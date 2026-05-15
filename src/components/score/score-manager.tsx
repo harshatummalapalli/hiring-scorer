@@ -102,7 +102,7 @@ export function ScoreManager() {
         : undefined;
       const pick = matched ?? briefs[0];
 
-      if (!matched) setActiveBrief(pick);
+      setActiveBrief(pick);
       setRoleBrief(pick);
     } catch (err) {
       setError(getErrorMessage(err, "Failed to load role briefs"));
