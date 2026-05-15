@@ -28,6 +28,21 @@ export async function insertScoringRun(
   return { id: data.id as string };
 }
 
+export async function insertSavedScore(
+  row: Record<string, unknown>,
+): Promise<{ id: string }> {
+  const supabase = getServerSupabase();
+  const { data, error } = await supabase
+    .from("saved_scores")
+    .insert(row)
+    .select("id")
+    .single();
+
+  if (error) throw new Error(error.message ?? "Database insert failed");
+  if (!data?.id) throw new Error("Insert succeeded but no row id returned.");
+  return { id: data.id as string };
+}
+
 export async function listScoringRuns(): Promise<Record<string, unknown>[]> {
   const supabase = getServerSupabase();
   const { data, error } = await supabase

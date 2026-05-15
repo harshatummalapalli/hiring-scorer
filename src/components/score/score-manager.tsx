@@ -292,7 +292,6 @@ export function ScoreManager() {
     setError(null);
 
     try {
-      const supabase = createSupabaseClient();
       const payload = buildSavedScoreInsertPayload(
         selected.file.name,
         roleBrief,
@@ -300,16 +299,14 @@ export function ScoreManager() {
         tag,
         recruiterNotes,
       );
-      const { data, error: insertError } = await supabase
-        .from("saved_scores")
-        .insert(payload)
-        .select("id")
-        .single();
-
-      console.log("[save] supabase result", { data, insertError, url: (supabase as unknown as { supabaseUrl?: string }).supabaseUrl });
-      if (insertError) throw insertError;
-      if (!data?.id) throw new Error(`Insert returned no id. data=${JSON.stringify(data)}`);
-      updateCandidate(selected.id, { savedId: data.id as string });
+      const res = await fetch("/api/save-score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to save score");
+      updateCandidate(selected.id, { savedId: json.id as string });
     } catch (err) {
       setError(getErrorMessage(err, "Failed to save score"));
     } finally {
