@@ -306,7 +306,9 @@ export function ScoreManager() {
         .select("id")
         .single();
 
+      console.log("[save] supabase result", { data, insertError, url: (supabase as unknown as { supabaseUrl?: string }).supabaseUrl });
       if (insertError) throw insertError;
+      if (!data?.id) throw new Error(`Insert returned no id. data=${JSON.stringify(data)}`);
       updateCandidate(selected.id, { savedId: data.id as string });
     } catch (err) {
       setError(getErrorMessage(err, "Failed to save score"));
