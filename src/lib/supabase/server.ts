@@ -23,7 +23,7 @@ export async function insertScoringRun(
     .select("id")
     .single();
 
-  if (error) throw error;
+  if (error) throw new Error(error.message ?? "Database insert failed");
   if (!data?.id) throw new Error("Insert succeeded but no row id returned.");
   return { id: data.id as string };
 }
@@ -35,7 +35,7 @@ export async function listScoringRuns(): Promise<Record<string, unknown>[]> {
     .select("*")
     .order("created_at", { ascending: true });
 
-  if (error) throw error;
+  if (error) throw new Error(error.message ?? "Database query failed");
   return (data ?? []) as Record<string, unknown>[];
 }
 
@@ -58,7 +58,7 @@ export async function upsertScoringRunByScenario(
       .from("scoring_runs")
       .update(row)
       .eq("id", existing.id);
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? "Database update failed");
     return { id: existing.id as string, inserted: false };
   }
 
