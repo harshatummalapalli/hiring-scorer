@@ -279,7 +279,14 @@ export function ScoreManager() {
   };
 
   const handleSave = async () => {
-    if (!roleBrief || !selected?.result) return;
+    if (!roleBrief) {
+      setError("No active role brief selected. Go to Role Briefs and set one as active.");
+      return;
+    }
+    if (!selected?.result) {
+      setError("No score result to save. Score the candidate first.");
+      return;
+    }
 
     setSaving(true);
     setError(null);
