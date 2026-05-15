@@ -192,7 +192,7 @@ function stripNamesInFirstLines(text: string, lineCount = 10): string {
 
     // Name at start: "Jane Doe | Engineer" or "Jane Doe - Engineer"
     lines[i] = line.replace(
-      /^([A-Z][a-z]{1,30}(?:\s+[A-Z][a-z.'-]{1,30}){1,3})\s*(\||-|–|—|,)/,
+      /^([A-Z][a-z]{1,30}(?:\s+[A-Z][a-z.'-]{1,30}){1,3})\s*(\||-|\u2013|\u2014|,)/,
       (match, name: string, sep: string) =>
         isLikelyPersonName(name) ? `${REDACTED.NAME}${sep}` : match,
     );
@@ -224,5 +224,5 @@ export function stripPII(text: string): StripPIIResult {
 
 export function previewSlice(text: string, max = 2000): string {
   if (text.length <= max) return text;
-  return `${text.slice(0, max)}…`;
+  return `${text.slice(0, max)}\u2026`;
 }

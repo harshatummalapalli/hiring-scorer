@@ -21,7 +21,7 @@ const DEVILS_ADVOCATE_SYSTEM = `You are a rigorous hiring committee member whose
 
 const STRUCTURED_SCORER_SYSTEM = `Score this candidate against the role brief on each of the five dimensions from 0 to 100. Score only on explicitly stated information. Do not infer. If information is absent score it 0 and flag as insufficient data. Return JSON only with dimension name score and one line reason.`;
 
-/** Gemini Flash — Signal Extractor */
+/** Gemini Flash - Signal Extractor */
 export type SignalExtractorResult = {
   dimensions: Record<
     DimensionKey,
@@ -36,7 +36,7 @@ export type SignalExtractorResult = {
   watch_signals: { text: string; dimension?: string }[];
 };
 
-/** Claude — Devil's Advocate */
+/** Claude - Devil's Advocate */
 export type DevilsAdvocateResult = {
   risks: string[];
   gaps: string[];
@@ -46,7 +46,7 @@ export type DevilsAdvocateResult = {
   >;
 };
 
-/** GPT-4o — Structured Scorer */
+/** GPT-4o - Structured Scorer */
 export type StructuredScorerResult = {
   dimensions: Record<
     DimensionKey,
@@ -354,11 +354,42 @@ export type ModelRunResults = {
   };
 };
 
+function fallbackDevilsAdvocate(errorMsg: string): DevilsAdvocateResult {
+  return {
+    risks: [`Claude scoring model unavailable: ${errorMsg || "unknown error"}`],
+    gaps: [],
+    dimension_scores: Object.fromEntries(
+      DIMENSION_KEYS.map((k) => [k, { score: 0, reason: "Model unavailable - review recommended" }]),
+    ) as DevilsAdvocateResult["dimension_scores"],
+  };
+}
+
+function fallbackSignalExtractor(errorMsg: string): SignalExtractorResult {
+  return {
+    dimensions: Object.fromEntries(
+      DIMENSION_KEYS.map((k) => [
+        k,
+        { score: 0, positive_signals: [], concerning_signals: [], inference_notes: "Model unavailable - review recommended" },
+      ]),
+    ) as SignalExtractorResult["dimensions"],
+    green_flags: [],
+    watch_signals: [{ text: `Gemini scoring model unavailable: ${errorMsg || "unknown error"}` }],
+  };
+}
+
+function fallbackStructuredScorer(): StructuredScorerResult {
+  return {
+    dimensions: Object.fromEntries(
+      DIMENSION_KEYS.map((k) => [k, { score: 0, reason: "Model unavailable - review recommended", insufficient_data: true }]),
+    ) as StructuredScorerResult["dimensions"],
+  };
+}
+
 export async function runAllModelsParallel(
   roleBrief: RoleBrief,
   resumeText: string,
 ): Promise<ModelRunResults> {
-  const results = await Promise.allSettled([
+  const [claudeSettled, geminiSettled, gptSettled] = await Promise.allSettled([
     callDevilsAdvocate(roleBrief, resumeText),
     callSignalExtractor(roleBrief, resumeText),
     callStructuredScorer(roleBrief, resumeText),
@@ -374,34 +405,42 @@ export async function runAllModelsParallel(
     "google",
     "openai",
   ];
+  const settled = [claudeSettled, geminiSettled, gptSettled];
 
-  const errors: string[] = [];
-  results.forEach((r, i) => {
+  const errorMessages = settled.map((r, i) => {
     if (r.status === "rejected") {
-      const msg =
-        r.reason instanceof Error
-          ? formatProviderAuthError(providers[i], r.reason.message)
-          : String(r.reason);
-      errors.push(`${labels[i]}: ${msg}`);
+      const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+      return formatProviderAuthError(providers[i], msg);
+    }
+    return null;
+  });
+
+  if (errorMessages.every((m) => m !== null)) {
+    throw new Error(
+      errorMessages.map((m, i) => `${labels[i]}: ${m}`).join("\n"),
+    );
+  }
+
+  errorMessages.forEach((msg, i) => {
+    if (msg) {
+      console.error(`[model-runners] ${labels[i]} failed, using fallback:`, msg);
     }
   });
 
-  if (errors.length > 0) {
-    throw new Error(errors.join("\n"));
-  }
+  const claudeRun =
+    claudeSettled.status === "fulfilled"
+      ? claudeSettled.value
+      : { result: fallbackDevilsAdvocate(errorMessages[0] ?? ""), raw: {} };
 
-  const claudeRun = (results[0] as PromiseFulfilledResult<{
-    result: DevilsAdvocateResult;
-    raw: Record<string, unknown>;
-  }>).value;
-  const geminiRun = (results[1] as PromiseFulfilledResult<{
-    result: SignalExtractorResult;
-    raw: Record<string, unknown>;
-  }>).value;
-  const gptRun = (results[2] as PromiseFulfilledResult<{
-    result: StructuredScorerResult;
-    raw: Record<string, unknown>;
-  }>).value;
+  const geminiRun =
+    geminiSettled.status === "fulfilled"
+      ? geminiSettled.value
+      : { result: fallbackSignalExtractor(errorMessages[1] ?? ""), raw: {} };
+
+  const gptRun =
+    gptSettled.status === "fulfilled"
+      ? gptSettled.value
+      : { result: fallbackStructuredScorer(), raw: {} };
 
   return {
     claude: claudeRun.result,

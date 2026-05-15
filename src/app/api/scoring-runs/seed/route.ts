@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { getHistoricalSeedRuns } from "@/lib/analysis/seed-historical";
 import { upsertScoringRunByScenario } from "@/lib/supabase/server";
 
-export async function POST() {
+export async function POST(request: Request) {
+  const token = request.headers.get("X-Seed-Token");
+  if (!token || token !== process.env.SEED_SECRET) {
+    return NextResponse.json(null, { status: 404 });
+  }
+
   try {
     const seeds = getHistoricalSeedRuns();
     let inserted = 0;

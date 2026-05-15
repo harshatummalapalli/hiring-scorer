@@ -30,6 +30,18 @@ export async function POST(request: Request) {
       );
     }
 
+    if (body.resumeText.trim().length > 50000) {
+      return NextResponse.json(
+        { error: "Resume text exceeds 50,000 character limit." },
+        { status: 400 },
+      );
+    }
+
+    console.log("[score] scoring request", {
+      role: body.roleBrief.title,
+      textLength: body.resumeText.trim().length,
+    });
+
     const candidateFilename =
       body.candidateFilename?.trim() || "unknown-candidate.pdf";
 
