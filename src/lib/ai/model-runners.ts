@@ -371,7 +371,7 @@ function fallbackSignalExtractor(errorMsg: string): SignalExtractorResult {
         k,
         { score: 0, positive_signals: [], concerning_signals: [], inference_notes: "Model unavailable - review recommended" },
       ]),
-    ) as SignalExtractorResult["dimensions"],
+    ) as unknown as SignalExtractorResult["dimensions"],
     green_flags: [],
     watch_signals: [{ text: `Gemini scoring model unavailable: ${errorMsg || "unknown error"}` }],
   };
