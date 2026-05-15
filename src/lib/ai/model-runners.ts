@@ -1,0 +1,416 @@
+import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from "openai";
+import type { RoleBrief } from "@/types/role-brief";
+import type { DimensionKey } from "@/types/score";
+import { formatProviderAuthError, getApiKey } from "./api-keys";
+import { buildRoleContext } from "./build-role-context";
+import { parseJsonFromModel } from "./parse-json";
+
+const DIMENSION_KEYS: DimensionKey[] = [
+  "skills",
+  "trajectory",
+  "domain",
+  "seniority",
+  "tenure",
+];
+
+const SIGNAL_EXTRACTOR_SYSTEM = `You are an expert recruiter with 18 years of enterprise technology hiring experience. Analyse this candidate profile against the role brief. For each of the five dimensions identify the strongest signals both positive and concerning. Base your analysis ONLY on information explicitly stated in the profile. Label any inference clearly. Return structured JSON only.`;
+
+const DEVILS_ADVOCATE_SYSTEM = `You are a rigorous hiring committee member whose job is to identify risks gaps and red flags. What critical information is missing? What patterns suggest risk? What gaps exist between role requirements and demonstrated experience? Return structured JSON with a risks array and a gaps array.`;
+
+const STRUCTURED_SCORER_SYSTEM = `Score this candidate against the role brief on each of the five dimensions from 0 to 100. Score only on explicitly stated information. Do not infer. If information is absent score it 0 and flag as insufficient data. Return JSON only with dimension name score and one line reason.`;
+
+/** Gemini Flash — Signal Extractor */
+export type SignalExtractorResult = {
+  dimensions: Record<
+    DimensionKey,
+    {
+      score: number;
+      positive_signals: string[];
+      concerning_signals: string[];
+      inference_notes?: string;
+    }
+  >;
+  green_flags: { text: string; dimension?: string }[];
+  watch_signals: { text: string; dimension?: string }[];
+};
+
+/** Claude — Devil's Advocate */
+export type DevilsAdvocateResult = {
+  risks: string[];
+  gaps: string[];
+  dimension_scores: Record<
+    DimensionKey,
+    { score: number; reason: string }
+  >;
+};
+
+/** GPT-4o — Structured Scorer */
+export type StructuredScorerResult = {
+  dimensions: Record<
+    DimensionKey,
+    { score: number; reason: string; insufficient_data?: boolean }
+  >;
+};
+
+/** @deprecated use SignalExtractorResult */
+export type ClaudeSignals = SignalExtractorResult;
+/** @deprecated use DevilsAdvocateResult */
+export type GptAdvocate = DevilsAdvocateResult;
+/** @deprecated use StructuredScorerResult */
+export type GeminiScorer = StructuredScorerResult;
+
+function clampScore(n: number): number {
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+async function callSignalExtractorOnce(
+  modelId: string,
+  roleBrief: RoleBrief,
+  resumeText: string,
+): Promise<{ result: SignalExtractorResult; raw: Record<string, unknown> }> {
+  const genAI = new GoogleGenerativeAI(getApiKey("google"));
+  const model = genAI.getGenerativeModel({
+    model: modelId,
+    systemInstruction: SIGNAL_EXTRACTOR_SYSTEM,
+    generationConfig: { responseMimeType: "application/json" },
+  });
+
+  const userContent = `${buildRoleContext(roleBrief, resumeText)}
+
+Return JSON only with this shape:
+{
+  "dimensions": {
+    "skills": { "score": 0-100, "positive_signals": ["..."], "concerning_signals": ["..."], "inference_notes": "optional" },
+    "trajectory": { ... },
+    "domain": { ... },
+    "seniority": { ... },
+    "tenure": { ... }
+  },
+  "green_flags": [{ "text": "...", "dimension": "skills" }],
+  "watch_signals": [{ "text": "...", "dimension": "skills" }]
+}
+Provide at most 3 green_flags and at most 3 watch_signals, ranked by relevance to the role brief.`;
+
+  const text = (await model.generateContent(userContent)).response.text();
+  const parsed = parseJsonFromModel(text) as Record<string, unknown>;
+  return {
+    result: parseSignalExtractorResponse(parsed),
+    raw: parsed,
+  };
+}
+
+async function callSignalExtractor(
+  roleBrief: RoleBrief,
+  resumeText: string,
+): Promise<{ result: SignalExtractorResult; raw: Record<string, unknown> }> {
+  const models = geminiModelCandidates();
+  const failures: string[] = [];
+
+  for (const modelId of models) {
+    const maxAttempts = 2;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        return await callSignalExtractorOnce(modelId, roleBrief, resumeText);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (isRetryableGeminiError(message) && attempt < maxAttempts - 1) {
+          await sleep(retryDelayMs(message));
+          continue;
+        }
+        failures.push(`${modelId}: ${formatProviderAuthError("google", message)}`);
+        break;
+      }
+    }
+  }
+
+  throw new Error(
+    failures.length > 0
+      ? failures[failures.length - 1]
+      : "Gemini (Signal Extractor) failed for all configured models.",
+  );
+}
+
+async function callDevilsAdvocate(
+  roleBrief: RoleBrief,
+  resumeText: string,
+): Promise<{ result: DevilsAdvocateResult; raw: Record<string, unknown> }> {
+  const client = new Anthropic({ apiKey: getApiKey("anthropic") });
+  const userContent = `${buildRoleContext(roleBrief, resumeText)}
+
+Return JSON only with this shape (at most 3 risks and 2 gaps):
+{
+  "risks": ["..."],
+  "gaps": ["..."],
+  "dimension_scores": {
+    "skills": { "score": 0-100, "reason": "one line" },
+    "trajectory": { "score": 0-100, "reason": "one line" },
+    "domain": { "score": 0-100, "reason": "one line" },
+    "seniority": { "score": 0-100, "reason": "one line" },
+    "tenure": { "score": 0-100, "reason": "one line" }
+  }
+}
+dimension_scores should reflect how risks and gaps affect each dimension.`;
+
+  const message = await client.messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 4096,
+    system: DEVILS_ADVOCATE_SYSTEM,
+    messages: [{ role: "user", content: userContent }],
+  });
+
+  const text = message.content
+    .filter((b) => b.type === "text")
+    .map((b) => b.text)
+    .join("");
+
+  const parsed = parseJsonFromModel(text) as Record<string, unknown>;
+  return {
+    result: parseDevilsAdvocateResponse(parsed),
+    raw: parsed,
+  };
+}
+
+async function callStructuredScorer(
+  roleBrief: RoleBrief,
+  resumeText: string,
+): Promise<{ result: StructuredScorerResult; raw: Record<string, unknown> }> {
+  const client = new OpenAI({ apiKey: getApiKey("openai") });
+  const userContent = `${buildRoleContext(roleBrief, resumeText)}
+
+Return JSON only:
+{
+  "dimensions": {
+    "skills": { "score": 0-100, "reason": "one line", "insufficient_data": false },
+    "trajectory": { ... },
+    "domain": { ... },
+    "seniority": { ... },
+    "tenure": { ... }
+  }
+}`;
+
+  const completion = await client.chat.completions.create({
+    model: "gpt-4o",
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: STRUCTURED_SCORER_SYSTEM },
+      { role: "user", content: userContent },
+    ],
+  });
+
+  const text = completion.choices[0]?.message?.content ?? "";
+  const parsed = parseJsonFromModel(text) as Record<string, unknown>;
+  return {
+    result: parseStructuredScorerResponse(parsed),
+    raw: parsed,
+  };
+}
+
+const DEFAULT_GEMINI_MODELS = [
+  "gemini-2.0-flash-lite",
+  "gemini-1.5-flash",
+  "gemini-2.0-flash",
+  "gemini-2.5-flash",
+];
+
+function geminiModelCandidates(): string[] {
+  const preferred = process.env.GEMINI_MODEL?.trim();
+  if (preferred) {
+    return [preferred, ...DEFAULT_GEMINI_MODELS.filter((m) => m !== preferred)];
+  }
+  return DEFAULT_GEMINI_MODELS;
+}
+
+function isRetryableGeminiError(message: string): boolean {
+  return (
+    message.includes("429") ||
+    message.includes("Too Many Requests") ||
+    message.includes("quota") ||
+    message.includes("RESOURCE_EXHAUSTED")
+  );
+}
+
+function retryDelayMs(message: string): number {
+  const match = message.match(/retry in (\d+(?:\.\d+)?)s/i);
+  if (match) {
+    return Math.ceil(parseFloat(match[1]) * 1000) + 500;
+  }
+  return 3000;
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseSignalExtractorResponse(
+  parsed: Record<string, unknown>,
+): SignalExtractorResult {
+  const dimensions = {} as SignalExtractorResult["dimensions"];
+
+  for (const key of DIMENSION_KEYS) {
+    const dim = (parsed.dimensions as Record<string, unknown>)?.[key] as
+      | Record<string, unknown>
+      | undefined;
+    if (!dim || typeof dim.score !== "number") {
+      throw new Error(`Gemini (Signal Extractor) response missing dimension: ${key}`);
+    }
+    dimensions[key] = {
+      score: clampScore(dim.score),
+      positive_signals: stringArray(dim.positive_signals),
+      concerning_signals: stringArray(dim.concerning_signals),
+      inference_notes:
+        typeof dim.inference_notes === "string" ? dim.inference_notes : undefined,
+    };
+  }
+
+  return {
+    dimensions,
+    green_flags: flagArray(parsed.green_flags).slice(0, 3),
+    watch_signals: flagArray(parsed.watch_signals).slice(0, 3),
+  };
+}
+
+function parseDevilsAdvocateResponse(
+  parsed: Record<string, unknown>,
+): DevilsAdvocateResult {
+  const dimension_scores = {} as DevilsAdvocateResult["dimension_scores"];
+
+  for (const key of DIMENSION_KEYS) {
+    const dim = (parsed.dimension_scores as Record<string, unknown>)?.[key] as
+      | Record<string, unknown>
+      | undefined;
+    if (!dim || typeof dim.score !== "number") {
+      throw new Error(
+        `Claude (Devil's Advocate) response missing dimension_scores.${key}`,
+      );
+    }
+    dimension_scores[key] = {
+      score: clampScore(dim.score),
+      reason: typeof dim.reason === "string" ? dim.reason.trim() : "",
+    };
+  }
+
+  return {
+    risks: stringArray(parsed.risks).slice(0, 3),
+    gaps: stringArray(parsed.gaps).slice(0, 2),
+    dimension_scores,
+  };
+}
+
+function parseStructuredScorerResponse(
+  parsed: Record<string, unknown>,
+): StructuredScorerResult {
+  const dimensions = {} as StructuredScorerResult["dimensions"];
+
+  for (const key of DIMENSION_KEYS) {
+    const dim = (parsed.dimensions as Record<string, unknown>)?.[key] as
+      | Record<string, unknown>
+      | undefined;
+    if (!dim || typeof dim.score !== "number") {
+      throw new Error(`GPT-4o (Structured Scorer) response missing dimension: ${key}`);
+    }
+    dimensions[key] = {
+      score: clampScore(dim.score),
+      reason: typeof dim.reason === "string" ? dim.reason.trim() : "",
+      insufficient_data: Boolean(dim.insufficient_data),
+    };
+  }
+
+  return { dimensions };
+}
+
+function stringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((v): v is string => typeof v === "string" && v.trim() !== "");
+}
+
+function flagArray(value: unknown): { text: string; dimension?: string }[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (typeof item === "string") return { text: item.trim() };
+      if (typeof item === "object" && item !== null && "text" in item) {
+        const o = item as { text: unknown; dimension?: unknown };
+        return {
+          text: String(o.text).trim(),
+          dimension:
+            typeof o.dimension === "string" ? o.dimension : undefined,
+        };
+      }
+      return null;
+    })
+    .filter((x): x is { text: string; dimension?: string } => !!x?.text);
+}
+
+export type ModelRunResults = {
+  claude: DevilsAdvocateResult;
+  gpt: StructuredScorerResult;
+  gemini: SignalExtractorResult;
+  raw_responses: {
+    claude: unknown;
+    gpt4o: unknown;
+    gemini: unknown;
+  };
+};
+
+export async function runAllModelsParallel(
+  roleBrief: RoleBrief,
+  resumeText: string,
+): Promise<ModelRunResults> {
+  const results = await Promise.allSettled([
+    callDevilsAdvocate(roleBrief, resumeText),
+    callSignalExtractor(roleBrief, resumeText),
+    callStructuredScorer(roleBrief, resumeText),
+  ]);
+
+  const labels = [
+    "Claude (Devil's Advocate)",
+    "Gemini Flash (Signal Extractor)",
+    "GPT-4o (Structured Scorer)",
+  ];
+  const providers: ("anthropic" | "openai" | "google")[] = [
+    "anthropic",
+    "google",
+    "openai",
+  ];
+
+  const errors: string[] = [];
+  results.forEach((r, i) => {
+    if (r.status === "rejected") {
+      const msg =
+        r.reason instanceof Error
+          ? formatProviderAuthError(providers[i], r.reason.message)
+          : String(r.reason);
+      errors.push(`${labels[i]}: ${msg}`);
+    }
+  });
+
+  if (errors.length > 0) {
+    throw new Error(errors.join("\n"));
+  }
+
+  const claudeRun = (results[0] as PromiseFulfilledResult<{
+    result: DevilsAdvocateResult;
+    raw: Record<string, unknown>;
+  }>).value;
+  const geminiRun = (results[1] as PromiseFulfilledResult<{
+    result: SignalExtractorResult;
+    raw: Record<string, unknown>;
+  }>).value;
+  const gptRun = (results[2] as PromiseFulfilledResult<{
+    result: StructuredScorerResult;
+    raw: Record<string, unknown>;
+  }>).value;
+
+  return {
+    claude: claudeRun.result,
+    gpt: gptRun.result,
+    gemini: geminiRun.result,
+    raw_responses: {
+      claude: claudeRun.raw,
+      gpt4o: gptRun.raw,
+      gemini: geminiRun.raw,
+    },
+  };
+}
