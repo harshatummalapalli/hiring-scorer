@@ -6,6 +6,7 @@ import type { DimensionKey } from "@/types/score";
 import { formatProviderAuthError, getApiKey } from "./api-keys";
 import { buildRoleContext } from "./build-role-context";
 import type { ResumeQualitySignals } from "@/lib/intelligence/beyond-keywords";
+import type { SkillsIntelligence } from "@/lib/intelligence/semantic-matcher";
 import { parseJsonFromModel } from "./parse-json";
 
 const DIMENSION_KEYS: DimensionKey[] = [
@@ -86,6 +87,7 @@ async function callSignalExtractorOnce(
   roleBrief: RoleBrief,
   resumeText: string,
   resumeQualitySignals: ResumeQualitySignals,
+  skillsIntelligence: SkillsIntelligence | null,
 ): Promise<{ result: SignalExtractorResult; raw: Record<string, unknown> }> {
   const genAI = new GoogleGenerativeAI(getApiKey("google"));
   const model = genAI.getGenerativeModel({
@@ -94,7 +96,7 @@ async function callSignalExtractorOnce(
     generationConfig: { responseMimeType: "application/json" },
   });
 
-  const userContent = `${buildRoleContext(roleBrief, resumeText, resumeQualitySignals)}
+  const userContent = `${buildRoleContext(roleBrief, resumeText, resumeQualitySignals, skillsIntelligence)}
 
 Return JSON only with this shape:
 {
@@ -130,6 +132,7 @@ async function callSignalExtractor(
   roleBrief: RoleBrief,
   resumeText: string,
   resumeQualitySignals: ResumeQualitySignals,
+  skillsIntelligence: SkillsIntelligence | null,
 ): Promise<{ result: SignalExtractorResult; raw: Record<string, unknown> }> {
   const models = geminiModelCandidates();
   const failures: string[] = [];
@@ -143,6 +146,7 @@ async function callSignalExtractor(
           roleBrief,
           resumeText,
           resumeQualitySignals,
+          skillsIntelligence,
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -167,9 +171,10 @@ async function callDevilsAdvocate(
   roleBrief: RoleBrief,
   resumeText: string,
   resumeQualitySignals: ResumeQualitySignals,
+  skillsIntelligence: SkillsIntelligence | null,
 ): Promise<{ result: DevilsAdvocateResult; raw: Record<string, unknown> }> {
   const client = new Anthropic({ apiKey: getApiKey("anthropic") });
-  const userContent = `${buildRoleContext(roleBrief, resumeText, resumeQualitySignals)}
+  const userContent = `${buildRoleContext(roleBrief, resumeText, resumeQualitySignals, skillsIntelligence)}
 
 Return JSON only with this shape (at most 3 risks, 2 gaps, exactly 2 interview_questions):
 {
@@ -210,9 +215,10 @@ async function callStructuredScorer(
   roleBrief: RoleBrief,
   resumeText: string,
   resumeQualitySignals: ResumeQualitySignals,
+  skillsIntelligence: SkillsIntelligence | null,
 ): Promise<{ result: StructuredScorerResult; raw: Record<string, unknown> }> {
   const client = new OpenAI({ apiKey: getApiKey("openai") });
-  const userContent = `${buildRoleContext(roleBrief, resumeText, resumeQualitySignals)}
+  const userContent = `${buildRoleContext(roleBrief, resumeText, resumeQualitySignals, skillsIntelligence)}
 
 Return JSON only:
 {
@@ -478,11 +484,12 @@ export async function runAllModelsParallel(
   roleBrief: RoleBrief,
   resumeText: string,
   resumeQualitySignals: ResumeQualitySignals,
+  skillsIntelligence: SkillsIntelligence | null,
 ): Promise<ModelRunResults> {
   const [claudeSettled, geminiSettled, gptSettled] = await Promise.allSettled([
-    callDevilsAdvocate(roleBrief, resumeText, resumeQualitySignals),
-    callSignalExtractor(roleBrief, resumeText, resumeQualitySignals),
-    callStructuredScorer(roleBrief, resumeText, resumeQualitySignals),
+    callDevilsAdvocate(roleBrief, resumeText, resumeQualitySignals, skillsIntelligence),
+    callSignalExtractor(roleBrief, resumeText, resumeQualitySignals, skillsIntelligence),
+    callStructuredScorer(roleBrief, resumeText, resumeQualitySignals, skillsIntelligence),
   ]);
 
   const labels = [

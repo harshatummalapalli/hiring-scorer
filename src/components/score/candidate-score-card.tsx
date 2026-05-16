@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import type { RoleBrief } from "@/types/role-brief";
 import type { CandidateScoreResult, FitVerdict } from "@/types/score";
+import { formatSkillsMatchSummary } from "@/lib/intelligence/semantic-matcher";
 import {
   buildFallbackRecruiterCard,
   scoreToVerdict,
@@ -82,6 +83,9 @@ export function CandidateScoreCard({
     card;
   const verdict = scoreToVerdict(result.overall_score);
   const verdictStyle = VERDICT_STYLES[verdict];
+  const skillsMatchSummary = result.skills_intelligence
+    ? formatSkillsMatchSummary(result.skills_intelligence)
+    : null;
 
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -124,6 +128,11 @@ export function CandidateScoreCard({
             {verdict}
           </p>
           <p className="sr-only">Score {result.overall_score} out of 100</p>
+          {skillsMatchSummary && (
+            <p className="mt-5 text-center text-sm font-medium leading-relaxed text-slate-600">
+              {skillsMatchSummary}
+            </p>
+          )}
         </section>
 
         {/* Section 3 — what stands out */}

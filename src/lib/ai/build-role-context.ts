@@ -3,6 +3,10 @@ import {
   formatResumeQualitySignalsBlock,
   type ResumeQualitySignals,
 } from "@/lib/intelligence/beyond-keywords";
+import {
+  formatSkillsIntelligenceForPrompt,
+  type SkillsIntelligence,
+} from "@/lib/intelligence/semantic-matcher";
 
 function formatList(items: string[], empty = "None listed"): string {
   return items.length > 0 ? items.join("; ") : empty;
@@ -37,11 +41,16 @@ export function buildRoleContext(
   roleBrief: RoleBrief,
   resumeText: string,
   resumeQualitySignals?: ResumeQualitySignals,
+  skillsIntelligence?: SkillsIntelligence | null,
 ): string {
   const jd = roleBrief.job_description?.trim();
   const qualityBlock = resumeQualitySignals
     ? `\n\n${formatResumeQualitySignalsBlock(resumeQualitySignals)}\n`
     : "";
+  const skillsBlock =
+    skillsIntelligence && skillsIntelligence.total_required > 0
+      ? `\n\n${formatSkillsIntelligenceForPrompt(skillsIntelligence)}\n`
+      : "";
 
   return `ROLE BRIEF:
 Title: ${roleBrief.title}
@@ -57,5 +66,5 @@ ${jd ? `\nOriginal job description:\n${jd}` : ""}
 Scoring weights (1-10): skills=${roleBrief.weight_skills}, trajectory=${roleBrief.weight_trajectory}, domain=${roleBrief.weight_domain}, seniority=${roleBrief.weight_seniority}, tenure=${roleBrief.weight_tenure}
 
 CANDIDATE PROFILE (PII redacted):
-${resumeText}${qualityBlock}`;
+${resumeText}${qualityBlock}${skillsBlock}`;
 }

@@ -36,6 +36,8 @@ import type { ModelRawResponses } from "@/types/score";
 import type { ResumeQualitySignals } from "@/lib/intelligence/beyond-keywords";
 import { buildRecruiterCard } from "@/lib/scoring/recruiter-card";
 import { enrichRecruiterCardWithResumeSignals } from "@/lib/scoring/merge-resume-signals";
+import { enrichRecruiterCardWithSkillsIntelligence } from "@/lib/scoring/merge-skills-intelligence";
+import type { SkillsIntelligence } from "@/lib/intelligence/semantic-matcher";
 
 const DIMENSION_KEYS: DimensionKey[] = [
   "skills",
@@ -237,6 +239,7 @@ export function buildConsensusResult(
   resumeText: string,
   candidateFilename = "candidate.pdf",
   resumeQualitySignals?: ResumeQualitySignals,
+  skillsIntelligence?: SkillsIntelligence | null,
 ): CandidateScoreResult {
   const dimensionDetails: DimensionConsensusDetail[] = [];
   const dimension_scores = {} as Record<DimensionKey, DimensionScore>;
@@ -345,6 +348,14 @@ export function buildConsensusResult(
     );
   }
 
+  if (skillsIntelligence && skillsIntelligence.total_required > 0) {
+    recruiter_card = enrichRecruiterCardWithSkillsIntelligence(
+      recruiter_card,
+      resumeText,
+      skillsIntelligence,
+    );
+  }
+
   return {
     overall_score,
     overall_provisional: review_recommended,
@@ -369,5 +380,6 @@ export function buildConsensusResult(
     model_flags,
     recruiter_card,
     resume_quality_signals: resumeQualitySignals ?? null,
+    skills_intelligence: skillsIntelligence ?? null,
   };
 }

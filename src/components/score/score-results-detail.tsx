@@ -19,6 +19,7 @@ import {
 } from "@/types/score";
 import { DimensionBreakdown } from "./dimension-breakdown";
 import { ModelRawResponsesPanel } from "./model-raw-responses";
+import { SkillsIntelligencePanel } from "./skills-intelligence-panel";
 
 const DIMENSION_KEYS: DimensionKey[] = [
   "skills",
@@ -71,6 +72,10 @@ export function ScoreResultsDetail({
           {confidenceLabel}
         </span>
       </div>
+
+      {result.skills_intelligence && (
+        <SkillsIntelligencePanel intelligence={result.skills_intelligence} />
+      )}
 
       <section className="rounded-lg border border-slate-100 bg-slate-50 p-4">
         <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800">

@@ -3,6 +3,7 @@ import {
   MODEL_ROLE_DISPLAY,
 } from "@/lib/scoring/recruiter-labels";
 import type { ResumeQualitySignals } from "@/lib/intelligence/beyond-keywords";
+import type { SkillsIntelligence } from "@/lib/intelligence/semantic-matcher";
 
 export type AiProvider = "anthropic" | "openai" | "google";
 
@@ -120,6 +121,12 @@ export type {
   KeywordStuffingResult,
 } from "@/lib/intelligence/beyond-keywords";
 
+export type {
+  SkillsIntelligence,
+  SkillMatchResult,
+  SkillMatchType,
+} from "@/lib/intelligence/semantic-matcher";
+
 export type CandidateScoreResult = {
   overall_score: number;
   /** True when overall used provisional scores for one or more dimensions. */
@@ -143,6 +150,7 @@ export type CandidateScoreResult = {
   };
   recruiter_card: RecruiterCard;
   resume_quality_signals: ResumeQualitySignals | null;
+  skills_intelligence: SkillsIntelligence | null;
 };
 
 export type SavedScore = {
