@@ -14,7 +14,7 @@ export default function SavedScoresPage() {
         </h1>
         <p className="mt-2 text-slate-600">
           All score cards saved to Supabase. Click a row to open the full
-          consensus breakdown. Edit tags and notes inline.
+          evaluation. Edit tags and notes inline.
         </p>
       </div>
       <SavedScoresManager />

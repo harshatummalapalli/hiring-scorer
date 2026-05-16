@@ -55,7 +55,7 @@ export function ScoreResultsDetail({
     <div className="space-y-6 border-t border-slate-200 pt-8">
       <div className="flex flex-wrap items-end justify-between gap-4 rounded-lg border border-slate-100 bg-slate-50 p-4">
         <div>
-          <p className="text-sm font-medium text-slate-500">Consensus score</p>
+          <p className="text-sm font-medium text-slate-500">Overall score</p>
           <p className="text-4xl font-bold tabular-nums tracking-tight text-slate-900">
             {result.overall_score}
             {result.overall_provisional && (
@@ -80,7 +80,7 @@ export function ScoreResultsDetail({
       <section className="rounded-lg border border-slate-100 bg-slate-50 p-4">
         <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800">
           <Users className="h-4 w-4" aria-hidden />
-          Multi-model consensus
+          Evaluator pipeline
         </h3>
         <p className="text-xs text-slate-600">{MODEL_CONSENSUS_DESCRIPTION}</p>
         <ul className="mt-2 space-y-0.5 text-xs text-slate-500">
@@ -105,7 +105,7 @@ export function ScoreResultsDetail({
 
       <section>
         <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Dimension scores (consensus)
+          Dimension scores
         </h3>
         <ul className="space-y-3">
           {DIMENSION_KEYS.map((key) => {

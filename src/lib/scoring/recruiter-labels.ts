@@ -35,10 +35,21 @@ export function toRecruiterConfidenceLabel(
 }
 
 export const FUNCTIONAL_ROLE_LABELS: Record<FunctionalRole, string> = {
-  signal_extractor: "Signal extractor",
+  signal_extractor: "Signal extractor (Gemini)",
   devils_advocate: "Devil's advocate",
   structured_scorer: "Structured scorer",
 };
+
+/** Column / filter label in Saved Scores (values use CONFIDENCE_LABEL_*). */
+export const MODEL_AGREEMENT_COLUMN_LABEL = "Model agreement";
+
+export const SCORING_PANEL_TITLE = "Gemini-powered candidate scoring";
+export const SCORING_PANEL_DESCRIPTION =
+  "Gemini Flash extracts signals from the resume. Claude and GPT-4o run in parallel for risk review and dimension scoring, then results are combined into one verdict.";
+export const SCORE_CANDIDATE_BUTTON = "Score candidate";
+export const SCORING_IN_PROGRESS_LABEL = "Scoring…";
+export const SCORE_ALL_READY_LABEL = (count: number) =>
+  `Score all ready (${count})`;
 
 /** Maps internal model keys to recruiter-facing role names (fixed production config). */
 export function modelRoleDisplayName(model: ModelRole): string {
@@ -53,7 +64,7 @@ export const MODEL_ROLE_DISPLAY: Record<ModelRole, string> = {
 };
 
 export const CONSENSUS_SUMMARY =
-  "Three specialized evaluators run in parallel: one extracts signals, one surfaces risks and gaps, and one scores each dimension.";
+  "Gemini extracts resume signals; Claude surfaces risks and gaps; GPT-4o scores each dimension. Results are combined into dimension and overall scores.";
 
 export function confidenceBadgeClass(label: string | null | undefined): string {
   const normalized = toRecruiterConfidenceLabel(label);

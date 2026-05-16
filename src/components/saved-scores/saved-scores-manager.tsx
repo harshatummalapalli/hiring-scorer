@@ -14,6 +14,7 @@ import { snapshotToRoleBrief } from "@/lib/saved-scores/build-save-payload";
 import { CONFIDENCE_FILTER_OPTIONS } from "@/lib/saved-scores/confidence-badge";
 import {
   confidenceBadgeClass,
+  MODEL_AGREEMENT_COLUMN_LABEL,
   toRecruiterConfidenceLabel,
 } from "@/lib/scoring/recruiter-labels";
 import { downloadSavedScoresCsv } from "@/lib/saved-scores/export-csv";
@@ -266,7 +267,7 @@ export function SavedScoresManager() {
           />
 
           <FilterSelect
-            label="Confidence"
+            label={MODEL_AGREEMENT_COLUMN_LABEL}
             value={confidenceFilter}
             onChange={setConfidenceFilter}
             options={CONFIDENCE_FILTER_OPTIONS.map((o) => ({
@@ -325,7 +326,7 @@ export function SavedScoresManager() {
                   <th className="px-4 py-3">Candidate</th>
                   <th className="px-4 py-3">Role brief</th>
                   <th className="px-4 py-3">Score</th>
-                  <th className="px-4 py-3">Confidence</th>
+                  <th className="px-4 py-3">{MODEL_AGREEMENT_COLUMN_LABEL}</th>
                   <th className="px-4 py-3">Tag</th>
                   <th className="px-4 py-3">Recruiter notes</th>
                   <th className="px-4 py-3">Date scored</th>

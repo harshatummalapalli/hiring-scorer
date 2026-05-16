@@ -39,7 +39,7 @@ export function DimensionBreakdown({
             </span>
           </div>
           <p className="mt-1 text-sm tabular-nums text-slate-600">
-            Consensus {displayScore}
+            Combined {displayScore}
             {isProvisional && (
               <span className="font-semibold text-amber-600">*</span>
             )}
@@ -105,7 +105,7 @@ export function DimensionBreakdown({
                 </tr>
                 <tr>
                   <td className="pb-2 pr-3 font-medium text-slate-800">
-                    Dimension confidence
+                    Model agreement
                   </td>
                   <td colSpan={3} className="pb-2">
                     <span

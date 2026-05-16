@@ -2,6 +2,7 @@ import type { DimensionKey } from "@/types/score";
 import { DIMENSION_LABELS } from "@/types/score";
 import type { SavedScoreRow } from "@/types/saved-score";
 import { normalizeStoredOverallScore } from "@/lib/saved-scores/normalize-score";
+import { toRecruiterConfidenceLabel } from "@/lib/scoring/recruiter-labels";
 
 const DIMENSION_KEYS: DimensionKey[] = [
   "skills",
@@ -35,7 +36,7 @@ export function buildSavedScoresCsv(rows: SavedScoreRow[]): string {
     "candidate filename",
     "role brief",
     "overall score",
-    "confidence level",
+    "model agreement",
     "skills match score",
     "career trajectory score",
     "domain expertise score",
@@ -57,7 +58,7 @@ export function buildSavedScoresCsv(rows: SavedScoreRow[]): string {
       row.candidate_filename ?? "",
       row.role_brief_title ?? "",
       String(overall),
-      row.confidence_level ?? "",
+      toRecruiterConfidenceLabel(row.confidence_level),
       dimScore(row, "skills"),
       dimScore(row, "trajectory"),
       dimScore(row, "domain"),

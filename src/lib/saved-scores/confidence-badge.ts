@@ -8,7 +8,7 @@ import {
 export { confidenceBadgeClass };
 
 export const CONFIDENCE_FILTER_OPTIONS = [
-  { value: "", label: "All confidence levels" },
+  { value: "", label: "All agreement levels" },
   { value: CONFIDENCE_LABEL_HIGH, label: CONFIDENCE_LABEL_HIGH },
   { value: CONFIDENCE_LABEL_MEDIUM, label: CONFIDENCE_LABEL_MEDIUM },
   { value: CONFIDENCE_LABEL_REVIEW, label: CONFIDENCE_LABEL_REVIEW },

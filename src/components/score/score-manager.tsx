@@ -6,6 +6,13 @@ import { AlertCircle, Loader2, Sparkles } from "lucide-react";
 import { useActiveRoleBrief } from "@/contexts/active-role-brief-context";
 import { useScoringDebug } from "@/contexts/scoring-debug-context";
 import { getErrorMessage } from "@/lib/errors";
+import {
+  SCORE_ALL_READY_LABEL,
+  SCORE_CANDIDATE_BUTTON,
+  SCORING_IN_PROGRESS_LABEL,
+  SCORING_PANEL_DESCRIPTION,
+  SCORING_PANEL_TITLE,
+} from "@/lib/scoring/recruiter-labels";
 import { buildSavedScoreInsertPayload } from "@/lib/saved-scores/build-save-payload";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
@@ -33,7 +40,7 @@ async function scoreResume(
     result?: CandidateScoreResult;
   };
   if (!res.ok) {
-    throw new Error(data.error ?? "Consensus scoring failed");
+    throw new Error(data.error ?? "Scoring failed");
   }
   return data.result as CandidateScoreResult;
 }
@@ -202,7 +209,7 @@ export function ScoreManager() {
         candidate.file.name,
       );
       const durationMs = Date.now() - startedAt;
-      console.log("[Hiring Scorer] Consensus scoring complete", result);
+      console.log("[Hiring Scorer] Scoring complete", result);
       console.log(
         "[Hiring Scorer] Model raw JSON responses",
         result.model_raw_responses,
@@ -405,11 +412,13 @@ export function ScoreManager() {
 
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">
-          Multi-model consensus scoring
+          {SCORING_PANEL_TITLE}
         </h2>
         <p className="mt-1 mb-4 text-sm text-slate-500">
-          Three evaluators run in parallel — signal extraction, risk review, and
-          structured dimension scoring. Set all keys in{" "}
+          {SCORING_PANEL_DESCRIPTION} Set{" "}
+          <code className="text-xs">GOOGLE_API_KEY</code> (Gemini),{" "}
+          <code className="text-xs">ANTHROPIC_API_KEY</code>, and{" "}
+          <code className="text-xs">OPENAI_API_KEY</code> in{" "}
           <code className="text-xs">.env.local</code> and restart the dev server
           after changes.
         </p>
@@ -426,7 +435,7 @@ export function ScoreManager() {
             ) : (
               <Sparkles className="h-4 w-4" />
             )}
-            {scoring ? "Running consensus…" : "Run consensus score"}
+            {scoring ? SCORING_IN_PROGRESS_LABEL : SCORE_CANDIDATE_BUTTON}
           </button>
           {readyCount > 0 && (
             <button
@@ -441,8 +450,8 @@ export function ScoreManager() {
                 <Sparkles className="h-4 w-4" />
               )}
               {scoringAll
-                ? "Running consensus…"
-                : `Consensus score all ready (${readyCount})`}
+                ? SCORING_IN_PROGRESS_LABEL
+                : SCORE_ALL_READY_LABEL(readyCount)}
             </button>
           )}
         </div>
