@@ -321,10 +321,10 @@ function RoleSection({
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     <th className="px-4 py-3">Name</th>
-                    <th className="px-4 py-3">Email</th>
+                    <th className="min-w-[200px] px-4 py-3">Email</th>
                     <th className="px-4 py-3">Phone</th>
                     <th className="px-4 py-3">Location</th>
-                    <th className="px-4 py-3">Insights</th>
+                    <th className="max-w-[12rem] px-4 py-3">Insights</th>
                     <th className="px-4 py-3">Score</th>
                     <th className="px-4 py-3">Relocation</th>
                     <th className="px-4 py-3">Present CTC</th>
@@ -380,11 +380,21 @@ function PipelineTableRow({
           {row.candidate_name}
         </Link>
       </td>
-      <td className="px-4 py-3 text-slate-600">{row.email ?? "—"}</td>
+      <td className="min-w-[200px] max-w-[280px] px-4 py-3 text-slate-600">
+        {row.email?.trim() ? (
+          <span className="block truncate" title={row.email}>
+            {row.email}
+          </span>
+        ) : (
+          "—"
+        )}
+      </td>
       <td className="px-4 py-3 text-slate-600">{row.phone ?? "—"}</td>
       <td className="px-4 py-3 text-slate-600">{row.location ?? "—"}</td>
-      <td className="max-w-[14rem] px-4 py-3 text-slate-600">
-        {formatInsightsText(row.insights) || "—"}
+      <td className="max-w-[12rem] px-4 py-3 text-slate-600">
+        <span className="line-clamp-2 text-xs leading-snug">
+          {formatInsightsText(row.insights) || "—"}
+        </span>
       </td>
       <td className="px-4 py-3">
         {row.fit_score != null ? (

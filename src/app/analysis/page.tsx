@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { AnalysisDashboard } from "@/components/analysis/analysis-dashboard";
-import { HistoricalEntryForm } from "@/components/analysis/historical-entry-form";
 import { computeAnalysisFindings } from "@/lib/analysis/compute-findings";
 import type { AnalysisFindings } from "@/lib/analysis/compute-findings";
 import {
@@ -96,7 +95,6 @@ export default function AnalysisPage() {
 
   return (
     <div className="space-y-8 pb-12">
-      <HistoricalEntryForm onSaved={() => void load()} />
       <AnalysisDashboard
         findings={findings}
         loading={loading}
