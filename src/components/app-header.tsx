@@ -46,6 +46,12 @@ export function AppHeader() {
             Role Briefs
           </Link>
           <Link
+            href="/candidates"
+            className="rounded-md px-3 py-1.5 font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
+          >
+            Candidates
+          </Link>
+          <Link
             href="/score"
             className="rounded-md px-3 py-1.5 font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
           >

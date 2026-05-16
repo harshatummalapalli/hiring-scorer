@@ -1,0 +1,119 @@
+import type { CompanyType, FitVerdict, ResumeQualitySignals } from "@/types/score";
+import type { CandidateScoreResult } from "@/types/score";
+
+export type CandidateStage =
+  | "new"
+  | "screening"
+  | "pipeline"
+  | "passed"
+  | "hired";
+
+export type TrajectoryVelocity = "fast" | "normal" | "slow";
+
+export type SignalRating = "Strong" | "Moderate" | "Weak";
+
+export type VerifiedSkill = {
+  skill: string;
+  evidence: string;
+};
+
+export type ProfileSignal = {
+  signal: string;
+  evidence: string;
+};
+
+export type ExperienceEntry = {
+  title: string;
+  company: string;
+  company_type: CompanyType;
+  location: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  bullets: string[];
+};
+
+export type EducationEntry = {
+  institution: string;
+  degree: string | null;
+  field: string | null;
+  year: string | null;
+};
+
+export type CandidateSignalProfile = {
+  display_name: string;
+  most_recent_title: string;
+  location: string | null;
+  total_years_experience: string;
+  career_pattern: string;
+  career_types_sequence: CompanyType[];
+  shows_product_progression: boolean;
+  professional_summary: string;
+  resume_quality: ResumeQualitySignals;
+  ownership_ratio_percent: number;
+  quantification_ratio_percent: number;
+  quantification_level: "consistent" | "sometimes" | "rarely";
+  keyword_stuffing_flagged: boolean;
+  keyword_stuffing_explanation: string;
+  trajectory_velocity: TrajectoryVelocity;
+  positive_signals: ProfileSignal[];
+  watch_signals: string[];
+  experience: ExperienceEntry[];
+  education: EducationEntry[];
+  skills_verified: VerifiedSkill[];
+  skills_listed_only: string[];
+  title_band: string | null;
+};
+
+export type CandidateActivityType =
+  | "added"
+  | "scored"
+  | "tagged"
+  | "note_added"
+  | "stage_changed"
+  | "screened"
+  | "passed"
+  | "saved_to_pipeline";
+
+export type CandidateActivity = {
+  id: string;
+  type: CandidateActivityType;
+  summary: string;
+  created_at: string;
+  meta?: Record<string, string | number | null>;
+};
+
+export type CandidateNote = {
+  id: string;
+  candidate_id: string;
+  body: string;
+  created_at: string;
+};
+
+export type CandidateRow = {
+  id: string;
+  display_name: string;
+  resume_filename: string | null;
+  resume_text: string;
+  signal_profile: CandidateSignalProfile;
+  stage: CandidateStage;
+  tag: string | null;
+  activity: CandidateActivity[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type CandidateRoleFitScore = {
+  id: string;
+  role_brief_id: string | null;
+  role_brief_title: string | null;
+  overall_score: number;
+  verdict: FitVerdict;
+  created_at: string;
+  score_snapshot: CandidateScoreResult | null;
+  role_brief_snapshot: unknown;
+};
+
+export type CandidateDetail = CandidateRow & {
+  notes: CandidateNote[];
+  role_fit_scores: CandidateRoleFitScore[];
+};

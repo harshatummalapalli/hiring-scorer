@@ -1,4 +1,6 @@
 import type { RoleBrief } from "@/types/role-brief";
+import type { CandidateSignalProfile } from "@/types/candidate";
+import { formatCandidateSignalProfileBlock } from "@/lib/candidates/format-profile-context";
 import {
   formatResumeQualitySignalsBlock,
   type ResumeQualitySignals,
@@ -42,6 +44,7 @@ export function buildRoleContext(
   resumeText: string,
   resumeQualitySignals?: ResumeQualitySignals,
   skillsIntelligence?: SkillsIntelligence | null,
+  signalProfile?: CandidateSignalProfile | null,
 ): string {
   const jd = roleBrief.job_description?.trim();
   const qualityBlock = resumeQualitySignals
@@ -51,6 +54,9 @@ export function buildRoleContext(
     skillsIntelligence && skillsIntelligence.total_required > 0
       ? `\n\n${formatSkillsIntelligenceForPrompt(skillsIntelligence)}\n`
       : "";
+  const profileBlock = signalProfile
+    ? `\n\n${formatCandidateSignalProfileBlock(signalProfile)}\n`
+    : "";
 
   return `ROLE BRIEF:
 Title: ${roleBrief.title}
@@ -66,5 +72,5 @@ ${jd ? `\nOriginal job description:\n${jd}` : ""}
 Scoring weights (1-10): skills=${roleBrief.weight_skills}, trajectory=${roleBrief.weight_trajectory}, domain=${roleBrief.weight_domain}, seniority=${roleBrief.weight_seniority}, tenure=${roleBrief.weight_tenure}
 
 CANDIDATE PROFILE (PII redacted):
-${resumeText}${qualityBlock}${skillsBlock}`;
+${resumeText}${qualityBlock}${skillsBlock}${profileBlock}`;
 }
