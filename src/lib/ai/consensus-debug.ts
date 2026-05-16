@@ -36,7 +36,7 @@ export function buildScoringConfigurationSummary(roleBrief: RoleBrief): string {
     `• ${MODEL_ROLE_LABELS.gpt4o}`,
     `• ${MODEL_ROLE_LABELS.claude}`,
     `• ${MODEL_ROLE_LABELS.gemini}`,
-    `Role brief: ${roleBrief.title}${roleBrief.department ? ` · ${roleBrief.department}` : ""}`,
+    `Role brief: ${roleBrief.title}${roleBrief.title_band ? ` · ${roleBrief.title_band}` : ""}`,
     `Brief ID: ${roleBrief.id}`,
     `Dimension weights (total ${totalWeight}): skills=${roleBrief.weight_skills}, trajectory=${roleBrief.weight_trajectory}, domain=${roleBrief.weight_domain}, seniority=${roleBrief.weight_seniority}, tenure=${roleBrief.weight_tenure}`,
     `Consensus rule: spread ≤${AGREEMENT_THRESHOLD} → unanimous; two within ${AGREEMENT_THRESHOLD} → majority; else divergent (provisional avg)`,

@@ -1,0 +1,89 @@
+import Anthropic from "@anthropic-ai/sdk";
+import { getApiKey } from "@/lib/ai/api-keys";
+import { parseJsonFromModel } from "@/lib/ai/parse-json";
+import type { RoleBriefAnalysis, TitleBand } from "@/types/role-brief";
+import { TITLE_BANDS } from "@/types/role-brief";
+
+const ANALYSE_JD_SYSTEM = `You are an expert recruiter with 18 years of enterprise technology hiring experience. Analyse this job description and return a JSON object with these exact fields. deal_breakers as an array of strings — the absolute must-have requirements where absence disqualifies a candidate. core_signals as an array of objects each with skill name and equivalents array — the important skills that drive the score heavily. preferred_signals as an array of strings — nice to have items that boost score but absence does not penalise. cannot_assess as an array of strings — soft skills or qualities that cannot be evaluated from a resume alone. equivalent_titles as an array of strings — all job titles that should be considered equivalent to the target role. title_band as a string — one of Entry Mid Senior Staff Principal. semantic_clusters as an object where each key is a required skill and value is an array of technologies that imply proficiency in that skill. Return JSON only, no explanation.`;
+
+function parseStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((v) => String(v).trim()).filter(Boolean))];
+}
+
+function parseTitleBand(value: unknown): TitleBand {
+  const v = String(value ?? "Mid").trim();
+  const match = TITLE_BANDS.find(
+    (b) => b.toLowerCase() === v.toLowerCase(),
+  );
+  return match ?? "Mid";
+}
+
+export function parseRoleBriefAnalysis(raw: unknown): RoleBriefAnalysis {
+  if (typeof raw !== "object" || raw == null) {
+    throw new Error("Invalid analysis response from model.");
+  }
+  const o = raw as Record<string, unknown>;
+
+  const core_signals = Array.isArray(o.core_signals)
+    ? o.core_signals
+        .map((item) => {
+          if (typeof item !== "object" || item == null) return null;
+          const row = item as Record<string, unknown>;
+          const skill = String(row.skill ?? row.name ?? "").trim();
+          if (!skill) return null;
+          return {
+            skill,
+            equivalents: parseStringArray(row.equivalents),
+          };
+        })
+        .filter((x): x is RoleBriefAnalysis["core_signals"][0] => x != null)
+    : [];
+
+  const semantic_clusters: Record<string, string[]> = {};
+  if (typeof o.semantic_clusters === "object" && o.semantic_clusters != null) {
+    for (const [key, val] of Object.entries(
+      o.semantic_clusters as Record<string, unknown>,
+    )) {
+      const k = key.trim();
+      if (!k) continue;
+      semantic_clusters[k] = parseStringArray(val);
+    }
+  }
+
+  return {
+    deal_breakers: parseStringArray(o.deal_breakers),
+    core_signals,
+    preferred_signals: parseStringArray(o.preferred_signals),
+    cannot_assess: parseStringArray(o.cannot_assess),
+    equivalent_titles: parseStringArray(o.equivalent_titles),
+    title_band: parseTitleBand(o.title_band),
+    semantic_clusters,
+  };
+}
+
+export async function analyseJobDescription(
+  jobDescription: string,
+): Promise<RoleBriefAnalysis> {
+  const client = new Anthropic({ apiKey: getApiKey("anthropic") });
+
+  const message = await client.messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 4096,
+    system: ANALYSE_JD_SYSTEM,
+    messages: [
+      {
+        role: "user",
+        content: jobDescription.trim(),
+      },
+    ],
+  });
+
+  const textBlock = message.content.find((b) => b.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error("Claude returned no text for role analysis.");
+  }
+
+  const parsed = parseJsonFromModel(textBlock.text);
+  return parseRoleBriefAnalysis(parsed);
+}

@@ -2,28 +2,81 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, Loader2 } from "lucide-react";
+import {
+  RoleBriefCreator,
+  roleBriefToCreatorState,
+} from "@/components/role-briefs/role-brief-creator";
+import { RoleBriefList } from "@/components/role-briefs/role-brief-list";
 import { useActiveRoleBrief } from "@/contexts/active-role-brief-context";
 import { getErrorMessage } from "@/lib/errors";
-import { createSupabaseClient, getSupabaseConfigError } from "@/lib/supabase/client";
-import type { RoleBrief, RoleBriefFormValues } from "@/types/role-brief";
 import {
-  defaultFormValues,
-  formValuesToPayload,
-  roleBriefToFormValues,
-} from "@/types/role-brief";
-import { RoleBriefForm } from "./role-brief-form";
-import { RoleBriefList } from "./role-brief-list";
+  buildFullBriefPayload,
+  buildLegacyBriefPayload,
+  isMissingV2ColumnError,
+} from "@/lib/role-brief/insert-brief-payload";
+import { createSupabaseClient, getSupabaseConfigError } from "@/lib/supabase/client";
+import type { RoleBrief, RoleBriefAnalysis } from "@/types/role-brief";
+import { parseRoleBriefRow } from "@/types/role-brief";
+
+async function upsertRoleBrief(
+  title: string,
+  jobDescription: string,
+  analysis: RoleBriefAnalysis,
+  editingId: string | null,
+): Promise<RoleBrief> {
+  const supabase = createSupabaseClient();
+
+  const attempt = async (row: Record<string, unknown>) => {
+    if (editingId) {
+      const { data, error } = await supabase
+        .from("role_briefs")
+        .update(row)
+        .eq("id", editingId)
+        .select()
+        .single();
+      if (error) throw error;
+      if (!data) throw new Error("Update succeeded but no row returned.");
+      return parseRoleBriefRow(data as Record<string, unknown>);
+    }
+    const { data, error } = await supabase
+      .from("role_briefs")
+      .insert(row)
+      .select()
+      .single();
+    if (error) throw error;
+    if (!data) throw new Error("Insert succeeded but no row returned.");
+    return parseRoleBriefRow(data as Record<string, unknown>);
+  };
+
+  const full = buildFullBriefPayload(title, jobDescription, analysis);
+  try {
+    return await attempt(full);
+  } catch (err) {
+    const msg = getErrorMessage(err, "");
+    if (isMissingV2ColumnError(msg)) {
+      return await attempt(
+        buildLegacyBriefPayload(title, jobDescription, analysis),
+      );
+    }
+    throw err;
+  }
+}
 
 export function RoleBriefManager() {
   const { activeBriefId, setActiveBrief, syncActiveBriefFromList } =
     useActiveRoleBrief();
 
   const [briefs, setBriefs] = useState<RoleBrief[]>([]);
-  const [formValues, setFormValues] =
-    useState<RoleBriefFormValues>(defaultFormValues);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [creatorKey, setCreatorKey] = useState(0);
+  const [editJobDescription, setEditJobDescription] = useState("");
+  const [editAnalysis, setEditAnalysis] = useState<RoleBriefAnalysis | null>(
+    null,
+  );
+  const [editTitle, setEditTitle] = useState("");
+
   const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -32,9 +85,7 @@ export function RoleBriefManager() {
 
   const fetchBriefs = useCallback(async () => {
     setError(null);
-    const envError = getSupabaseConfigError();
-    if (envError) {
-      setError(envError);
+    if (getSupabaseConfigError()) {
       setLoading(false);
       return;
     }
@@ -48,7 +99,9 @@ export function RoleBriefManager() {
 
       if (fetchError) throw fetchError;
 
-      const rows = (data ?? []) as RoleBrief[];
+      const rows = (data ?? []).map((r) =>
+        parseRoleBriefRow(r as Record<string, unknown>),
+      );
       setBriefs(rows);
       syncActiveBriefFromList(rows);
     } catch (err) {
@@ -59,59 +112,50 @@ export function RoleBriefManager() {
   }, [syncActiveBriefFromList]);
 
   useEffect(() => {
-    fetchBriefs();
+    void fetchBriefs();
   }, [fetchBriefs]);
 
-  const resetForm = () => {
-    setFormValues(defaultFormValues);
+  const resetCreator = () => {
     setEditingId(null);
+    setEditJobDescription("");
+    setEditAnalysis(null);
+    setEditTitle("");
+    setCreatorKey((k) => k + 1);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+  const handleSave = async (data: {
+    title: string;
+    jobDescription: string;
+    analysis: RoleBriefAnalysis;
+  }) => {
+    setIsSaving(true);
     setError(null);
     setSuccess(null);
 
     try {
-      const supabase = createSupabaseClient();
-      const payload = formValuesToPayload(formValues);
-
-      if (editingId) {
-        const { data, error: updateError } = await supabase
-          .from("role_briefs")
-          .update(payload)
-          .eq("id", editingId)
-          .select()
-          .single();
-
-        if (updateError) throw updateError;
-        if (!data) throw new Error("Update succeeded but no row was returned.");
-        setSuccess(`Updated “${data.title}”.`);
-      } else {
-        const { data, error: insertError } = await supabase
-          .from("role_briefs")
-          .insert(payload)
-          .select()
-          .single();
-
-        if (insertError) throw insertError;
-        if (!data) throw new Error("Insert succeeded but no row was returned.");
-        setSuccess(`Created “${data.title}”.`);
-      }
-
-      resetForm();
+      const saved = await upsertRoleBrief(
+        data.title,
+        data.jobDescription,
+        data.analysis,
+        editingId,
+      );
+      setSuccess(`Saved “${saved.title}”.`);
+      resetCreator();
       await fetchBriefs();
     } catch (err) {
       setError(getErrorMessage(err, "Failed to save role brief"));
     } finally {
-      setIsSubmitting(false);
+      setIsSaving(false);
     }
   };
 
   const handleEdit = (brief: RoleBrief) => {
+    const state = roleBriefToCreatorState(brief);
     setEditingId(brief.id);
-    setFormValues(roleBriefToFormValues(brief));
+    setEditJobDescription(state.jobDescription);
+    setEditAnalysis(state.analysis);
+    setEditTitle(state.title);
+    setCreatorKey((k) => k + 1);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -130,12 +174,8 @@ export function RoleBriefManager() {
 
       if (deleteError) throw deleteError;
 
-      if (activeBriefId === id) {
-        setActiveBrief(null);
-      }
-      if (editingId === id) {
-        resetForm();
-      }
+      if (activeBriefId === id) setActiveBrief(null);
+      if (editingId === id) resetCreator();
       await fetchBriefs();
     } catch (err) {
       setError(getErrorMessage(err, "Failed to delete role brief"));
@@ -144,12 +184,8 @@ export function RoleBriefManager() {
     }
   };
 
-  const handleSetActive = (brief: RoleBrief) => {
-    setActiveBrief(brief);
-  };
-
   return (
-    <div className="space-y-10">
+    <div className="space-y-12">
       {configError && (
         <div
           role="alert"
@@ -165,7 +201,7 @@ export function RoleBriefManager() {
           role="alert"
           className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
         >
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>
       )}
@@ -179,33 +215,34 @@ export function RoleBriefManager() {
         </div>
       )}
 
-      <RoleBriefForm
-        values={formValues}
-        onChange={setFormValues}
-        onSubmit={handleSubmit}
-        onCancel={editingId ? resetForm : undefined}
-        isSubmitting={isSubmitting}
+      <RoleBriefCreator
+        key={creatorKey}
+        initialJobDescription={editJobDescription}
+        initialAnalysis={editAnalysis}
+        initialTitle={editTitle}
         editingId={editingId}
+        onSave={handleSave}
+        isSaving={isSaving}
       />
 
       <section>
-        <div className="mb-4">
+        <div className="mb-6">
           <h2 className="text-lg font-semibold text-slate-900">Saved role briefs</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Select a brief as active to use it across the app for scoring.
+            Select a brief as active to use it when scoring candidates.
           </p>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-slate-500">
-            <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+            <Loader2 className="h-5 w-5 animate-spin" />
             <span className="text-sm">Loading role briefs…</span>
           </div>
         ) : (
           <RoleBriefList
             briefs={briefs}
             activeBriefId={activeBriefId}
-            onSetActive={handleSetActive}
+            onSetActive={setActiveBrief}
             onEdit={handleEdit}
             onDelete={handleDelete}
             deletingId={deletingId}

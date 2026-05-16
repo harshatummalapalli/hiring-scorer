@@ -1,13 +1,47 @@
 import { ensureIntegerOverallScore } from "@/lib/saved-scores/normalize-score";
 import type { CandidateScoreResult } from "@/types/score";
-import type { RoleBrief } from "@/types/role-brief";
+import { DEFAULT_SCORING_WEIGHTS, type RoleBrief } from "@/types/role-brief";
 import type { RoleBriefSnapshot } from "@/types/saved-score";
+
+function minimalRoleBrief(
+  partial: Pick<RoleBrief, "id" | "title"> &
+    Partial<
+      Pick<
+        RoleBrief,
+        | "weight_skills"
+        | "weight_trajectory"
+        | "weight_domain"
+        | "weight_seniority"
+        | "weight_tenure"
+        | "created_at"
+      >
+    >,
+): RoleBrief {
+  return {
+    ...partial,
+    job_description: null,
+    deal_breakers: [],
+    core_signals: [],
+    preferred_signals: [],
+    cannot_assess: [],
+    equivalent_titles: [],
+    title_band: null,
+    semantic_clusters: {},
+    weight_skills: partial.weight_skills ?? DEFAULT_SCORING_WEIGHTS.weight_skills,
+    weight_trajectory:
+      partial.weight_trajectory ?? DEFAULT_SCORING_WEIGHTS.weight_trajectory,
+    weight_domain: partial.weight_domain ?? DEFAULT_SCORING_WEIGHTS.weight_domain,
+    weight_seniority:
+      partial.weight_seniority ?? DEFAULT_SCORING_WEIGHTS.weight_seniority,
+    weight_tenure: partial.weight_tenure ?? DEFAULT_SCORING_WEIGHTS.weight_tenure,
+    created_at: partial.created_at ?? "",
+  };
+}
 
 export function roleBriefToSnapshot(brief: RoleBrief): RoleBriefSnapshot {
   return {
     id: brief.id,
     title: brief.title,
-    department: brief.department,
     weight_skills: brief.weight_skills,
     weight_trajectory: brief.weight_trajectory,
     weight_domain: brief.weight_domain,
@@ -22,37 +56,20 @@ export function snapshotToRoleBrief(
   fallbackId: string | null,
 ): RoleBrief {
   if (snapshot) {
-    return {
+    return minimalRoleBrief({
       id: snapshot.id,
       title: snapshot.title,
-      department: snapshot.department ?? null,
-      responsibilities: null,
-      required_skills: null,
-      nice_to_have_skills: null,
-      experience_years: null,
       weight_skills: snapshot.weight_skills,
       weight_trajectory: snapshot.weight_trajectory,
       weight_domain: snapshot.weight_domain,
       weight_seniority: snapshot.weight_seniority,
       weight_tenure: snapshot.weight_tenure,
-      created_at: "",
-    };
+    });
   }
-  return {
+  return minimalRoleBrief({
     id: fallbackId ?? "",
     title: fallbackTitle ?? "Unknown role",
-    department: null,
-    responsibilities: null,
-    required_skills: null,
-    nice_to_have_skills: null,
-    experience_years: null,
-    weight_skills: 5,
-    weight_trajectory: 5,
-    weight_domain: 5,
-    weight_seniority: 5,
-    weight_tenure: 5,
-    created_at: "",
-  };
+  });
 }
 
 export function buildSavedScoreInsertPayload(

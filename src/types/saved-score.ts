@@ -4,7 +4,6 @@ import type { AttributedFlag } from "@/types/score";
 export type RoleBriefSnapshot = {
   id: string;
   title: string;
-  department: string | null;
   weight_skills: number;
   weight_trajectory: number;
   weight_domain: number;

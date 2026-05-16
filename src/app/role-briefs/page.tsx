@@ -7,14 +7,14 @@ export const metadata = {
 
 export default function RoleBriefsPage() {
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-          Role Brief Manager
+    <div className="mx-auto max-w-5xl px-4 py-10 sm:px-8 sm:py-14">
+      <div className="mb-12">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+          Role Briefs
         </h1>
-        <p className="mt-2 text-slate-600">
-          Define role requirements and scoring weights. Set one brief as active
-          for candidate evaluation.
+        <p className="mt-3 max-w-2xl text-base leading-relaxed text-slate-600">
+          Paste a full job description. We analyse it into deal breakers, core
+          signals, and more — then use the active brief when scoring candidates.
         </p>
       </div>
       <RoleBriefManager />

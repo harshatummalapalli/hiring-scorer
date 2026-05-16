@@ -378,15 +378,15 @@ export function ScoreManager() {
             {allBriefs.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.title}
-                {b.department ? ` · ${b.department}` : ""}
+                {b.title_band ? ` · ${b.title_band}` : ""}
               </option>
             ))}
           </select>
         ) : (
           <p className="text-sm text-slate-900">
             <span className="font-semibold">{roleBrief.title}</span>
-            {roleBrief.department && (
-              <span className="text-slate-500"> · {roleBrief.department}</span>
+            {roleBrief.title_band && (
+              <span className="text-slate-500"> · {roleBrief.title_band}</span>
             )}
           </p>
         )}

@@ -15,6 +15,14 @@ create table if not exists public.role_briefs (
   weight_domain integer not null default 5 check (weight_domain between 1 and 10),
   weight_seniority integer not null default 5 check (weight_seniority between 1 and 10),
   weight_tenure integer not null default 5 check (weight_tenure between 1 and 10),
+  job_description text,
+  deal_breakers jsonb default '[]'::jsonb,
+  core_signals jsonb default '[]'::jsonb,
+  preferred_signals jsonb default '[]'::jsonb,
+  cannot_assess jsonb default '[]'::jsonb,
+  equivalent_titles jsonb default '[]'::jsonb,
+  title_band text,
+  semantic_clusters jsonb default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
 
