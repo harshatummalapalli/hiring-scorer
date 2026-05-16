@@ -5,6 +5,7 @@ import type { RoleBrief } from "@/types/role-brief";
 import type { DimensionKey } from "@/types/score";
 import { formatProviderAuthError, getApiKey } from "./api-keys";
 import { buildRoleContext } from "./build-role-context";
+import type { ResumeQualitySignals } from "@/lib/intelligence/beyond-keywords";
 import { parseJsonFromModel } from "./parse-json";
 
 const DIMENSION_KEYS: DimensionKey[] = [
@@ -15,11 +16,11 @@ const DIMENSION_KEYS: DimensionKey[] = [
   "tenure",
 ];
 
-const SIGNAL_EXTRACTOR_SYSTEM = `You are an expert recruiter with 18 years of enterprise technology hiring experience. Analyse this candidate profile against the role brief. For each of the five dimensions identify the strongest signals both positive and concerning. Base your analysis ONLY on information explicitly stated in the profile. Label any inference clearly. Return structured JSON only.`;
+const SIGNAL_EXTRACTOR_SYSTEM = `You are an expert recruiter with 18 years of enterprise technology hiring experience. Analyse this candidate profile against the role brief. For each of the five dimensions identify the strongest signals both positive and concerning. Base your analysis ONLY on information explicitly stated in the profile. Label any inference clearly. When a RESUME QUALITY SIGNALS block is present, use it to assess signal quality (ownership language, quantification, keyword stuffing). Return structured JSON only.`;
 
-const DEVILS_ADVOCATE_SYSTEM = `You are a rigorous hiring committee member whose job is to identify risks gaps and red flags. What critical information is missing? What patterns suggest risk? What gaps exist between role requirements and demonstrated experience? Return structured JSON with a risks array and a gaps array.`;
+const DEVILS_ADVOCATE_SYSTEM = `You are a rigorous hiring committee member whose job is to identify risks gaps and red flags. What critical information is missing? What patterns suggest risk? What gaps exist between role requirements and demonstrated experience? When a RESUME QUALITY SIGNALS block is present, factor it into risks and gaps. Return structured JSON with a risks array and a gaps array.`;
 
-const STRUCTURED_SCORER_SYSTEM = `Score this candidate against the role brief on each of the five dimensions from 0 to 100. Score only on explicitly stated information. Do not infer. If information is absent score it 0 and flag as insufficient data. Return JSON only with dimension name score and one line reason.`;
+const STRUCTURED_SCORER_SYSTEM = `Score this candidate against the role brief on each of the five dimensions from 0 to 100. Score only on explicitly stated information. Do not infer. If information is absent score it 0 and flag as insufficient data. When a RESUME QUALITY SIGNALS block is present, use it when assessing signal quality. Return JSON only with dimension name score and one line reason.`;
 
 export type GreenFlagEntry = {
   text: string;
@@ -84,6 +85,7 @@ async function callSignalExtractorOnce(
   modelId: string,
   roleBrief: RoleBrief,
   resumeText: string,
+  resumeQualitySignals: ResumeQualitySignals,
 ): Promise<{ result: SignalExtractorResult; raw: Record<string, unknown> }> {
   const genAI = new GoogleGenerativeAI(getApiKey("google"));
   const model = genAI.getGenerativeModel({
@@ -92,7 +94,7 @@ async function callSignalExtractorOnce(
     generationConfig: { responseMimeType: "application/json" },
   });
 
-  const userContent = `${buildRoleContext(roleBrief, resumeText)}
+  const userContent = `${buildRoleContext(roleBrief, resumeText, resumeQualitySignals)}
 
 Return JSON only with this shape:
 {
@@ -127,6 +129,7 @@ Classify each work_history entry type as exactly one of: Services, Product, GCC,
 async function callSignalExtractor(
   roleBrief: RoleBrief,
   resumeText: string,
+  resumeQualitySignals: ResumeQualitySignals,
 ): Promise<{ result: SignalExtractorResult; raw: Record<string, unknown> }> {
   const models = geminiModelCandidates();
   const failures: string[] = [];
@@ -135,7 +138,12 @@ async function callSignalExtractor(
     const maxAttempts = 2;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        return await callSignalExtractorOnce(modelId, roleBrief, resumeText);
+        return await callSignalExtractorOnce(
+          modelId,
+          roleBrief,
+          resumeText,
+          resumeQualitySignals,
+        );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         if (isRetryableGeminiError(message) && attempt < maxAttempts - 1) {
@@ -158,9 +166,10 @@ async function callSignalExtractor(
 async function callDevilsAdvocate(
   roleBrief: RoleBrief,
   resumeText: string,
+  resumeQualitySignals: ResumeQualitySignals,
 ): Promise<{ result: DevilsAdvocateResult; raw: Record<string, unknown> }> {
   const client = new Anthropic({ apiKey: getApiKey("anthropic") });
-  const userContent = `${buildRoleContext(roleBrief, resumeText)}
+  const userContent = `${buildRoleContext(roleBrief, resumeText, resumeQualitySignals)}
 
 Return JSON only with this shape (at most 3 risks, 2 gaps, exactly 2 interview_questions):
 {
@@ -200,9 +209,10 @@ interview_questions must be open questions that probe the specific gaps found â€
 async function callStructuredScorer(
   roleBrief: RoleBrief,
   resumeText: string,
+  resumeQualitySignals: ResumeQualitySignals,
 ): Promise<{ result: StructuredScorerResult; raw: Record<string, unknown> }> {
   const client = new OpenAI({ apiKey: getApiKey("openai") });
-  const userContent = `${buildRoleContext(roleBrief, resumeText)}
+  const userContent = `${buildRoleContext(roleBrief, resumeText, resumeQualitySignals)}
 
 Return JSON only:
 {
@@ -467,11 +477,12 @@ function fallbackStructuredScorer(): StructuredScorerResult {
 export async function runAllModelsParallel(
   roleBrief: RoleBrief,
   resumeText: string,
+  resumeQualitySignals: ResumeQualitySignals,
 ): Promise<ModelRunResults> {
   const [claudeSettled, geminiSettled, gptSettled] = await Promise.allSettled([
-    callDevilsAdvocate(roleBrief, resumeText),
-    callSignalExtractor(roleBrief, resumeText),
-    callStructuredScorer(roleBrief, resumeText),
+    callDevilsAdvocate(roleBrief, resumeText, resumeQualitySignals),
+    callSignalExtractor(roleBrief, resumeText, resumeQualitySignals),
+    callStructuredScorer(roleBrief, resumeText, resumeQualitySignals),
   ]);
 
   const labels = [

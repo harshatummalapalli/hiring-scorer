@@ -1,4 +1,8 @@
 import type { RoleBrief } from "@/types/role-brief";
+import {
+  formatResumeQualitySignalsBlock,
+  type ResumeQualitySignals,
+} from "@/lib/intelligence/beyond-keywords";
 
 function formatList(items: string[], empty = "None listed"): string {
   return items.length > 0 ? items.join("; ") : empty;
@@ -29,8 +33,15 @@ function formatSemanticClusters(
     .join("; ");
 }
 
-export function buildRoleContext(roleBrief: RoleBrief, resumeText: string): string {
+export function buildRoleContext(
+  roleBrief: RoleBrief,
+  resumeText: string,
+  resumeQualitySignals?: ResumeQualitySignals,
+): string {
   const jd = roleBrief.job_description?.trim();
+  const qualityBlock = resumeQualitySignals
+    ? `\n\n${formatResumeQualitySignalsBlock(resumeQualitySignals)}\n`
+    : "";
 
   return `ROLE BRIEF:
 Title: ${roleBrief.title}
@@ -46,5 +57,5 @@ ${jd ? `\nOriginal job description:\n${jd}` : ""}
 Scoring weights (1-10): skills=${roleBrief.weight_skills}, trajectory=${roleBrief.weight_trajectory}, domain=${roleBrief.weight_domain}, seniority=${roleBrief.weight_seniority}, tenure=${roleBrief.weight_tenure}
 
 CANDIDATE PROFILE (PII redacted):
-${resumeText}`;
+${resumeText}${qualityBlock}`;
 }

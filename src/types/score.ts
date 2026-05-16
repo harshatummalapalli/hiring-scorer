@@ -2,6 +2,7 @@ import {
   CONSENSUS_SUMMARY,
   MODEL_ROLE_DISPLAY,
 } from "@/lib/scoring/recruiter-labels";
+import type { ResumeQualitySignals } from "@/lib/intelligence/beyond-keywords";
 
 export type AiProvider = "anthropic" | "openai" | "google";
 
@@ -111,6 +112,14 @@ export type RecruiterCard = {
   interview_questions: string[];
 };
 
+export type {
+  ResumeQualitySignals,
+  OwnershipRatioResult,
+  QuantificationScoreResult,
+  QuantificationLevel,
+  KeywordStuffingResult,
+} from "@/lib/intelligence/beyond-keywords";
+
 export type CandidateScoreResult = {
   overall_score: number;
   /** True when overall used provisional scores for one or more dimensions. */
@@ -133,6 +142,7 @@ export type CandidateScoreResult = {
     gemini: { green_flags: string[]; watch_signals: string[] };
   };
   recruiter_card: RecruiterCard;
+  resume_quality_signals: ResumeQualitySignals | null;
 };
 
 export type SavedScore = {

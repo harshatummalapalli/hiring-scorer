@@ -86,6 +86,7 @@ export function reconstructCandidateResult(
     if (snapshot.recruiter_card) return snapshot;
     return {
       ...snapshot,
+      resume_quality_signals: snapshot.resume_quality_signals ?? null,
       recruiter_card: buildFallbackRecruiterCard(
         row.candidate_filename ?? "candidate.pdf",
         [
@@ -138,6 +139,7 @@ export function reconstructCandidateResult(
       ],
       [],
     ),
+    resume_quality_signals: null,
   };
 }
 
