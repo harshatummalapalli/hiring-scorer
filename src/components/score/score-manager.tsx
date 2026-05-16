@@ -2,12 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  AlertCircle,
-  Loader2,
-  Save,
-  Sparkles,
-} from "lucide-react";
+import { AlertCircle, Loader2, Sparkles } from "lucide-react";
 import { useActiveRoleBrief } from "@/contexts/active-role-brief-context";
 import { useScoringDebug } from "@/contexts/scoring-debug-context";
 import { getErrorMessage } from "@/lib/errors";
@@ -18,11 +13,10 @@ import { stripPII } from "@/lib/resume/strip-pii";
 import { PiiPreview } from "./pii-preview";
 import type { RoleBrief } from "@/types/role-brief";
 import type { CandidateScoreResult } from "@/types/score";
-import { SCORE_TAGS } from "@/types/score";
 import type { UploadedCandidate } from "@/types/uploaded-candidate";
 import { createCandidateId } from "@/types/uploaded-candidate";
+import { CandidateScoreCard } from "./candidate-score-card";
 import { ResumeUpload } from "./resume-upload";
-import { ScoreResults } from "./score-results";
 
 async function scoreResume(
   resumeText: string,
@@ -58,9 +52,8 @@ export function ScoreManager() {
   const [scoring, setScoring] = useState(false);
   const [scoringAll, setScoringAll] = useState(false);
 
-  const [tag, setTag] = useState("");
-  const [recruiterNotes, setRecruiterNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [savedMessage, setSavedMessage] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -179,22 +172,19 @@ export function ScoreManager() {
       }
       return next;
     });
-    setTag("");
-    setRecruiterNotes("");
+    setSavedMessage(null);
   };
 
   const handleClearAll = () => {
     setCandidates([]);
     setSelectedId(null);
-    setTag("");
-    setRecruiterNotes("");
+    setSavedMessage(null);
     setError(null);
   };
 
   const handleSelect = (id: string) => {
     setSelectedId(id);
-    setTag("");
-    setRecruiterNotes("");
+    setSavedMessage(null);
     setError(null);
   };
 
@@ -278,7 +268,7 @@ export function ScoreManager() {
     setScoringAll(false);
   };
 
-  const handleSave = async () => {
+  const handleSaveWithTag = async (tag: string) => {
     if (!roleBrief) {
       setError("No active role brief selected. Go to Role Briefs and set one as active.");
       return;
@@ -287,9 +277,11 @@ export function ScoreManager() {
       setError("No score result to save. Score the candidate first.");
       return;
     }
+    if (selected.savedId) return;
 
     setSaving(true);
     setError(null);
+    setSavedMessage(null);
 
     try {
       const payload = buildSavedScoreInsertPayload(
@@ -297,7 +289,7 @@ export function ScoreManager() {
         roleBrief,
         selected.result,
         tag,
-        recruiterNotes,
+        "",
       );
       const res = await fetch("/api/save-score", {
         method: "POST",
@@ -307,6 +299,7 @@ export function ScoreManager() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to save score");
       updateCandidate(selected.id, { savedId: json.id as string });
+      setSavedMessage(`Saved with tag “${tag}”.`);
     } catch (err) {
       setError(getErrorMessage(err, "Failed to save score"));
     } finally {
@@ -456,85 +449,20 @@ export function ScoreManager() {
       </div>
 
       {selected?.result && (
-        <>
-          <ScoreResults result={selected.result} roleBrief={roleBrief} />
-
-          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">
-              Save score — {selected.file.name}
-            </h2>
-            <p className="mt-1 mb-4 text-sm text-slate-500">
-              Store this evaluation in Supabase for later review.
-            </p>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label
-                  htmlFor="tag"
-                  className="mb-1.5 block text-sm font-medium text-slate-700"
-                >
-                  Tag
-                </label>
-                <select
-                  id="tag"
-                  value={tag}
-                  onChange={(e) => setTag(e.target.value)}
-                  disabled={busy || !!selected.savedId}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200 disabled:opacity-60"
-                >
-                  <option value="">Select a tag…</option>
-                  {SCORE_TAGS.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label
-                  htmlFor="notes"
-                  className="mb-1.5 block text-sm font-medium text-slate-700"
-                >
-                  Recruiter notes
-                </label>
-                <textarea
-                  id="notes"
-                  rows={3}
-                  value={recruiterNotes}
-                  onChange={(e) => setRecruiterNotes(e.target.value)}
-                  disabled={busy || !!selected.savedId}
-                  placeholder="Optional notes for your team…"
-                  className="w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200 disabled:opacity-60"
-                />
-              </div>
-            </div>
-
-            <div className="mt-4 flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={busy || !!selected.savedId}
-                className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {saving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                {selected.savedId
-                  ? "Saved"
-                  : saving
-                    ? "Saving…"
-                    : "Save to Supabase"}
-              </button>
-              {selected.savedId && (
-                <span className="text-sm text-emerald-700">
-                  Score saved successfully.
-                </span>
-              )}
-            </div>
-          </div>
-        </>
+        <CandidateScoreCard
+          result={selected.result}
+          roleBrief={roleBrief}
+          candidateFilename={selected.file.name}
+          onScreen={() => handleSaveWithTag("Yes")}
+          onPass={() => handleSaveWithTag("No")}
+          onSaveToPipeline={() => handleSaveWithTag("Hold")}
+          actionBusy={saving}
+          savedLabel={
+            selected.savedId
+              ? savedMessage ?? "Score saved to pipeline."
+              : savedMessage
+          }
+        />
       )}
     </div>
   );

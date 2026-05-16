@@ -6,10 +6,19 @@ import { runAllModelsParallel } from "./model-runners";
 export async function runConsensusScore(
   roleBrief: RoleBrief,
   resumeText: string,
+  candidateFilename = "candidate.pdf",
 ): Promise<CandidateScoreResult> {
   const { claude, gpt, gemini, raw_responses } = await runAllModelsParallel(
     roleBrief,
     resumeText,
   );
-  return buildConsensusResult(roleBrief, gpt, gemini, claude, raw_responses);
+  return buildConsensusResult(
+    roleBrief,
+    gpt,
+    gemini,
+    claude,
+    raw_responses,
+    resumeText,
+    candidateFilename,
+  );
 }

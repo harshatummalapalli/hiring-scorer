@@ -21,6 +21,19 @@ const DEVILS_ADVOCATE_SYSTEM = `You are a rigorous hiring committee member whose
 
 const STRUCTURED_SCORER_SYSTEM = `Score this candidate against the role brief on each of the five dimensions from 0 to 100. Score only on explicitly stated information. Do not infer. If information is absent score it 0 and flag as insufficient data. Return JSON only with dimension name score and one line reason.`;
 
+export type GreenFlagEntry = {
+  text: string;
+  dimension?: string;
+  evidence_quote?: string;
+};
+
+export type CandidateProfileFromModel = {
+  most_recent_title?: string;
+  total_years_experience?: number | string;
+  work_history?: { company: string; type: string }[];
+  career_pattern?: string;
+};
+
 /** Gemini Flash - Signal Extractor */
 export type SignalExtractorResult = {
   dimensions: Record<
@@ -32,14 +45,16 @@ export type SignalExtractorResult = {
       inference_notes?: string;
     }
   >;
-  green_flags: { text: string; dimension?: string }[];
+  green_flags: GreenFlagEntry[];
   watch_signals: { text: string; dimension?: string }[];
+  candidate_profile?: CandidateProfileFromModel;
 };
 
 /** Claude - Devil's Advocate */
 export type DevilsAdvocateResult = {
   risks: string[];
   gaps: string[];
+  interview_questions: string[];
   dimension_scores: Record<
     DimensionKey,
     { score: number; reason: string }
@@ -88,10 +103,18 @@ Return JSON only with this shape:
     "seniority": { ... },
     "tenure": { ... }
   },
-  "green_flags": [{ "text": "...", "dimension": "skills" }],
+  "candidate_profile": {
+    "most_recent_title": "most recent job title from the resume",
+    "total_years_experience": number,
+    "work_history": [{ "company": "employer name", "type": "Services" | "Product" | "GCC" | "Startup" }],
+    "career_pattern": "optional e.g. Services → GCC → Product"
+  },
+  "green_flags": [{ "text": "signal statement", "evidence_quote": "exact verbatim quote from the resume supporting this signal", "dimension": "skills" }],
   "watch_signals": [{ "text": "...", "dimension": "skills" }]
 }
-Provide at most 3 green_flags and at most 3 watch_signals, ranked by relevance to the role brief.`;
+Provide at most 3 green_flags and at most 3 watch_signals, ranked by relevance to the role brief.
+For each green_flag, evidence_quote MUST be an exact substring copied from the candidate profile text — do not paraphrase.
+Classify each work_history entry type as exactly one of: Services, Product, GCC, or Startup.`;
 
   const text = (await model.generateContent(userContent)).response.text();
   const parsed = parseJsonFromModel(text) as Record<string, unknown>;
@@ -139,10 +162,11 @@ async function callDevilsAdvocate(
   const client = new Anthropic({ apiKey: getApiKey("anthropic") });
   const userContent = `${buildRoleContext(roleBrief, resumeText)}
 
-Return JSON only with this shape (at most 3 risks and 2 gaps):
+Return JSON only with this shape (at most 3 risks, 2 gaps, exactly 2 interview_questions):
 {
   "risks": ["..."],
   "gaps": ["..."],
+  "interview_questions": ["open-ended question probing a specific gap", "..."],
   "dimension_scores": {
     "skills": { "score": 0-100, "reason": "one line" },
     "trajectory": { "score": 0-100, "reason": "one line" },
@@ -151,7 +175,8 @@ Return JSON only with this shape (at most 3 risks and 2 gaps):
     "tenure": { "score": 0-100, "reason": "one line" }
   }
 }
-dimension_scores should reflect how risks and gaps affect each dimension.`;
+dimension_scores should reflect how risks and gaps affect each dimension.
+interview_questions must be open questions that probe the specific gaps found — not generic interview questions.`;
 
   const message = await client.messages.create({
     model: "claude-sonnet-4-20250514",
@@ -264,10 +289,13 @@ function parseSignalExtractorResponse(
     };
   }
 
+  const candidate_profile = parseCandidateProfile(parsed.candidate_profile);
+
   return {
     dimensions,
-    green_flags: flagArray(parsed.green_flags).slice(0, 3),
+    green_flags: greenFlagArray(parsed.green_flags).slice(0, 3),
     watch_signals: flagArray(parsed.watch_signals).slice(0, 3),
+    candidate_profile,
   };
 }
 
@@ -294,6 +322,7 @@ function parseDevilsAdvocateResponse(
   return {
     risks: stringArray(parsed.risks).slice(0, 3),
     gaps: stringArray(parsed.gaps).slice(0, 2),
+    interview_questions: stringArray(parsed.interview_questions).slice(0, 2),
     dimension_scores,
   };
 }
@@ -343,6 +372,55 @@ function flagArray(value: unknown): { text: string; dimension?: string }[] {
     .filter((x): x is { text: string; dimension?: string } => !!x?.text);
 }
 
+function greenFlagArray(value: unknown): GreenFlagEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (typeof item === "string") return { text: item.trim() };
+      if (typeof item === "object" && item !== null && "text" in item) {
+        const o = item as {
+          text: unknown;
+          dimension?: unknown;
+          evidence_quote?: unknown;
+        };
+        const text = String(o.text).trim();
+        if (!text) return null;
+        return {
+          text,
+          dimension:
+            typeof o.dimension === "string" ? o.dimension : undefined,
+          evidence_quote:
+            typeof o.evidence_quote === "string"
+              ? o.evidence_quote.trim()
+              : undefined,
+        };
+      }
+      return null;
+    })
+    .filter((x): x is GreenFlagEntry => !!x?.text);
+}
+
+function parseCandidateProfile(
+  value: unknown,
+): CandidateProfileFromModel | undefined {
+  if (typeof value !== "object" || value == null) return undefined;
+  const o = value as Record<string, unknown>;
+  return {
+    most_recent_title:
+      typeof o.most_recent_title === "string" ? o.most_recent_title : undefined,
+    total_years_experience:
+      typeof o.total_years_experience === "number" ||
+      typeof o.total_years_experience === "string"
+        ? o.total_years_experience
+        : undefined,
+    work_history: Array.isArray(o.work_history)
+      ? (o.work_history as { company: string; type: string }[])
+      : undefined,
+    career_pattern:
+      typeof o.career_pattern === "string" ? o.career_pattern : undefined,
+  };
+}
+
 export type ModelRunResults = {
   claude: DevilsAdvocateResult;
   gpt: StructuredScorerResult;
@@ -358,6 +436,7 @@ function fallbackDevilsAdvocate(errorMsg: string): DevilsAdvocateResult {
   return {
     risks: [`Claude scoring model unavailable: ${errorMsg || "unknown error"}`],
     gaps: [],
+    interview_questions: [],
     dimension_scores: Object.fromEntries(
       DIMENSION_KEYS.map((k) => [k, { score: 0, reason: "Model unavailable - review recommended" }]),
     ) as DevilsAdvocateResult["dimension_scores"],

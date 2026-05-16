@@ -79,6 +79,38 @@ export type ModelRawResponses = {
   gemini: unknown;
 };
 
+export type CompanyType = "Services" | "Product" | "GCC" | "Startup";
+
+export type WorkHistoryEntry = {
+  company: string;
+  type: CompanyType;
+};
+
+export type CandidateHeader = {
+  display_name: string;
+  most_recent_title: string;
+  total_years_experience: string;
+  career_pattern: string;
+};
+
+export type StandoutBullet = {
+  signal: string;
+  evidence: string;
+};
+
+export type FitVerdict =
+  | "STRONG FIT"
+  | "POSSIBLE FIT"
+  | "WEAK FIT"
+  | "NOT SUITABLE";
+
+export type RecruiterCard = {
+  candidate_header: CandidateHeader;
+  what_stands_out: StandoutBullet[];
+  worth_exploring: string[];
+  interview_questions: string[];
+};
+
 export type CandidateScoreResult = {
   overall_score: number;
   /** True when overall used provisional scores for one or more dimensions. */
@@ -100,6 +132,7 @@ export type CandidateScoreResult = {
     gpt4o: { insufficient: string[] };
     gemini: { green_flags: string[]; watch_signals: string[] };
   };
+  recruiter_card: RecruiterCard;
 };
 
 export type SavedScore = {

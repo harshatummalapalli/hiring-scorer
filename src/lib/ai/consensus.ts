@@ -33,6 +33,7 @@ import type {
   StructuredScorerResult,
 } from "./model-runners";
 import type { ModelRawResponses } from "@/types/score";
+import { buildRecruiterCard } from "@/lib/scoring/recruiter-card";
 
 const DIMENSION_KEYS: DimensionKey[] = [
   "skills",
@@ -231,6 +232,8 @@ export function buildConsensusResult(
   signalExtractor: SignalExtractorResult,
   devilsAdvocate: DevilsAdvocateResult,
   model_raw_responses: ModelRawResponses,
+  resumeText: string,
+  candidateFilename = "candidate.pdf",
 ): CandidateScoreResult {
   const dimensionDetails: DimensionConsensusDetail[] = [];
   const dimension_scores = {} as Record<DimensionKey, DimensionScore>;
@@ -316,6 +319,21 @@ export function buildConsensusResult(
 
   const overall_score = computeWeightedOverall(dimension_scores, roleBrief);
 
+  const worthExploringCandidates = [
+    ...devilsAdvocate.gaps,
+    ...devilsAdvocate.risks,
+    ...watch_signals.map((w) => w.text),
+    ...review_flags.map((r) => r.text),
+  ];
+
+  const recruiter_card = buildRecruiterCard(
+    candidateFilename,
+    resumeText,
+    signalExtractor,
+    devilsAdvocate,
+    worthExploringCandidates,
+  );
+
   return {
     overall_score,
     overall_provisional: review_recommended,
@@ -338,5 +356,6 @@ export function buildConsensusResult(
     dissent_signals,
     model_raw_responses,
     model_flags,
+    recruiter_card,
   };
 }

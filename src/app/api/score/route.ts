@@ -48,6 +48,7 @@ export async function POST(request: Request) {
     const result = await runConsensusScore(
       body.roleBrief,
       body.resumeText.trim(),
+      candidateFilename,
     );
 
     const scoringRun = buildScoringRunPayloadFromResult(

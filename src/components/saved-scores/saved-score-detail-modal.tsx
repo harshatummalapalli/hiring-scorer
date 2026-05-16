@@ -56,7 +56,11 @@ export function SavedScoreDetailModal({
           </button>
         </div>
         <div className="p-4 sm:p-6">
-          <ScoreResults result={result} roleBrief={roleBrief} />
+          <ScoreResults
+            result={result}
+            roleBrief={roleBrief}
+            candidateFilename={candidateFilename}
+          />
         </div>
       </div>
     </div>

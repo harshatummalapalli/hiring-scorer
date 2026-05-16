@@ -10,6 +10,7 @@ import {
   CONFIDENCE_LABEL_REVIEW,
   toRecruiterConfidenceLabel,
 } from "@/lib/scoring/recruiter-labels";
+import { buildFallbackRecruiterCard } from "@/lib/scoring/recruiter-card";
 import type { SavedScoreRow } from "@/types/saved-score";
 
 const DIMENSION_KEYS: DimensionKey[] = [
@@ -81,7 +82,20 @@ export function reconstructCandidateResult(
   row: SavedScoreRow,
 ): CandidateScoreResult | null {
   if (row.score_snapshot && typeof row.score_snapshot === "object") {
-    return row.score_snapshot as CandidateScoreResult;
+    const snapshot = row.score_snapshot as CandidateScoreResult;
+    if (snapshot.recruiter_card) return snapshot;
+    return {
+      ...snapshot,
+      recruiter_card: buildFallbackRecruiterCard(
+        row.candidate_filename ?? "candidate.pdf",
+        [
+          ...snapshot.review_flags.map((f) => f.text),
+          ...snapshot.watch_signals.map((f) => f.text),
+          ...snapshot.gaps.map((f) => f.text),
+        ],
+        [],
+      ),
+    };
   }
 
   if (!row.dimension_scores) return null;
@@ -116,6 +130,14 @@ export function reconstructCandidateResult(
       gpt4o: { insufficient: [] },
       gemini: { green_flags: [], watch_signals: [] },
     },
+    recruiter_card: buildFallbackRecruiterCard(
+      row.candidate_filename ?? "candidate.pdf",
+      [
+        ...normalizeFlags(row.review_flags).map((f) => f.text),
+        ...normalizeFlags(row.watch_signals).map((f) => f.text),
+      ],
+      [],
+    ),
   };
 }
 
