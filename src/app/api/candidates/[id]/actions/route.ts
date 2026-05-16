@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createActivity, prependActivity } from "@/lib/candidates/activity";
+import { addCandidateToPipeline } from "@/lib/pipeline/add-to-pipeline";
 import { getCandidateById, updateCandidate } from "@/lib/supabase/candidates";
 import type { CandidateStage } from "@/types/candidate";
 
@@ -9,6 +10,7 @@ type ActionBody = {
   action: "screen" | "pass" | "save_to_pipeline" | "tag" | "stage";
   tag?: string;
   stage?: CandidateStage;
+  role_brief_id?: string;
 };
 
 export async function POST(request: Request, { params }: Params) {
@@ -38,13 +40,25 @@ export async function POST(request: Request, { params }: Params) {
           createActivity("passed", "Passed on this candidate"),
         );
         break;
-      case "save_to_pipeline":
+      case "save_to_pipeline": {
         patch.stage = "pipeline";
+        const roleBriefId = body.role_brief_id?.trim();
+        if (!roleBriefId) {
+          return NextResponse.json(
+            {
+              error:
+                "role_brief_id is required. Score this candidate against a role brief first, or select an active role brief.",
+            },
+            { status: 400 },
+          );
+        }
+        await addCandidateToPipeline(id, roleBriefId);
         activity = prependActivity(
           activity,
           createActivity("saved_to_pipeline", "Saved to pipeline"),
         );
         break;
+      }
       case "tag":
         if (body.tag?.trim()) {
           patch.tag = body.tag.trim();

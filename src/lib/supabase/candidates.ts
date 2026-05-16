@@ -94,6 +94,8 @@ function mapScoreRow(row: Record<string, unknown>): CandidateScoreSummary {
   const overall = Number(row.overall_score ?? 0);
   return {
     id: String(row.id),
+    role_brief_id:
+      row.role_brief_id != null ? String(row.role_brief_id) : null,
     role_brief_title:
       row.role_brief_title != null ? String(row.role_brief_title) : null,
     overall_score: overall,
@@ -149,7 +151,7 @@ export async function listCandidatesWithSummaries(): Promise<
   const { data: scoreRows, error } = await supabase
     .from("saved_scores")
     .select(
-      "id, candidate_id, candidate_filename, overall_score, role_brief_title, created_at",
+      "id, candidate_id, candidate_filename, overall_score, role_brief_id, role_brief_title, created_at",
     )
     .order("created_at", { ascending: false });
 

@@ -121,10 +121,13 @@ export type CandidateRoleFitScore = {
 
 export type CandidateScoreSummary = {
   id: string;
+  role_brief_id: string | null;
   role_brief_title: string | null;
   overall_score: number;
   verdict: FitVerdict;
 };
+
+export type CandidatePoolFilter = "all" | "scored" | "unscored";
 
 export type CandidateListItem = Omit<CandidateRow, "resume_text"> & {
   resume_text?: string;

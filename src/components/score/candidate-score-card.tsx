@@ -16,6 +16,8 @@ type CandidateScoreCardProps = {
   result: CandidateScoreResult;
   roleBrief: RoleBrief;
   candidateFilename: string;
+  hideHeader?: boolean;
+  compact?: boolean;
   onScreen?: () => void | Promise<void>;
   onPass?: () => void | Promise<void>;
   onSaveToPipeline?: () => void | Promise<void>;
@@ -53,6 +55,8 @@ export function CandidateScoreCard({
   result,
   roleBrief,
   candidateFilename,
+  hideHeader = false,
+  compact = false,
   onScreen,
   onPass,
   onSaveToPipeline,
@@ -86,12 +90,15 @@ export function CandidateScoreCard({
   const skillsMatchSummary = result.skills_intelligence
     ? formatSkillsMatchSummary(result.skills_intelligence)
     : null;
+  const verdictSize = compact
+    ? "text-2xl font-bold tracking-wide"
+    : "text-3xl font-bold tracking-wide sm:text-4xl";
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="space-y-10 p-8 sm:p-10">
-        {/* Section 1 — candidate header */}
-        <header className="space-y-4 border-b border-slate-100 pb-8">
+    <article className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className={compact ? "space-y-6 p-5" : "space-y-10 p-8 sm:p-10"}>
+        {!hideHeader && (
+          <header className="space-y-4 border-b border-slate-100 pb-8">
           <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
             {candidate_header.display_name}
           </h2>
@@ -115,16 +122,15 @@ export function CandidateScoreCard({
               </dd>
             </div>
           </dl>
-        </header>
+          </header>
+        )}
 
-        {/* Section 2 — verdict (large, prominent) */}
+        {/* Verdict */}
         <section
-          className={`rounded-2xl px-6 py-8 text-center ring-1 ${verdictStyle.bg} ${verdictStyle.ring}`}
+          className={`rounded-xl px-4 py-5 text-center ring-1 ${verdictStyle.bg} ${verdictStyle.ring} ${compact ? "" : "rounded-2xl px-6 py-8"}`}
           aria-label={`Verdict: ${verdict}`}
         >
-          <p
-            className={`text-3xl font-bold tracking-wide sm:text-4xl ${verdictStyle.text}`}
-          >
+          <p className={`${verdictSize} ${verdictStyle.text}`}>
             {verdict}
           </p>
           <p className="sr-only">Score {result.overall_score} out of 100</p>
