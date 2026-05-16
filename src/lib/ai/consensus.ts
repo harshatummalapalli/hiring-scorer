@@ -38,6 +38,7 @@ import { buildRecruiterCard } from "@/lib/scoring/recruiter-card";
 import { enrichRecruiterCardWithResumeSignals } from "@/lib/scoring/merge-resume-signals";
 import { enrichRecruiterCardWithSkillsIntelligence } from "@/lib/scoring/merge-skills-intelligence";
 import type { SkillsIntelligence } from "@/lib/intelligence/semantic-matcher";
+import { AGREEMENT_THRESHOLD } from "@/lib/ai/agreement-threshold";
 
 const DIMENSION_KEYS: DimensionKey[] = [
   "skills",
@@ -52,8 +53,6 @@ const MODEL_LABELS: Record<ModelRole, string> = {
   gpt4o: modelRoleDisplayName("gpt4o"),
   gemini: modelRoleDisplayName("gemini"),
 };
-
-const AGREEMENT_THRESHOLD = 10;
 
 type DimScores = { claude: number; gpt4o: number; gemini: number };
 

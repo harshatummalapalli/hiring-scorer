@@ -10,6 +10,7 @@ import {
   CONFIDENCE_LABEL_REVIEW,
   toRecruiterConfidenceLabel,
 } from "@/lib/scoring/recruiter-labels";
+import { AGREEMENT_THRESHOLD } from "@/lib/ai/agreement-threshold";
 import { buildFallbackRecruiterCard } from "@/lib/scoring/recruiter-card";
 import type { SavedScoreRow } from "@/types/saved-score";
 
@@ -22,7 +23,7 @@ const DIMENSION_KEYS: DimensionKey[] = [
 ];
 
 function agreementFromSpread(spread: number): DimensionConsensusDetail["agreement"] {
-  if (spread <= 10) return "unanimous";
+  if (spread <= AGREEMENT_THRESHOLD) return "unanimous";
   return "divergent";
 }
 

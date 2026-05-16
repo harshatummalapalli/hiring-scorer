@@ -10,8 +10,7 @@ const DIMENSION_KEYS: DimensionKey[] = [
   "tenure",
 ];
 
-const AGREEMENT_THRESHOLD = 10;
-
+import { AGREEMENT_THRESHOLD } from "@/lib/ai/agreement-threshold";
 import type { ScoringArchitecture } from "@/types/scoring-debug";
 
 export const SCORING_ARCHITECTURE: ScoringArchitecture = "3-call";

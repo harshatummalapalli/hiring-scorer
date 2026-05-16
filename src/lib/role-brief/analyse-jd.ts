@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getApiKey } from "@/lib/ai/api-keys";
 import { parseJsonFromModel } from "@/lib/ai/parse-json";
+import { dedupeRoleBriefAnalysis } from "@/lib/role-brief/dedupe-skills";
 import type { RoleBriefAnalysis, TitleBand } from "@/types/role-brief";
 import { TITLE_BANDS } from "@/types/role-brief";
 
@@ -51,7 +52,7 @@ export function parseRoleBriefAnalysis(raw: unknown): RoleBriefAnalysis {
     }
   }
 
-  return {
+  return dedupeRoleBriefAnalysis({
     deal_breakers: parseStringArray(o.deal_breakers),
     core_signals,
     preferred_signals: parseStringArray(o.preferred_signals),
@@ -59,7 +60,7 @@ export function parseRoleBriefAnalysis(raw: unknown): RoleBriefAnalysis {
     equivalent_titles: parseStringArray(o.equivalent_titles),
     title_band: parseTitleBand(o.title_band),
     semantic_clusters,
-  };
+  });
 }
 
 export async function analyseJobDescription(

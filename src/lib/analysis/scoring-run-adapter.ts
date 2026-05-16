@@ -5,6 +5,7 @@ import {
 } from "@/lib/scoring/provider-labels";
 import type { AnalysisDimensionRecord, AnalysisRunEntry } from "@/lib/analysis/analysis-entry";
 import type { ScoringRun } from "@/types/scoring-run";
+import { AGREEMENT_THRESHOLD } from "@/lib/ai/agreement-threshold";
 import type { DimensionKey, ModelRole } from "@/types/score";
 
 const DIMENSION_KEYS: DimensionKey[] = [
@@ -30,7 +31,7 @@ function buildDimensionsFromRun(run: ScoringRun): {
       const spread = run.spreads?.[key] ?? 0;
       const agreement =
         (run.confidence_levels?.[key]?.agreement as AnalysisDimensionRecord["agreement"]) ??
-        (spread <= 10 ? "unanimous" : "divergent");
+        (spread <= AGREEMENT_THRESHOLD ? "unanimous" : "divergent");
       const consensusScore =
         run.dimension_scores?.[key]?.score ??
         Math.round(

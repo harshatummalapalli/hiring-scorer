@@ -1,3 +1,5 @@
+import { dedupeRoleBriefAnalysis } from "@/lib/role-brief/dedupe-skills";
+
 export type TitleBand = "Entry" | "Mid" | "Senior" | "Staff" | "Principal";
 
 export const TITLE_BANDS: TitleBand[] = [
@@ -128,16 +130,18 @@ export function roleBriefToSavePayload(
   jobDescription: string,
   analysis: RoleBriefAnalysis,
 ) {
+  const deduped = dedupeRoleBriefAnalysis(analysis);
+
   return {
     title: title.trim(),
     job_description: jobDescription.trim(),
-    deal_breakers: analysis.deal_breakers,
-    core_signals: analysis.core_signals,
-    preferred_signals: analysis.preferred_signals,
-    cannot_assess: analysis.cannot_assess,
-    equivalent_titles: analysis.equivalent_titles,
-    title_band: analysis.title_band,
-    semantic_clusters: analysis.semantic_clusters,
+    deal_breakers: deduped.deal_breakers,
+    core_signals: deduped.core_signals,
+    preferred_signals: deduped.preferred_signals,
+    cannot_assess: deduped.cannot_assess,
+    equivalent_titles: deduped.equivalent_titles,
+    title_band: deduped.title_band,
+    semantic_clusters: deduped.semantic_clusters,
     department: null,
     responsibilities: null,
     required_skills: null,

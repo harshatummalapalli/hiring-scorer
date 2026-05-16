@@ -415,12 +415,7 @@ export function ScoreManager() {
           {SCORING_PANEL_TITLE}
         </h2>
         <p className="mt-1 mb-4 text-sm text-slate-500">
-          {SCORING_PANEL_DESCRIPTION} Set{" "}
-          <code className="text-xs">GOOGLE_API_KEY</code> (Gemini),{" "}
-          <code className="text-xs">ANTHROPIC_API_KEY</code>, and{" "}
-          <code className="text-xs">OPENAI_API_KEY</code> in{" "}
-          <code className="text-xs">.env.local</code> and restart the dev server
-          after changes.
+          {SCORING_PANEL_DESCRIPTION}
         </p>
 
         <div className="flex flex-wrap gap-3">
