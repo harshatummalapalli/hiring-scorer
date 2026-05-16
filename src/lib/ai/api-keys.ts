@@ -29,11 +29,15 @@ export function getApiKey(provider: AiProvider): string {
       return key;
     }
     case "google": {
-      const raw = process.env.GOOGLE_API_KEY?.trim() ?? "";
+      const raw =
+        process.env.GOOGLE_API_KEY?.trim() ??
+        process.env.GEMINI_API_KEY?.trim() ??
+        process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ??
+        "";
       const key = raw.replace(/^["']|["']$/g, "");
       if (!key || key.includes("your_google")) {
         throw new Error(
-          "GOOGLE_API_KEY is missing in .env.local. Create one at https://aistudio.google.com/apikey",
+          "GOOGLE_API_KEY is missing. Set it in .env.local locally, or in Vercel → Project Settings → Environment Variables (name: GOOGLE_API_KEY). Create a key at https://aistudio.google.com/apikey",
         );
       }
       if (!key.startsWith("AIza") || key.length < 35) {

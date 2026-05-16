@@ -62,18 +62,10 @@ export function parseYearsNumber(yearsLabel: string): number | null {
 }
 
 export function formatProfileSubtitle(profile: CandidateSignalProfile): string {
-  const parts: string[] = [];
-  const title = getDisplayJobTitle(profile);
-  if (title) {
-    const withCompany = profile.current_company?.trim()
-      ? `${title} at ${profile.current_company.trim()}`
-      : title;
-    parts.push(withCompany);
-  }
-  const n = parseYearsNumber(profile.total_years_experience);
-  parts.push(n != null ? `${n} yrs exp` : "Experience not stated");
-  if (profile.location?.trim()) parts.push(profile.location.trim());
-  return parts.join(" · ");
+  const headline = formatCandidateHeadline(profile);
+  if (headline) return headline;
+  if (profile.location?.trim()) return profile.location.trim();
+  return "Experience not stated";
 }
 
 export function titleBandToDisplayLabel(band: string | null): string {
@@ -109,13 +101,32 @@ export function getDisplayJobTitle(profile: CandidateSignalProfile): string {
     stored &&
     stored !== "Not stated" &&
     !isEducationTitle(stored) &&
+    !isSummaryLikeTitle(stored) &&
     !/\[REDACTED/i.test(stored) &&
     stored.length <= 90
   ) {
     return stored;
   }
 
-  return titleBandToDisplayLabel(profile.title_band);
+  return "";
+}
+
+export function getCandidateHeaderName(profile: CandidateSignalProfile): string {
+  const first = profile.first_name?.trim();
+  const last = profile.last_name?.trim();
+  if (first && last) return `${first} ${last}`;
+  if (first) return first;
+  return profile.display_name?.trim() || "Candidate";
+}
+
+export function formatCandidateHeadline(profile: CandidateSignalProfile): string {
+  const parts: string[] = [];
+  const title = getDisplayJobTitle(profile);
+  if (title) parts.push(title);
+  if (profile.current_company?.trim()) parts.push(profile.current_company.trim());
+  const years = profile.total_years_experience?.trim();
+  if (years && years !== "Not stated") parts.push(years);
+  return parts.join(" · ");
 }
 
 export function evidenceContainsRedaction(text: string): boolean {

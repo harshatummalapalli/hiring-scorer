@@ -1,5 +1,6 @@
 import { analyseResumeSignals } from "@/lib/intelligence/beyond-keywords";
-import { filenameToDisplayName } from "@/lib/scoring/recruiter-card";
+import { extractResumeLinks } from "@/lib/candidates/parse-resume-links";
+import { parseResumeIdentity } from "@/lib/candidates/parse-resume-identity";
 import type { CompanyType } from "@/types/score";
 import type {
   CandidateSignalProfile,
@@ -8,9 +9,8 @@ import type {
 } from "@/types/candidate";
 import {
   inferTitleBand,
+  isSummaryLikeTitle,
   isValidExperienceEntry,
-  resolveMostRecentJobTitle,
-  titleBandToDisplayLabel,
 } from "./profile-display";
 import {
   computeTrajectoryVelocity,
@@ -19,7 +19,6 @@ import {
   extractExplicitYearsOfExperience,
   extractFirstSubstantialLine,
   extractLocation,
-  extractNameFromRawResume,
   extractProfessionalSummary,
   extractTitleFromResumeHeader,
   parseEducationEntries,
@@ -196,19 +195,24 @@ export function buildSignalProfile(
       ? career_types_sequence.join(" → ")
       : "Not available";
 
-  const display_name =
-    extractNameFromRawResume(resumeText) ?? filenameToDisplayName(resumeFilename);
+  const identity = parseResumeIdentity(resumeText, resumeFilename);
+  const { linkedin_url, portfolio_links } = extractResumeLinks(resumeText);
+  const display_name = identity.display_name;
+
   const title_band = inferTitleBand(
     experience[0]?.title ?? professional_summary.slice(0, 200),
   );
-  const experienceTitle = experience.find((e) => isValidExperienceEntry(e))?.title.trim();
+  const recentRole = experience.find((e) => isValidExperienceEntry(e));
+  const experienceTitle = recentRole?.title.trim();
+  const headerTitle = extractTitleFromResumeHeader(resumeText)?.trim();
   const most_recent_title =
-    experienceTitle ??
-    extractTitleFromResumeHeader(resumeText) ??
-    titleBandToDisplayLabel(title_band);
+    experienceTitle ||
+    (headerTitle && !isSummaryLikeTitle(headerTitle) ? headerTitle : "") ||
+    "";
   const current_company =
-    experience.find((e) => isValidExperienceEntry(e))?.company.trim() ??
-    extractCurrentCompany(resumeText);
+    recentRole?.company.trim() ||
+    extractCurrentCompany(resumeText)?.trim() ||
+    null;
   const location = extractLocation(resumeText);
   const explicitYears = extractExplicitYearsOfExperience(resumeText, rawSections);
   const fromRoles = estimateYearsExperience(experience);
@@ -222,10 +226,14 @@ export function buildSignalProfile(
 
   return {
     display_name,
+    first_name: identity.first_name,
+    last_name: identity.last_name,
     most_recent_title,
     current_company,
     location,
     total_years_experience,
+    linkedin_url,
+    portfolio_links,
     career_pattern,
     career_types_sequence,
     shows_product_progression: detectProductProgression(career_types_sequence),
@@ -255,13 +263,11 @@ export function buildSignalProfile(
   };
 }
 
+/** Always re-parse resume text so list/detail stay in sync with the code parser. */
 export function normalizeSignalProfile(
-  raw: unknown,
+  _raw: unknown,
   resumeText: string,
   resumeFilename: string,
 ): CandidateSignalProfile {
-  if (typeof raw === "object" && raw != null && "display_name" in raw) {
-    return buildSignalProfile(resumeText, resumeFilename);
-  }
   return buildSignalProfile(resumeText, resumeFilename);
 }

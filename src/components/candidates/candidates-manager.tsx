@@ -78,8 +78,10 @@ export function CandidatesManager() {
   const [candidates, setCandidates] = useState<CandidateListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [reparsing, setReparsing] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [verdictFilter, setVerdictFilter] =
@@ -138,10 +140,30 @@ export function CandidatesManager() {
     setExperienceFilter("all");
   };
 
+  const handleReparseAll = async () => {
+    setReparsing(true);
+    setError(null);
+    setUploadNotice(null);
+    try {
+      const res = await fetch("/api/candidates/reparse", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Reparse failed");
+      setUploadNotice(
+        `Re-parsed ${json.total} candidate${json.total === 1 ? "" : "s"} from stored resume text.`,
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Reparse failed");
+    } finally {
+      setReparsing(false);
+    }
+  };
+
   const handleFiles = async (files: FileList | null) => {
     if (!files?.length) return;
     setUploading(true);
     setError(null);
+    setUploadNotice(null);
     try {
       for (const file of Array.from(files)) {
         const resumeText = await parseResumeFile(file);
@@ -164,7 +186,8 @@ export function CandidatesManager() {
         console.log("[upload] candidate saved", {
           id: json.id,
           extractionSource: json.extractionSource,
-          name: json.signal_profile?.display_name,
+          extractionError: json.extractionError,
+          name: json.display_name ?? json.signal_profile?.display_name,
         });
       }
       setShowUpload(false);
@@ -188,15 +211,37 @@ export function CandidatesManager() {
             score, screen, or add notes.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowUpload((s) => !s)}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
-        >
-          <UserPlus className="h-4 w-4" aria-hidden />
-          Add to pool
-        </button>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void handleReparseAll()}
+            disabled={reparsing || loading}
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {reparsing ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : null}
+            Refresh from resume
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowUpload((s) => !s)}
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+          >
+            <UserPlus className="h-4 w-4" aria-hidden />
+            Add to pool
+          </button>
+        </div>
       </div>
+
+      {uploadNotice && (
+        <div
+          role="status"
+          className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+        >
+          {uploadNotice}
+        </div>
+      )}
 
       {showUpload && (
         <div className="mb-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">

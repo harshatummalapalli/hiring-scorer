@@ -162,7 +162,7 @@ function parseBulletsFromLines(lines: string[]): string[] {
     .filter((l) => /^[•\-\*▪]/.test(l) || /^\d+\.\s/.test(l))
     .map((l) => l.replace(/^[•\-\*▪]\s*|\d+\.\s*/, "").trim())
     .filter((l) => l.length > 10)
-    .slice(0, 3);
+    .slice(0, 8);
 }
 
 function lineHasDateRange(line: string): boolean {
@@ -553,29 +553,99 @@ const PORTAL_NAMES =
 const PHONE_PATTERN =
   /\+?\d{1,4}[-.\s]?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}|\b\d{10,15}\b/;
 
+function capitalizeWord(w: string): string {
+  return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+}
+
+function splitGluedNameToken(word: string): string[] | null {
+  const parts = word
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length >= 2) {
+    return parts.map(capitalizeWord);
+  }
+  return null;
+}
+
+function isNameWord(w: string): boolean {
+  return (
+    /^[A-Z][A-Za-z'-]{1,}$/.test(w) ||
+    /^[A-Z]{2,}$/.test(w) ||
+    /^[A-Z]\.?$/.test(w)
+  );
+}
+
 function looksLikeName(line: string): boolean {
   if (JOB_TITLE_HINT.test(line)) return false;
+  if (/\[REDACTED/i.test(line)) return false;
   const words = line.trim().split(/\s+/);
-  if (words.length < 2 || words.length > 3) return false;
-  return words.every((w) => /^[A-Z][A-Za-z'-]{1,}$/.test(w));
+  if (words.length >= 2 && words.length <= 4) {
+    return words.every(isNameWord);
+  }
+  if (words.length === 1) {
+    const w = words[0];
+    if (w.length >= 4 && w.length <= 24 && isNameWord(w)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function extractNameFromHeaderChunk(chunk: string): string | null {
+  const head = chunk.slice(0, 600).trim();
+  if (!head) return null;
+
+  const beforeTitle = head.split(
+    /\b(?:software|senior|staff|lead|engineer|developer|architect|consultant|analyst|manager|summary|experience|education|skills|objective|profile)\b/i,
+  )[0];
+  const segment = (beforeTitle ?? head).trim();
+  const candidates = [
+    segment.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z.'-]+){1,3})\b/),
+    segment.match(/^([A-Z]{2,}(?:\s+[A-Z]{2,}){1,3})\b/),
+    segment.match(/^([A-Za-z]+(?:\s+[A-Za-z]+){1,3})\b/),
+  ];
+  for (const match of candidates) {
+    const raw = match?.[1]?.trim();
+    if (!raw || raw.length < 4 || raw.length > 48) continue;
+    if (!looksLikeName(raw)) continue;
+    return formatNameLine(raw);
+  }
+  return null;
+}
+
+function formatNameLine(line: string): string {
+  const trimmed = line.trim();
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  if (words.length === 1) {
+    const split = splitGluedNameToken(words[0]);
+    if (split) return split.join(" ");
+    return capitalizeWord(words[0]);
+  }
+  return words.map(capitalizeWord).join(" ");
 }
 
 export function extractNameFromRawResume(rawResumeText: string): string | null {
   const lines = rawResumeText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  for (const line of lines.slice(0, 6)) {
+  for (const line of lines.slice(0, 12)) {
+    if (/\[REDACTED/i.test(line)) continue;
     if (/\d/.test(line)) continue;
     if (/@/.test(line)) continue;
     if (/[|•·,;:(){}\[\]#@+~!%^&*<>]/.test(line)) continue;
     if (/linkedin\.com|github\.com|http/i.test(line)) continue;
     if (PORTAL_NAMES.test(line)) continue;
-    if (line.length < 4 || line.length > 40) continue;
+    if (line.length < 3 || line.length > 48) continue;
     if (!looksLikeName(line)) continue;
-    return line
-      .split(/\s+/)
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-      .join(" ");
+    return formatNameLine(line);
   }
-  return null;
+
+  if (lines.length === 1 && lines[0].length > 80) {
+    return extractNameFromHeaderChunk(lines[0]);
+  }
+  if (lines.length > 0) {
+    return extractNameFromHeaderChunk(lines.slice(0, 3).join(" "));
+  }
+  return extractNameFromHeaderChunk(rawResumeText);
 }
 
 export function extractTitleFromResumeHeader(resumeText: string): string | null {

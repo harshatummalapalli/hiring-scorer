@@ -43,16 +43,22 @@ export function filenameToDisplayName(filename: string): string {
 
   if (!base) return "Candidate";
 
-  const words = base
+  const companyWord =
+    /^(?:microsoft|google|amazon|meta|apple|netflix|flipkart|swiggy|zomato|razorpay|phonepe|paytm|freshworks|infosys|tcs|wipro|cognizant|hcl|accenture|capgemini|deloitte|ibm|oracle|sap|adobe|salesforce|uber|airbnb|stripe|linkedin|naukri|hirist|apna|shine)$/i;
+
+  let words = base
     .split(" ")
     .filter(Boolean)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 
-  const result = words.join(" ");
-  if (words.length > 4 || result.length > 30) {
+  while (words.length > 2 && companyWord.test(words[words.length - 1] ?? "")) {
+    words.pop();
+  }
+
+  if (words.length > 4 || words.join(" ").length > 32) {
     return words.slice(0, 2).join(" ") || "Candidate";
   }
-  return result;
+  return words.join(" ") || "Candidate";
 }
 
 export function scoreToVerdict(score: number): FitVerdict {

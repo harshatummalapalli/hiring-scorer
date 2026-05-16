@@ -1,6 +1,9 @@
 import Link from "next/link";
 import type { CandidateListItem } from "@/types/candidate";
-import { getDisplayJobTitle } from "@/lib/candidates/profile-display";
+import {
+  formatCandidateHeadline,
+  getCandidateHeaderName,
+} from "@/lib/candidates/profile-display";
 import { initialsFromName, shortVerdictLabel } from "@/lib/candidates/list-filters";
 import { VERDICT_BADGE } from "./profile-shared";
 
@@ -10,6 +13,8 @@ type CandidateListCardProps = {
 
 export function CandidateListCard({ candidate }: CandidateListCardProps) {
   const profile = candidate.signal_profile;
+  const displayName = getCandidateHeaderName(profile);
+  const headline = formatCandidateHeadline(profile);
   const topSkills = profile.skills_verified.slice(0, 3);
 
   return (
@@ -22,13 +27,13 @@ export function CandidateListCard({ candidate }: CandidateListCardProps) {
           className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-900 text-base font-semibold text-white"
           aria-hidden
         >
-          {initialsFromName(candidate.display_name)}
+          {initialsFromName(displayName)}
         </div>
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <h3 className="text-lg font-bold text-[#0a1628] group-hover:text-slate-900">
-              {candidate.display_name}
+              {displayName}
             </h3>
             {candidate.tag && (
               <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
@@ -38,21 +43,7 @@ export function CandidateListCard({ candidate }: CandidateListCardProps) {
           </div>
 
           <p className="mt-0.5 text-sm text-slate-600">
-            <span className="text-slate-800">{getDisplayJobTitle(profile)}</span>
-            {profile.current_company && (
-              <>
-                <span className="mx-1.5 text-slate-300" aria-hidden>·</span>
-                <span>{profile.current_company}</span>
-              </>
-            )}
-            {!profile.current_company &&
-              profile.career_pattern &&
-              profile.career_pattern !== "Not available" && (
-                <>
-                  <span className="mx-1.5 text-slate-300" aria-hidden>·</span>
-                  <span>{profile.career_pattern}</span>
-                </>
-              )}
+            {headline || "Title and company not parsed from resume"}
           </p>
 
           {topSkills.length > 0 && (

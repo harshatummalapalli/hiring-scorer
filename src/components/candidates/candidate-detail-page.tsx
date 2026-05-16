@@ -9,15 +9,16 @@ import {
   ChevronUp,
   Loader2,
   Sparkles,
-  TrendingUp,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import type { CandidateDetail } from "@/types/candidate";
 import type { RoleBrief } from "@/types/role-brief";
 import {
-  formatProfileSubtitle,
+  formatCandidateHeadline,
+  getCandidateHeaderName,
   sanitizeEvidenceForDisplay,
 } from "@/lib/candidates/profile-display";
+import { formatExperienceMeta } from "@/lib/candidates/format-experience";
 import {
   ownershipLabel,
   quantificationLabel,
@@ -220,24 +221,80 @@ export function CandidateDetailPage({ candidateId }: { candidateId: string }) {
                   className="flex h-28 w-28 shrink-0 items-center justify-center rounded-full border-4 border-white bg-slate-900 text-3xl font-semibold text-white shadow-md"
                   aria-hidden
                 >
-                  {initials(candidate.display_name)}
+                  {initials(getCandidateHeaderName(profile))}
                 </div>
                 <div className="min-w-0 flex-1 pt-2 sm:pt-0">
                   <h1 className="text-2xl font-bold tracking-tight text-[#0a1628] sm:text-3xl">
-                    {candidate.display_name}
+                    {getCandidateHeaderName(profile)}
                   </h1>
-                  <p className="mt-1 text-lg text-slate-500">
-                    {formatProfileSubtitle(profile)}
+                  <p className="mt-1 text-lg text-slate-600">
+                    {formatCandidateHeadline(profile) ||
+                      "Current role not parsed from resume"}
                   </p>
-                  <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-600">
-                    {profile.career_pattern}
-                    {profile.shows_product_progression && (
-                      <TrendingUp
-                        className="h-4 w-4 text-emerald-600"
-                        aria-label="Progression toward product companies"
-                      />
-                    )}
-                  </p>
+                  {(profile.linkedin_url || profile.portfolio_links.length > 0) && (
+                    <div className="mt-3 flex flex-wrap gap-3 text-sm font-medium">
+                      {profile.linkedin_url && (
+                        <a
+                          href={profile.linkedin_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[#0a66c2] hover:underline"
+                        >
+                          LinkedIn
+                        </a>
+                      )}
+                      {profile.portfolio_links.map((url) => (
+                        <a
+                          key={url}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-slate-700 hover:text-slate-900 hover:underline"
+                        >
+                          {url.includes("github.com")
+                            ? "GitHub"
+                            : url.replace(/^https?:\/\/(www\.)?/, "").slice(0, 36)}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
+                    <div>
+                      <dt className="text-slate-500">First name</dt>
+                      <dd className="font-medium text-slate-900">
+                        {profile.first_name || "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-500">Last name</dt>
+                      <dd className="font-medium text-slate-900">
+                        {profile.last_name || "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-500">Current title</dt>
+                      <dd className="font-medium text-slate-900">
+                        {profile.most_recent_title || "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-500">Current company</dt>
+                      <dd className="font-medium text-slate-900">
+                        {profile.current_company || "—"}
+                      </dd>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <dt className="text-slate-500">Total experience</dt>
+                      <dd className="font-medium text-slate-900">
+                        {profile.total_years_experience || "—"}
+                      </dd>
+                    </div>
+                  </dl>
+                  {profile.location?.trim() && (
+                    <p className="mt-2 text-sm text-slate-500">
+                      {profile.location}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="mt-6 flex flex-wrap gap-3">
@@ -376,9 +433,13 @@ export function CandidateDetailPage({ candidateId }: { candidateId: string }) {
                 </div>
               ) : (
               <>
-              <ul className="space-y-8">
+              <ul className="space-y-0 border-l-2 border-slate-200 pl-6">
                 {visibleExp.map((job, i) => (
-                  <li key={i} className="flex gap-4">
+                  <li key={i} className="relative flex gap-4 pb-10 last:pb-0">
+                    <span
+                      className="absolute -left-[1.55rem] top-1.5 h-3 w-3 rounded-full border-2 border-white bg-slate-400 ring-2 ring-slate-200"
+                      aria-hidden
+                    />
                     <CompanyLogoPlaceholder company={job.company} />
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-slate-900">
@@ -389,9 +450,7 @@ export function CandidateDetailPage({ candidateId }: { candidateId: string }) {
                         <CompanyTypeBadge type={job.company_type} />
                       </p>
                       <p className="mt-1 text-sm text-slate-500">
-                        {[job.location, job.start_date, job.end_date]
-                          .filter(Boolean)
-                          .join(" · ")}
+                        {formatExperienceMeta(job)}
                       </p>
                       {job.bullets.length > 0 && (
                         <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-slate-700">

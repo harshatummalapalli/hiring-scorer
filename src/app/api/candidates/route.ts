@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
-import { geminiExtractProfile } from "@/lib/candidates/gemini-profile-extractor";
 import { buildSignalProfile } from "@/lib/candidates/build-signal-profile";
+import { getCandidateHeaderName } from "@/lib/candidates/profile-display";
+import { normalizeResumeText } from "@/lib/resume/normalize-resume-text";
 import { createActivity } from "@/lib/candidates/activity";
 import {
   insertCandidate,
   listCandidatesWithSummaries,
 } from "@/lib/supabase/candidates";
+
+export const maxDuration = 60;
 
 export async function GET() {
   try {
@@ -41,7 +44,7 @@ function coerceResumeText(value: unknown): string {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as PostBody;
-    const resumeText = coerceResumeText(body.resumeText);
+    const resumeText = normalizeResumeText(coerceResumeText(body.resumeText));
     if (!resumeText) {
       return NextResponse.json(
         { error: "Resume text is required." },
@@ -58,32 +61,30 @@ export async function POST(request: Request) {
     const resumeFilename =
       body.resumeFilename?.trim() || "candidate-resume.pdf";
 
-    let signal_profile;
-    let extractionSource = "gemini";
-    try {
-      signal_profile = await geminiExtractProfile(resumeText);
-    } catch (geminiErr) {
-      console.error("[candidates] Gemini extraction failed, falling back to code parser:", geminiErr);
-      extractionSource = "code";
-      signal_profile = buildSignalProfile(resumeText, resumeFilename);
-    }
-
+    const signal_profile = buildSignalProfile(resumeText, resumeFilename);
     const display_name =
-      body.displayName?.trim() || signal_profile.display_name;
+      body.displayName?.trim() || getCandidateHeaderName(signal_profile);
 
     const activity = [
       createActivity("added", "Candidate added to talent pool"),
     ];
 
+    const profile = { ...signal_profile, display_name };
+
     const { id } = await insertCandidate({
       display_name,
       resume_filename: resumeFilename,
       resume_text: resumeText,
-      signal_profile: { ...signal_profile, display_name },
+      signal_profile: profile,
       activity,
     });
 
-    return NextResponse.json({ id, signal_profile, extractionSource });
+    return NextResponse.json({
+      id,
+      display_name,
+      signal_profile: profile,
+      extractionSource: "code",
+    });
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to create candidate";

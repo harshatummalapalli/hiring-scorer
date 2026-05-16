@@ -11,6 +11,7 @@ import type {
   CandidateStage,
 } from "@/types/candidate";
 import { normalizeSignalProfile } from "@/lib/candidates/build-signal-profile";
+import { getCandidateHeaderName } from "@/lib/candidates/profile-display";
 import { scoreToVerdict } from "@/lib/scoring/recruiter-card";
 import type { CandidateScoreResult } from "@/types/score";
 
@@ -28,16 +29,18 @@ function getServerSupabase(): SupabaseClient {
 function rowToCandidate(row: Record<string, unknown>): CandidateRow {
   const filename = String(row.resume_filename ?? "candidate.pdf");
   const resumeText = String(row.resume_text ?? "");
+  const signal_profile = normalizeSignalProfile(
+    row.signal_profile,
+    resumeText,
+    filename,
+  );
+  const display_name = getCandidateHeaderName(signal_profile);
   return {
     id: String(row.id),
-    display_name: String(row.display_name),
+    display_name,
     resume_filename: row.resume_filename != null ? String(row.resume_filename) : null,
     resume_text: resumeText,
-    signal_profile: normalizeSignalProfile(
-      row.signal_profile,
-      resumeText,
-      filename,
-    ),
+    signal_profile: { ...signal_profile, display_name },
     stage: (row.stage as CandidateStage) ?? "new",
     tag: row.tag != null ? String(row.tag) : null,
     activity: Array.isArray(row.activity)
@@ -46,6 +49,28 @@ function rowToCandidate(row: Record<string, unknown>): CandidateRow {
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
   };
+}
+
+async function backfillResolvedDisplayNames(
+  rawRows: Record<string, unknown>[],
+  candidates: CandidateRow[],
+): Promise<void> {
+  const supabase = getServerSupabase();
+  const updates = candidates.flatMap((candidate, i) => {
+    const rawName = String(rawRows[i]?.display_name ?? "").trim();
+    if (!rawName || rawName === candidate.display_name) return [];
+    return [
+      supabase
+        .from("candidates")
+        .update({
+          display_name: candidate.display_name,
+          signal_profile: candidate.signal_profile,
+        })
+        .eq("id", candidate.id),
+    ];
+  });
+  if (updates.length === 0) return;
+  await Promise.allSettled(updates);
 }
 
 export async function listCandidates(): Promise<CandidateRow[]> {
@@ -59,7 +84,10 @@ export async function listCandidates(): Promise<CandidateRow[]> {
     if (error.message?.toLowerCase().includes("does not exist")) return [];
     throw new Error(error.message);
   }
-  return (data ?? []).map((r) => rowToCandidate(r as Record<string, unknown>));
+  const rawRows = (data ?? []) as Record<string, unknown>[];
+  const candidates = rawRows.map((r) => rowToCandidate(r));
+  void backfillResolvedDisplayNames(rawRows, candidates).catch(() => {});
+  return candidates;
 }
 
 function mapScoreRow(row: Record<string, unknown>): CandidateScoreSummary {

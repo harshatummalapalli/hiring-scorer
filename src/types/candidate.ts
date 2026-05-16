@@ -41,10 +41,14 @@ export type EducationEntry = {
 
 export type CandidateSignalProfile = {
   display_name: string;
+  first_name: string;
+  last_name: string;
   most_recent_title: string;
   current_company: string | null;
   location: string | null;
   total_years_experience: string;
+  linkedin_url: string | null;
+  portfolio_links: string[];
   career_pattern: string;
   career_types_sequence: CompanyType[];
   shows_product_progression: boolean;

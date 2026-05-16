@@ -1,3 +1,5 @@
+import { normalizeResumeText } from "./normalize-resume-text";
+
 const MAX_CHARS = 50_000;
 
 export async function parseResumeFile(file: File): Promise<string> {
@@ -14,7 +16,7 @@ export async function parseResumeFile(file: File): Promise<string> {
     throw new Error("Unsupported file type. Upload PDF, DOCX, or TXT.");
   }
 
-  const trimmed = text.replace(/\s+/g, " ").trim();
+  const trimmed = normalizeResumeText(text);
   if (!trimmed) {
     throw new Error("Could not extract text from this file.");
   }
