@@ -47,6 +47,32 @@ async function loadScoreForRole(
   };
 }
 
+/** Latest score for this candidate on any role (talent-pool adds). */
+async function loadLatestScoreAnyRole(
+  candidateId: string,
+): Promise<{
+  overall_score: number;
+  verdict: string;
+  score_snapshot: CandidateScoreResult | null;
+} | null> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("saved_scores")
+    .select("overall_score, score_snapshot")
+    .eq("candidate_id", candidateId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  const score = Number(data.overall_score ?? 0);
+  return {
+    overall_score: score,
+    verdict: scoreToVerdict(score),
+    score_snapshot: (data.score_snapshot as CandidateScoreResult) ?? null,
+  };
+}
+
 export async function addCandidateToPipeline(
   candidateId: string,
   roleBriefId: string,
@@ -59,7 +85,9 @@ export async function addCandidateToPipeline(
     throw new Error("Candidate not found.");
   }
 
-  const score = await loadScoreForRole(candidateId, roleBriefId);
+  const scoreForRole = await loadScoreForRole(candidateId, roleBriefId);
+  const score =
+    scoreForRole ?? (await loadLatestScoreAnyRole(candidateId));
   const contact = extractContactFromResume(candidate.resume_text);
   const profile = candidate.signal_profile;
 
@@ -67,9 +95,12 @@ export async function addCandidateToPipeline(
     ? insightsFromScoreResult(score.score_snapshot)
     : insightsFromProfile(profile);
 
-  const fit_score = score?.overall_score ?? candidate.role_fit_scores.find(
-    (f) => f.role_brief_id === roleBriefId,
-  )?.overall_score ?? null;
+  const fit_score =
+    score?.overall_score ??
+    candidate.role_fit_scores.find((f) => f.role_brief_id === roleBriefId)
+      ?.overall_score ??
+    candidate.role_fit_scores[0]?.overall_score ??
+    null;
 
   const fit_verdict =
     score?.verdict ??

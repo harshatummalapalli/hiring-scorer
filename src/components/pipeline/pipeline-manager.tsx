@@ -87,14 +87,18 @@ function EditableCell({
   );
 }
 
+type AddCandidateSource = "role" | "talent_pool";
+
 function AddCandidateModal({
   roleBriefId,
   roleTitle,
+  source,
   onClose,
   onAdded,
 }: {
   roleBriefId: string;
   roleTitle: string;
+  source: AddCandidateSource;
   onClose: () => void;
   onAdded: () => void;
 }) {
@@ -109,8 +113,9 @@ function AddCandidateModal({
     void (async () => {
       setLoading(true);
       try {
+        const poolParam = source === "talent_pool" ? "&pool=any" : "";
         const res = await fetch(
-          `/api/pipeline/scored-candidates?role_brief_id=${encodeURIComponent(roleBriefId)}`,
+          `/api/pipeline/scored-candidates?role_brief_id=${encodeURIComponent(roleBriefId)}${poolParam}`,
         );
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? "Failed to load");
@@ -121,7 +126,7 @@ function AddCandidateModal({
         setLoading(false);
       }
     })();
-  }, [roleBriefId]);
+  }, [roleBriefId, source]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -179,9 +184,16 @@ function AddCandidateModal({
       >
         <div className="border-b border-slate-200 px-5 py-4">
           <h2 id="add-pipeline-title" className="text-lg font-semibold text-slate-900">
-            Add to pipeline
+            {source === "talent_pool" ? "Add from talent pool" : "Add to pipeline"}
           </h2>
-          <p className="mt-1 text-sm text-slate-600">{roleTitle}</p>
+          <p className="mt-1 text-sm text-slate-600">
+            {roleTitle}
+            {source === "talent_pool" && (
+              <span className="block text-xs text-slate-500">
+                Candidates scored on any role brief
+              </span>
+            )}
+          </p>
         </div>
         <div className="border-b border-slate-200 px-5 py-3">
           <div className="relative">
@@ -202,8 +214,9 @@ function AddCandidateModal({
             </div>
           ) : filtered.length === 0 ? (
             <p className="px-3 py-8 text-center text-sm text-slate-500">
-              No scored candidates for this role yet. Score candidates from the
-              talent pool first.
+              {source === "talent_pool"
+                ? "No scored candidates in the talent pool yet. Score candidates on the Candidates page first."
+                : "No scored candidates for this role yet. Score candidates against this role brief first."}
             </p>
           ) : (
             <ul className="space-y-1">
@@ -277,6 +290,7 @@ function RoleSection({
   onToggle,
   onPatch,
   onOpenAdd,
+  onOpenTalentPool,
 }: {
   section: PipelineRoleSection;
   expanded: boolean;
@@ -287,6 +301,7 @@ function RoleSection({
     value: string,
   ) => Promise<void>;
   onOpenAdd: () => void;
+  onOpenTalentPool: () => void;
 }) {
   return (
     <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -312,9 +327,19 @@ function RoleSection({
       {expanded && (
         <div className="border-t border-slate-200">
           {section.candidates.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-slate-500">
-              No candidates in this pipeline yet.
-            </p>
+            <div className="flex flex-col items-center px-5 py-10 text-center">
+              <p className="text-sm text-slate-600">
+                No candidates shortlisted yet
+              </p>
+              <button
+                type="button"
+                onClick={onOpenTalentPool}
+                className="mt-4 inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+              >
+                <Plus className="h-4 w-4" />
+                Add from talent pool
+              </button>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[960px] text-left text-sm">
@@ -340,16 +365,18 @@ function RoleSection({
               </table>
             </div>
           )}
-          <div className="border-t border-slate-200 px-5 py-4">
-            <button
-              type="button"
-              onClick={onOpenAdd}
-              className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-            >
-              <Plus className="h-4 w-4" />
-              Add candidate
-            </button>
-          </div>
+          {section.candidates.length > 0 && (
+            <div className="border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={onOpenAdd}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+              >
+                <Plus className="h-4 w-4" />
+                Add candidate
+              </button>
+            </div>
+          )}
         </div>
       )}
     </section>
@@ -448,6 +475,7 @@ export function PipelineManager() {
   const [addModal, setAddModal] = useState<{
     role_brief_id: string;
     title: string;
+    source: AddCandidateSource;
   } | null>(null);
 
   const load = useCallback(async () => {
@@ -580,6 +608,14 @@ export function PipelineManager() {
                 setAddModal({
                   role_brief_id: section.role_brief_id,
                   title: section.title,
+                  source: "role",
+                })
+              }
+              onOpenTalentPool={() =>
+                setAddModal({
+                  role_brief_id: section.role_brief_id,
+                  title: section.title,
+                  source: "talent_pool",
                 })
               }
             />
@@ -591,6 +627,7 @@ export function PipelineManager() {
         <AddCandidateModal
           roleBriefId={addModal.role_brief_id}
           roleTitle={addModal.title}
+          source={addModal.source}
           onClose={() => setAddModal(null)}
           onAdded={() => void load()}
         />

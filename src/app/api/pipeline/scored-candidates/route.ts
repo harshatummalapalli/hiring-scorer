@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { listScoredCandidatesForRole } from "@/lib/supabase/pipeline";
+import {
+  listScoredCandidatesForRole,
+  listTalentPoolScoredCandidates,
+} from "@/lib/supabase/pipeline";
 
 export async function GET(request: Request) {
   try {
@@ -11,7 +14,11 @@ export async function GET(request: Request) {
         { status: 400 },
       );
     }
-    const candidates = await listScoredCandidatesForRole(roleBriefId);
+    const pool = searchParams.get("pool");
+    const candidates =
+      pool === "any"
+        ? await listTalentPoolScoredCandidates(roleBriefId)
+        : await listScoredCandidatesForRole(roleBriefId);
     return NextResponse.json({ candidates });
   } catch (err) {
     const message =

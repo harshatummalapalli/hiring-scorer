@@ -247,3 +247,76 @@ export async function listScoredCandidatesForRole(
 
   return options.sort((a, b) => b.overall_score - a.overall_score);
 }
+
+/** Candidates scored against any role brief (deduped), for talent-pool add modal. */
+export async function listTalentPoolScoredCandidates(
+  targetRoleBriefId: string,
+): Promise<ScoredCandidateOption[]> {
+  const supabase = getServerSupabase();
+  const [scoresRes, pipelineRes, candidatesRes] = await Promise.all([
+    supabase
+      .from("saved_scores")
+      .select("id, candidate_id, candidate_filename, overall_score, created_at")
+      .not("candidate_id", "is", null)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("pipeline_candidates")
+      .select("candidate_id")
+      .eq("role_brief_id", targetRoleBriefId),
+    supabase.from("candidates").select("id, display_name"),
+  ]);
+
+  if (scoresRes.error) throw new Error(scoresRes.error.message);
+
+  const inPipeline = new Set(
+    (pipelineRes.data ?? []).map((r) =>
+      String((r as { candidate_id: string }).candidate_id),
+    ),
+  );
+
+  const nameById = new Map<string, string>();
+  for (const c of candidatesRes.data ?? []) {
+    const row = c as { id: string; display_name: string };
+    nameById.set(String(row.id), String(row.display_name));
+  }
+
+  const bestByCandidate = new Map<
+    string,
+    { overall: number; saved_score_id: string; name: string }
+  >();
+
+  for (const raw of scoresRes.data ?? []) {
+    const row = raw as Record<string, unknown>;
+    const candidateId =
+      row.candidate_id != null ? String(row.candidate_id) : "";
+    if (!candidateId) continue;
+
+    const overall = Number(row.overall_score ?? 0);
+    const existing = bestByCandidate.get(candidateId);
+    if (existing && existing.overall >= overall) continue;
+
+    const name =
+      nameById.get(candidateId) ??
+      String(row.candidate_filename ?? "Candidate").replace(/\.[^.]+$/, "");
+
+    bestByCandidate.set(candidateId, {
+      overall,
+      saved_score_id: String(row.id),
+      name,
+    });
+  }
+
+  const options: ScoredCandidateOption[] = [];
+  for (const [candidateId, meta] of bestByCandidate) {
+    options.push({
+      candidate_id: candidateId,
+      candidate_name: meta.name,
+      overall_score: meta.overall,
+      verdict: scoreToVerdict(meta.overall) as FitVerdict,
+      saved_score_id: meta.saved_score_id,
+      already_in_pipeline: inPipeline.has(candidateId),
+    });
+  }
+
+  return options.sort((a, b) => b.overall_score - a.overall_score);
+}
