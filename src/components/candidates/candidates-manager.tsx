@@ -161,6 +161,11 @@ export function CandidatesManager() {
               : (json.error ?? "Upload failed"),
           );
         }
+        console.log("[upload] candidate saved", {
+          id: json.id,
+          extractionSource: json.extractionSource,
+          name: json.signal_profile?.display_name,
+        });
       }
       setShowUpload(false);
       await load();
