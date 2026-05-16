@@ -19,6 +19,8 @@ const COMPANY_TYPES: CompanyType[] = [
   "Startup",
 ];
 
+import { stripTrailingJobTitleWords } from "@/lib/candidates/resolve-display-name";
+
 export function filenameToDisplayName(filename: string): string {
   let base = filename.replace(/\.[^.]+$/, "");
   base = base.replace(/\[[^\]]*\]/g, "");
@@ -54,6 +56,8 @@ export function filenameToDisplayName(filename: string): string {
   while (words.length > 2 && companyWord.test(words[words.length - 1] ?? "")) {
     words.pop();
   }
+
+  words = stripTrailingJobTitleWords(words);
 
   if (words.length > 4 || words.join(" ").length > 32) {
     return words.slice(0, 2).join(" ") || "Candidate";

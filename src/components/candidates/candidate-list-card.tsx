@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { CandidateListItem } from "@/types/candidate";
 import {
-  formatCandidateHeadline,
+  formatListCardSubtitle,
   getCandidateHeaderName,
 } from "@/lib/candidates/profile-display";
 import { initialsFromName, shortVerdictLabel } from "@/lib/candidates/list-filters";
@@ -14,7 +14,7 @@ type CandidateListCardProps = {
 export function CandidateListCard({ candidate }: CandidateListCardProps) {
   const profile = candidate.signal_profile;
   const displayName = getCandidateHeaderName(profile);
-  const headline = formatCandidateHeadline(profile);
+  const subtitle = formatListCardSubtitle(profile);
   const topSkills = profile.skills_verified.slice(0, 3);
 
   return (
@@ -42,9 +42,9 @@ export function CandidateListCard({ candidate }: CandidateListCardProps) {
             )}
           </div>
 
-          <p className="mt-0.5 text-sm text-slate-600">
-            {headline || "Title and company not parsed from resume"}
-          </p>
+          {subtitle ? (
+            <p className="mt-0.5 text-sm text-slate-600">{subtitle}</p>
+          ) : null}
 
           {topSkills.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">

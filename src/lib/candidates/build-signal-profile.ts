@@ -17,15 +17,13 @@ import {
   estimateYearsExperience,
   extractCurrentCompany,
   extractExplicitYearsOfExperience,
-  extractFirstSubstantialLine,
   extractLocation,
-  extractProfessionalSummary,
   extractTitleFromResumeHeader,
+  resolveProfessionalSummary,
   parseEducationEntries,
   parseExperienceWithFallback,
   parseSkillsFromSection,
   splitResumeSections,
-  summaryFromRecentRole,
 } from "./parse-resume-structure";
 import { prepareSignalQuote, toStrippedResumeText } from "./resume-text";
 
@@ -181,14 +179,6 @@ export function buildSignalProfile(
     allBullets,
   );
 
-  let professional_summary = extractProfessionalSummary(resumeText, rawSections);
-  if (!professional_summary || professional_summary.length < 40) {
-    professional_summary = summaryFromRecentRole(experience);
-  }
-  if (!professional_summary || professional_summary.length < 40) {
-    professional_summary = extractFirstSubstantialLine(resumeText);
-  }
-
   const career_types_sequence = experience.map((e) => e.company_type);
   const career_pattern =
     career_types_sequence.length > 0
@@ -199,9 +189,6 @@ export function buildSignalProfile(
   const { linkedin_url, portfolio_links } = extractResumeLinks(resumeText);
   const display_name = identity.display_name;
 
-  const title_band = inferTitleBand(
-    experience[0]?.title ?? professional_summary.slice(0, 200),
-  );
   const recentRole = experience.find((e) => isValidExperienceEntry(e));
   const experienceTitle = recentRole?.title.trim();
   const headerTitle = extractTitleFromResumeHeader(resumeText)?.trim();
@@ -222,6 +209,20 @@ export function buildSignalProfile(
       : explicitYears != null
         ? `${Math.round(explicitYears)} years`
         : "Not stated";
+
+  const professional_summary = resolveProfessionalSummary(
+    resumeText,
+    rawSections,
+    experience,
+    {
+      totalYears: total_years_experience,
+      mostRecentTitle: most_recent_title,
+    },
+  );
+
+  const title_band = inferTitleBand(
+    experience[0]?.title ?? professional_summary.slice(0, 200),
+  );
   const trajectory_velocity = computeTrajectoryVelocity(experience);
 
   return {

@@ -7,6 +7,18 @@ const COMPANY_WORD =
 const BAD_NAME_PATTERNS =
   /^(?:candidate|mid-level engineer|not stated|unknown)$/i;
 
+/** Job-title tokens sometimes glued to filenames or header names (stripped after 2+ name words). */
+const TRAILING_TITLE_WORD =
+  /^(?:Principal|Senior|Junior|Lead|Staff|Engineer|Developer|Analyst|Manager|Director|Head|VP|Architect|Consultant|Associate|Executive)$/i;
+
+export function stripTrailingJobTitleWords(words: string[]): string[] {
+  const result = [...words];
+  while (result.length > 2 && TRAILING_TITLE_WORD.test(result[result.length - 1] ?? "")) {
+    result.pop();
+  }
+  return result;
+}
+
 const INDIAN_SURNAME_SUFFIXES = [
   "kumar",
   "singh",
@@ -90,6 +102,8 @@ export function cleanDisplayName(name: string): string {
   while (words.length > 1 && COMPANY_WORD.test(words[words.length - 1] ?? "")) {
     words.pop();
   }
+
+  words = stripTrailingJobTitleWords(words);
 
   if (words.length === 1) {
     const camel = splitCamelCaseToken(words[0]);

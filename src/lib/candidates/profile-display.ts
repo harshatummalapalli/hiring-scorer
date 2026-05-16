@@ -61,11 +61,50 @@ export function parseYearsNumber(yearsLabel: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
+export function formatYearsExperience(
+  profile: CandidateSignalProfile,
+): string | null {
+  const years = profile.total_years_experience?.trim();
+  if (!years || years === "Not stated") return null;
+  return years;
+}
+
+/** Secondary line on talent pool cards — silent when nothing parsed. */
+export function formatListCardSubtitle(profile: CandidateSignalProfile): string {
+  return formatCandidateHeadline(profile) || formatYearsExperience(profile) || "";
+}
+
+/** Job title only (profile header). */
+export function formatProfileHeaderTitle(
+  profile: CandidateSignalProfile,
+): string {
+  return getDisplayJobTitle(profile);
+}
+
+/** Location and years on one line (profile header). */
+export function formatProfileHeaderMeta(
+  profile: CandidateSignalProfile,
+): string {
+  const parts: string[] = [];
+  if (profile.location?.trim()) parts.push(profile.location.trim());
+  const years = formatYearsExperience(profile);
+  if (years) parts.push(years);
+  return parts.join(" · ");
+}
+
 export function formatProfileSubtitle(profile: CandidateSignalProfile): string {
-  const headline = formatCandidateHeadline(profile);
-  if (headline) return headline;
-  if (profile.location?.trim()) return profile.location.trim();
-  return "Experience not stated";
+  return formatListCardSubtitle(profile);
+}
+
+export function getDisplaySummary(profile: CandidateSignalProfile): string {
+  const summary = profile.professional_summary?.trim();
+  if (summary && summary.length > 10) return summary;
+  const years = formatYearsExperience(profile);
+  const title = getDisplayJobTitle(profile) || "software engineering";
+  if (years) {
+    return `${years.replace(/ years?$/i, "")} years of ${title.toLowerCase().includes("engineer") ? title.toLowerCase() : "software engineering"} experience.`;
+  }
+  return `Experienced professional with background in ${title.toLowerCase()}.`;
 }
 
 export function titleBandToDisplayLabel(band: string | null): string {
@@ -124,8 +163,8 @@ export function formatCandidateHeadline(profile: CandidateSignalProfile): string
   const title = getDisplayJobTitle(profile);
   if (title) parts.push(title);
   if (profile.current_company?.trim()) parts.push(profile.current_company.trim());
-  const years = profile.total_years_experience?.trim();
-  if (years && years !== "Not stated") parts.push(years);
+  const years = formatYearsExperience(profile);
+  if (years) parts.push(years);
   return parts.join(" · ");
 }
 

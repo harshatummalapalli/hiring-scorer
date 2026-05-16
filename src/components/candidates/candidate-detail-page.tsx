@@ -14,11 +14,15 @@ import { createClient } from "@supabase/supabase-js";
 import type { CandidateDetail } from "@/types/candidate";
 import type { RoleBrief } from "@/types/role-brief";
 import {
-  formatCandidateHeadline,
+  formatProfileHeaderMeta,
+  formatProfileHeaderTitle,
+  formatYearsExperience,
   getCandidateHeaderName,
+  getDisplaySummary,
   sanitizeEvidenceForDisplay,
 } from "@/lib/candidates/profile-display";
 import { formatExperienceMeta } from "@/lib/candidates/format-experience";
+import { getValidProfileLinks } from "@/lib/candidates/parse-resume-links";
 import {
   ownershipLabel,
   quantificationLabel,
@@ -193,7 +197,11 @@ export function CandidateDetailPage({ candidateId }: { candidateId: string }) {
   const experience = profile.experience;
   const experienceFallback = profile.experience_fallback_raw;
   const visibleExp = expExpanded ? experience : experience.slice(0, 3);
-  const aboutLong = profile.professional_summary.length > 280;
+  const summaryText = getDisplaySummary(profile);
+  const aboutLong = summaryText.length > 280;
+  const headerTitle = formatProfileHeaderTitle(profile);
+  const headerMeta = formatProfileHeaderMeta(profile);
+  const profileLinks = getValidProfileLinks(profile);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
@@ -227,15 +235,21 @@ export function CandidateDetailPage({ candidateId }: { candidateId: string }) {
                   <h1 className="text-2xl font-bold tracking-tight text-[#0a1628] sm:text-3xl">
                     {getCandidateHeaderName(profile)}
                   </h1>
-                  <p className="mt-1 text-lg text-slate-600">
-                    {formatCandidateHeadline(profile) ||
-                      "Current role not parsed from resume"}
-                  </p>
-                  {(profile.linkedin_url || profile.portfolio_links.length > 0) && (
+                  {headerTitle ? (
+                    <p className="mt-1 text-lg text-slate-500">{headerTitle}</p>
+                  ) : formatYearsExperience(profile) ? (
+                    <p className="mt-1 text-lg text-slate-500">
+                      {formatYearsExperience(profile)}
+                    </p>
+                  ) : null}
+                  {headerMeta ? (
+                    <p className="mt-1 text-sm text-slate-500">{headerMeta}</p>
+                  ) : null}
+                  {(profileLinks.linkedin || profileLinks.github) && (
                     <div className="mt-3 flex flex-wrap gap-3 text-sm font-medium">
-                      {profile.linkedin_url && (
+                      {profileLinks.linkedin && (
                         <a
-                          href={profile.linkedin_url}
+                          href={profileLinks.linkedin}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-[#0a66c2] hover:underline"
@@ -243,57 +257,17 @@ export function CandidateDetailPage({ candidateId }: { candidateId: string }) {
                           LinkedIn
                         </a>
                       )}
-                      {profile.portfolio_links.map((url) => (
+                      {profileLinks.github && (
                         <a
-                          key={url}
-                          href={url}
+                          href={profileLinks.github}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-slate-700 hover:text-slate-900 hover:underline"
                         >
-                          {url.includes("github.com")
-                            ? "GitHub"
-                            : url.replace(/^https?:\/\/(www\.)?/, "").slice(0, 36)}
+                          GitHub
                         </a>
-                      ))}
+                      )}
                     </div>
-                  )}
-                  <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
-                    <div>
-                      <dt className="text-slate-500">First name</dt>
-                      <dd className="font-medium text-slate-900">
-                        {profile.first_name || "—"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-500">Last name</dt>
-                      <dd className="font-medium text-slate-900">
-                        {profile.last_name || "—"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-500">Current title</dt>
-                      <dd className="font-medium text-slate-900">
-                        {profile.most_recent_title || "—"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-500">Current company</dt>
-                      <dd className="font-medium text-slate-900">
-                        {profile.current_company || "—"}
-                      </dd>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <dt className="text-slate-500">Total experience</dt>
-                      <dd className="font-medium text-slate-900">
-                        {profile.total_years_experience || "—"}
-                      </dd>
-                    </div>
-                  </dl>
-                  {profile.location?.trim() && (
-                    <p className="mt-2 text-sm text-slate-500">
-                      {profile.location}
-                    </p>
                   )}
                 </div>
               </div>
@@ -337,7 +311,7 @@ export function CandidateDetailPage({ candidateId }: { candidateId: string }) {
                 !aboutExpanded && aboutLong ? "line-clamp-4" : ""
               }`}
             >
-              {profile.professional_summary || "No summary available."}
+              {summaryText}
             </p>
             {aboutLong && (
               <button

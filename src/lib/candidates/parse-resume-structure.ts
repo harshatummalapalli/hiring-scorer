@@ -2,7 +2,17 @@ import type { CompanyType } from "@/types/score";
 import type { EducationEntry, ExperienceEntry } from "@/types/candidate";
 
 const SECTION_HEADERS =
-  /^(?:professional\s+)?(?:summary|profile|objective|about)\s*$|^(?:work\s+)?experience|employment|professional\s+experience|career\s+history|education|academic|skills|technical\s+skills|core\s+competencies$/i;
+  /^(?:professional\s+)?(?:summary|profile|objective|about(?:\s+me)?|career\s+objective)\s*$|^(?:work\s+)?experience|employment|professional\s+experience|career\s+history|education|academic|skills|technical\s+skills|core\s+competencies$/i;
+
+const SUMMARY_SECTION_KEYS = [
+  "summary",
+  "professional summary",
+  "profile",
+  "about",
+  "about me",
+  "objective",
+  "career objective",
+];
 
 const MONTH =
   "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
@@ -92,13 +102,12 @@ export function extractProfessionalSummary(
   resumeText: string,
   sections: Map<string, string[]>,
 ): string {
-  const summaryLines =
-    sections.get("summary") ??
-    sections.get("professional summary") ??
-    sections.get("profile") ??
-    [];
-  if (summaryLines.length) {
-    return summaryLines.join(" ").replace(/\s+/g, " ").trim();
+  for (const key of SUMMARY_SECTION_KEYS) {
+    const lines = sections.get(key);
+    if (lines?.length) {
+      const text = lines.join(" ").replace(/\s+/g, " ").trim();
+      if (text.length >= 20) return text.slice(0, 500);
+    }
   }
 
   const lines = resumeText.split(/\r?\n/).map((l) => l.trim());
@@ -740,14 +749,161 @@ export function extractFirstSubstantialLine(resumeText: string): string {
 }
 
 export function summaryFromRecentRole(experience: ExperienceEntry[]): string {
-  const recent = experience[0];
+  const recent = experience.find((e) => isValidExperienceEntry(e)) ?? experience[0];
   if (!recent) return "";
   const bullets = recent.bullets.filter(Boolean);
+  if (bullets[0] && bullets[0].length >= 20) {
+    return bullets[0].slice(0, 500);
+  }
   if (bullets.length >= 2) {
-    return `${recent.title} at ${recent.company}: ${bullets[0]} ${bullets[1]}`;
+    return `${bullets[0]} ${bullets[1]}`.slice(0, 500);
   }
-  if (bullets[0]) {
-    return `${recent.title} at ${recent.company}. ${bullets[0]}`;
+  return "";
+}
+
+function isBulletOrSkillList(text: string): boolean {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  if (!lines.length) return false;
+  const bulletLines = lines.filter((l) => /^[•\-\*▪]/.test(l.trim())).length;
+  if (bulletLines >= lines.length * 0.5) return true;
+  return (text.match(/,/g)?.length ?? 0) > 10;
+}
+
+export function extractSummaryAfterLabels(resumeText: string): string {
+  const lines = resumeText.split(/\r?\n/).map((l) => l.trim());
+  const labelPattern =
+    /^(?:#{1,3}\s*)?(?:summary|professional\s+summary|about\s+me|profile|objective|career\s+objective)\s*:?\s*(.*)$/i;
+
+  for (let i = 0; i < Math.min(lines.length, 60); i++) {
+    const m = lines[i].match(labelPattern);
+    if (!m) continue;
+
+    const inline = m[1]?.trim();
+    if (inline && inline.split(/\s+/).filter(Boolean).length >= 8) {
+      return inline.slice(0, 500);
+    }
+
+    const collected: string[] = [];
+    for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
+      const line = lines[j];
+      if (!line) break;
+      if (SECTION_HEADERS.test(line.replace(/[#*_]/g, "").trim())) break;
+      DATE_RANGE.lastIndex = 0;
+      if (DATE_RANGE.test(line)) break;
+      if (/^[•\-\*]/.test(line)) break;
+      collected.push(line);
+    }
+    const block = collected.join(" ").replace(/\s+/g, " ").trim();
+    if (block.split(/\s+/).filter(Boolean).length >= 8) {
+      return block.slice(0, 500);
+    }
   }
-  return `${recent.title} at ${recent.company}, contributing in a ${recent.company_type.toLowerCase()} environment.`;
+  return "";
+}
+
+export function longestParagraphInHeader(
+  resumeText: string,
+  lineCount: number,
+  minWords: number,
+): string {
+  const lines = resumeText.split(/\r?\n/).map((l) => l.trim()).slice(0, lineCount);
+  let best = "";
+  let current: string[] = [];
+
+  const flush = () => {
+    const text = current.join(" ").replace(/\s+/g, " ").trim();
+    const wordCount = text.split(/\s+/).filter(Boolean).length;
+    if (
+      wordCount >= minWords &&
+      text.length > best.length &&
+      !isBulletOrSkillList(text) &&
+      !/@/.test(text) &&
+      !SECTION_HEADERS.test(text.replace(/[#*_]/g, "").trim())
+    ) {
+      DATE_RANGE.lastIndex = 0;
+      if (!DATE_RANGE.test(text)) best = text;
+    }
+    current = [];
+  };
+
+  for (const line of lines) {
+    if (!line) {
+      flush();
+      continue;
+    }
+    if (/^[•\-\*▪]/.test(line)) {
+      flush();
+      continue;
+    }
+    const clean = line.replace(/[#*_]/g, "").trim();
+    if (SECTION_HEADERS.test(clean)) {
+      flush();
+      continue;
+    }
+    current.push(line);
+  }
+  flush();
+  return best.slice(0, 500);
+}
+
+export function buildExperienceSummaryFallback(
+  totalYears: string,
+  mostRecentTitle: string,
+  experience: ExperienceEntry[],
+): string {
+  const recent = experience.find((e) => isValidExperienceEntry(e));
+  const n = totalYears.match(/(\d+)/)?.[1];
+  const types = [
+    ...new Set(
+      experience
+        .map((e) => e.company_type)
+        .filter((t) => t && t !== "Services"),
+    ),
+  ];
+  const env =
+    types.length > 0
+      ? types.map((t) => t.toLowerCase()).join(" and ")
+      : "product and platform";
+
+  if (n) {
+    return `${n} years of software engineering experience across ${env} roles.`;
+  }
+  if (mostRecentTitle) {
+    return `Experienced ${mostRecentTitle} with background across ${env} roles.`;
+  }
+  if (recent?.title) {
+    return `Experienced ${recent.title} with background across ${env} roles.`;
+  }
+  return `Professional experience across ${env} roles.`;
+}
+
+export function resolveProfessionalSummary(
+  resumeText: string,
+  sections: Map<string, string[]>,
+  experience: ExperienceEntry[],
+  opts: {
+    totalYears: string;
+    mostRecentTitle: string;
+  },
+): string {
+  const afterLabel = extractSummaryAfterLabels(resumeText);
+  if (afterLabel.length >= 40) return afterLabel;
+
+  const fromSection = extractProfessionalSummary(resumeText, sections);
+  if (fromSection.length >= 40) return fromSection;
+
+  const paragraph = longestParagraphInHeader(resumeText, 20, 40);
+  if (paragraph.length >= 40) return paragraph;
+
+  const fromRole = summaryFromRecentRole(experience);
+  if (fromRole.length >= 20) return fromRole;
+
+  const substantial = extractFirstSubstantialLine(resumeText);
+  if (substantial.length >= 40) return substantial;
+
+  return buildExperienceSummaryFallback(
+    opts.totalYears,
+    opts.mostRecentTitle,
+    experience,
+  );
 }
