@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import { AnalysisCards } from "@/components/role-briefs/analysis-cards";
+import { karta } from "@/lib/brand/karta";
 import { getErrorMessage } from "@/lib/errors";
 import type { RoleBrief, RoleBriefAnalysis } from "@/types/role-brief";
 import {
@@ -60,13 +61,13 @@ export function RoleBriefCreator({
         analysis?: RoleBriefAnalysis;
         title?: string;
       };
-      if (!res.ok) throw new Error(data.error ?? "Analysis failed");
+      if (!res.ok) throw new Error(data.error ?? "Read JD failed");
 
       const next = data.analysis ?? emptyAnalysis();
       setAnalysis(next);
       setTitle(data.title ?? deriveTitleFromAnalysis(next, jobDescription));
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to analyse job description"));
+      setError(getErrorMessage(err, "Failed to read job description"));
     } finally {
       setAnalysing(false);
     }
@@ -74,7 +75,7 @@ export function RoleBriefCreator({
 
   const handleSave = async () => {
     if (!analysis) {
-      setError("Analyse the job description before saving.");
+      setError("Read the job description before saving.");
       return;
     }
     const finalTitle = title.trim() || deriveTitleFromAnalysis(analysis, jobDescription);
@@ -92,24 +93,15 @@ export function RoleBriefCreator({
 
   return (
     <div className="space-y-10">
-      <section className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm sm:p-10">
-        <label
-          htmlFor="job-description"
-          className="block text-base font-semibold text-slate-900"
-        >
-          Paste your complete job description here
-        </label>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500">
-          Include everything — the title, responsibilities, requirements, and
-          any context about the company or team.
-        </p>
+      <section className={`${karta.card} p-8 sm:p-10`}>
         <textarea
           id="job-description"
           value={jobDescription}
           onChange={(e) => setJobDescription(e.target.value)}
           rows={14}
-          placeholder="Paste the full job description…"
-          className="mt-6 w-full resize-y rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-4 text-sm leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
+          placeholder="Paste the complete job description here — include the title, responsibilities, requirements, and any context about the team or company."
+          className={`w-full resize-y ${karta.input} leading-relaxed`}
+          aria-label="Job description"
         />
 
         <div className="mt-8 flex flex-wrap items-center gap-4">
@@ -117,14 +109,14 @@ export function RoleBriefCreator({
             type="button"
             onClick={() => void handleAnalyse()}
             disabled={analysing || !jobDescription.trim()}
-            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-8 py-3.5 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className={`inline-flex items-center gap-2 ${karta.btnPrimary} px-8 py-3 text-base`}
           >
             {analysing ? (
               <Loader2 className="h-5 w-5 animate-spin" />
             ) : (
               <Sparkles className="h-5 w-5" />
             )}
-            {analysing ? "Analysing…" : "Analyse Role"}
+            {analysing ? "Reading…" : "Read JD"}
           </button>
           {analysis && (
             <p className="text-sm text-slate-500">
@@ -150,17 +142,17 @@ export function RoleBriefCreator({
           />
 
           <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 pt-8">
-            <p className="text-sm text-slate-500">
-              {editingId ? "Update this role brief in Supabase." : "Save as a new role brief."}
+            <p className="text-sm text-[#64748B]">
+              {editingId ? "Update this job role." : "Save as a new job role."}
             </p>
             <button
               type="button"
               onClick={() => void handleSave()}
               disabled={isSaving}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-8 py-3.5 text-base font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+              className={`inline-flex items-center gap-2 ${karta.btnPrimary} px-8 py-3 text-base`}
             >
               {isSaving && <Loader2 className="h-5 w-5 animate-spin" />}
-              {isSaving ? "Saving…" : "Save Role Brief"}
+              {isSaving ? "Saving…" : "Save Job Role"}
             </button>
           </div>
         </>

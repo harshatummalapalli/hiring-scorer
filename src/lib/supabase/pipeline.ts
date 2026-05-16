@@ -8,6 +8,7 @@ import type {
   ScoredCandidateOption,
 } from "@/types/pipeline";
 import type { FitVerdict } from "@/types/score";
+import { VERDICT_SORT_ORDER } from "@/lib/brand/karta";
 import { scoreToVerdict } from "@/lib/scoring/recruiter-card";
 
 function getServerSupabase(): SupabaseClient {
@@ -84,13 +85,50 @@ export async function listRoleBriefs(): Promise<RoleBrief[]> {
   );
 }
 
+function sortPipelineCandidates(
+  rows: PipelineCandidateRow[],
+): PipelineCandidateRow[] {
+  return [...rows].sort((a, b) => {
+    const va = (a.fit_verdict ?? "NOT SUITABLE") as FitVerdict;
+    const vb = (b.fit_verdict ?? "NOT SUITABLE") as FitVerdict;
+    const order =
+      (VERDICT_SORT_ORDER[va] ?? 9) - (VERDICT_SORT_ORDER[vb] ?? 9);
+    if (order !== 0) return order;
+    return (b.fit_score ?? 0) - (a.fit_score ?? 0);
+  });
+}
+
+async function countScreenedCandidates(): Promise<number> {
+  const supabase = getServerSupabase();
+  const { data, error } = await supabase.from("candidates").select("activity");
+  if (error) return 0;
+  let count = 0;
+  for (const row of data ?? []) {
+    const activity = (row as { activity: unknown }).activity;
+    if (
+      Array.isArray(activity) &&
+      activity.some(
+        (a) =>
+          a &&
+          typeof a === "object" &&
+          (a as { type?: string }).type === "screened",
+      )
+    ) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
 export async function getPipelineBoard(): Promise<{
   roleBriefs: RoleBrief[];
   sections: PipelineRoleSection[];
+  screenedCount: number;
 }> {
-  const [roleBriefs, pipelineRows] = await Promise.all([
+  const [roleBriefs, pipelineRows, screenedCount] = await Promise.all([
     listRoleBriefs(),
     listPipelineCandidates(),
+    countScreenedCandidates(),
   ]);
 
   const byRole = new Map<string, PipelineCandidateRow[]>();
@@ -104,10 +142,10 @@ export async function getPipelineBoard(): Promise<{
     role_brief_id: brief.id,
     title: brief.title,
     title_band: brief.title_band,
-    candidates: byRole.get(brief.id) ?? [],
+    candidates: sortPipelineCandidates(byRole.get(brief.id) ?? []),
   }));
 
-  return { roleBriefs, sections };
+  return { roleBriefs, sections, screenedCount };
 }
 
 export async function getPipelineEntry(

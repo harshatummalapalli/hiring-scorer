@@ -1,8 +1,17 @@
 @import "tailwindcss";
 
 :root {
+  --karta-nav: #1e293b;
+  --karta-teal: #0d9488;
+  --karta-teal-hover: #0b8276;
+  --karta-page: #f8fafc;
+  --karta-slate: #1e293b;
+  --karta-body: #334155;
+  --karta-muted: #64748b;
+  --karta-border: #f1f5f9;
+  --karta-bar-track: #e2e8f0;
   --background: #f8fafc;
-  --foreground: #0f172a;
+  --foreground: #334155;
 }
 
 @theme inline {
@@ -13,9 +22,11 @@
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--karta-page);
+  color: var(--karta-body);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
 }
 
 input[type="range"]::-webkit-slider-thumb {
@@ -23,7 +34,7 @@ input[type="range"]::-webkit-slider-thumb {
   height: 16px;
   width: 16px;
   border-radius: 9999px;
-  background: #0f172a;
+  background: var(--karta-teal);
   cursor: pointer;
 }
 
@@ -31,7 +42,7 @@ input[type="range"]::-moz-range-thumb {
   height: 16px;
   width: 16px;
   border-radius: 9999px;
-  background: #0f172a;
+  background: var(--karta-teal);
   border: none;
   cursor: pointer;
 }

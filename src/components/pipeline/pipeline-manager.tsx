@@ -11,19 +11,11 @@ import {
   Search,
 } from "lucide-react";
 import type { PipelineCandidateRow, PipelineRoleSection } from "@/types/pipeline";
-import type { FitVerdict } from "@/types/score";
-import { VERDICT_BADGE } from "@/components/candidates/profile-shared";
+import { VerdictBadge } from "@/components/candidates/profile-shared";
+import { karta } from "@/lib/brand/karta";
 import { formatInsightsText } from "@/lib/pipeline/insights-from-score";
 import { buildPipelineWorkbook, downloadPipelineExcel } from "@/lib/pipeline/export-excel";
 import type { ScoredCandidateOption } from "@/types/pipeline";
-
-function shortVerdictLabel(verdict: string): string {
-  if (verdict === "STRONG FIT") return "Strong";
-  if (verdict === "POSSIBLE FIT") return "Possible";
-  if (verdict === "WEAK FIT") return "Weak";
-  if (verdict === "NOT SUITABLE") return "Not suitable";
-  return verdict;
-}
 
 function EditableCell({
   value,
@@ -68,7 +60,7 @@ function EditableCell({
             setEditing(false);
           }
         }}
-        className="w-full min-w-[7rem] rounded border border-slate-300 px-2 py-1 text-sm"
+        className={`w-full min-w-[7rem] ${karta.input} py-1 text-sm`}
         placeholder={placeholder}
       />
     );
@@ -184,7 +176,7 @@ function AddCandidateModal({
       >
         <div className="border-b border-slate-200 px-5 py-4">
           <h2 id="add-pipeline-title" className="text-lg font-semibold text-slate-900">
-            {source === "talent_pool" ? "Add from talent pool" : "Add to pipeline"}
+            {source === "talent_pool" ? "Shortlist candidates" : "Add candidate"}
           </h2>
           <p className="mt-1 text-sm text-slate-600">
             {roleTitle}
@@ -215,13 +207,12 @@ function AddCandidateModal({
           ) : filtered.length === 0 ? (
             <p className="px-3 py-8 text-center text-sm text-slate-500">
               {source === "talent_pool"
-                ? "No scored candidates in the talent pool yet. Score candidates on the Candidates page first."
-                : "No scored candidates for this role yet. Score candidates against this role brief first."}
+                ? "No matched candidates yet. Match candidates on the Candidates page first."
+                : "No matched candidates for this role yet. Match candidates against this job role first."}
             </p>
           ) : (
             <ul className="space-y-1">
               {filtered.map((o) => {
-                const styles = VERDICT_BADGE[o.verdict as FitVerdict];
                 const disabled = o.already_in_pipeline;
                 const checked = selected.has(o.candidate_id);
                 return (
@@ -243,11 +234,11 @@ function AddCandidateModal({
                       <span className="min-w-0 flex-1 font-medium text-slate-900">
                         {o.candidate_name}
                       </span>
-                      <span
-                        className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${styles.bg} ${styles.text} ${styles.ring}`}
-                      >
-                        {shortVerdictLabel(o.verdict)} · {o.overall_score}
-                      </span>
+                      <VerdictBadge
+                        verdict={o.verdict}
+                        score={o.overall_score}
+                        compact
+                      />
                       {disabled && (
                         <span className="text-xs text-slate-400">In pipeline</span>
                       )}
@@ -273,10 +264,10 @@ function AddCandidateModal({
             type="button"
             disabled={adding || selected.size === 0}
             onClick={() => void submit()}
-            className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+            className={karta.btnPrimary}
           >
             {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Add to pipeline
+            Shortlist
           </button>
         </div>
       </div>
@@ -304,7 +295,7 @@ function RoleSection({
   onOpenTalentPool: () => void;
 }) {
   return (
-    <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <section className={`overflow-hidden ${karta.card}`}>
       <button
         type="button"
         onClick={onToggle}
@@ -334,10 +325,10 @@ function RoleSection({
               <button
                 type="button"
                 onClick={onOpenTalentPool}
-                className="mt-4 inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                className={`mt-4 inline-flex items-center gap-2 ${karta.btnPrimary}`}
               >
                 <Plus className="h-4 w-4" />
-                Add from talent pool
+                Shortlist Candidates
               </button>
             </div>
           ) : (
@@ -350,7 +341,7 @@ function RoleSection({
                     <th className="px-4 py-3">Phone</th>
                     <th className="px-4 py-3">Location</th>
                     <th className="max-w-[12rem] px-4 py-3">Insights</th>
-                    <th className="px-4 py-3">Score</th>
+                    <th className="px-4 py-3">Match</th>
                     <th className="px-4 py-3">Relocation</th>
                     <th className="px-4 py-3">Present CTC</th>
                     <th className="px-4 py-3">Expected CTC</th>
@@ -394,8 +385,7 @@ function PipelineTableRow({
     value: string,
   ) => Promise<void>;
 }) {
-  const verdict = (row.fit_verdict ?? "") as FitVerdict;
-  const styles = VERDICT_BADGE[verdict] ?? VERDICT_BADGE["POSSIBLE FIT"];
+  const verdict = row.fit_verdict;
 
   return (
     <tr className="border-b border-slate-100 last:border-0">
@@ -424,15 +414,7 @@ function PipelineTableRow({
         </span>
       </td>
       <td className="px-4 py-3">
-        {row.fit_score != null ? (
-          <span
-            className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${styles.bg} ${styles.text} ${styles.ring}`}
-          >
-            {shortVerdictLabel(verdict)} · {row.fit_score}
-          </span>
-        ) : (
-          "—"
-        )}
+        <VerdictBadge verdict={verdict} score={row.fit_score} />
       </td>
       <td className="px-4 py-2">
         <EditableCell
@@ -468,6 +450,7 @@ function PipelineTableRow({
 
 export function PipelineManager() {
   const [sections, setSections] = useState<PipelineRoleSection[]>([]);
+  const [screenedCount, setScreenedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -491,6 +474,9 @@ export function PipelineManager() {
       }
       const next = json.sections as PipelineRoleSection[];
       setSections(next);
+      setScreenedCount(
+        typeof json.screenedCount === "number" ? json.screenedCount : 0,
+      );
       setExpanded((prev) => {
         if (prev.size > 0) return prev;
         const withCandidates = next.filter((s) => s.candidates.length > 0);
@@ -530,6 +516,11 @@ export function PipelineManager() {
     );
   };
 
+  const shortlistedTotal = useMemo(
+    () => sections.reduce((n, s) => n + s.candidates.length, 0),
+    [sections],
+  );
+
   const handleExport = async () => {
     setExporting(true);
     try {
@@ -543,20 +534,18 @@ export function PipelineManager() {
 
   return (
     <div>
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#0a1628] sm:text-3xl">
-            Pipeline
-          </h1>
-          <p className="mt-1.5 text-slate-600">
-            Shortlisted candidates organised by role brief.
+          <h1 className={karta.pageTitle}>Pipeline</h1>
+          <p className="mt-1.5 text-[15px] text-[#64748B]">
+            Shortlisted candidates organised by job role.
           </p>
         </div>
         <button
           type="button"
           disabled={exporting || loading}
           onClick={() => void handleExport()}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+          className={`inline-flex shrink-0 items-center justify-center gap-2 ${karta.btnOutlineTeal}`}
         >
           {exporting ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -565,6 +554,27 @@ export function PipelineManager() {
           )}
           Export Excel
         </button>
+      </div>
+
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className={`${karta.card} p-5`}>
+          <p className={karta.sectionHeading}>Active Roles</p>
+          <p className="mt-2 text-3xl font-semibold text-[#0D9488]">
+            {sections.length}
+          </p>
+        </div>
+        <div className={`${karta.card} p-5`}>
+          <p className={karta.sectionHeading}>Shortlisted</p>
+          <p className="mt-2 text-3xl font-semibold text-emerald-600">
+            {shortlistedTotal}
+          </p>
+        </div>
+        <div className={`${karta.card} p-5`}>
+          <p className={karta.sectionHeading}>Screened</p>
+          <p className="mt-2 text-3xl font-semibold text-[#64748B]">
+            {screenedCount}
+          </p>
+        </div>
       </div>
 
       {error && (
@@ -578,12 +588,12 @@ export function PipelineManager() {
           <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
         </div>
       ) : sections.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-slate-600">
-          No role briefs yet.{" "}
-          <Link href="/role-briefs" className="font-medium text-slate-900 underline">
-            Create a role brief
+        <p className={`${karta.card} border-dashed px-6 py-12 text-center text-[#64748B]`}>
+          Shortlist candidates from the{" "}
+          <Link href="/candidates" className="font-medium text-[#0D9488] underline">
+            Candidates
           </Link>{" "}
-          and score candidates to build your pipeline.
+          page to build your pipeline.
         </p>
       ) : (
         <div className="space-y-4">

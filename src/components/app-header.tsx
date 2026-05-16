@@ -1,90 +1,43 @@
 "use client";
 
 import Link from "next/link";
-import { Briefcase, Bug } from "lucide-react";
-import { useActiveRoleBrief } from "@/contexts/active-role-brief-context";
-import { useScoringDebug } from "@/contexts/scoring-debug-context";
+import { usePathname } from "next/navigation";
+import { KARTA, karta } from "@/lib/brand/karta";
+
+const NAV = [
+  { href: "/role-briefs", label: "Job Roles" },
+  { href: "/candidates", label: "Candidates" },
+  { href: "/pipeline", label: "Pipeline" },
+] as const;
+
+function navLinkClass(active: boolean): string {
+  return active
+    ? "rounded-md bg-[#0D9488] px-3 py-1.5 font-medium text-white"
+    : "rounded-md px-3 py-1.5 font-medium text-white/90 hover:bg-white/10 hover:text-white";
+}
 
 export function AppHeader() {
-  const { activeBriefTitle } = useActiveRoleBrief();
-  const { togglePanel, entries, panelOpen } = useScoringDebug();
+  const pathname = usePathname();
 
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-        <div className="flex min-w-0 items-center gap-3">
-          <Link
-            href="/role-briefs"
-            className="flex shrink-0 items-center gap-2 text-slate-900"
-          >
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white">
-              <Briefcase className="h-4 w-4" aria-hidden />
-            </span>
-            <span className="hidden font-semibold tracking-tight sm:inline">
-              Hiring Scorer
-            </span>
-          </Link>
-          <span className="hidden text-slate-300 sm:inline" aria-hidden>
-            |
+    <header className={`sticky top-0 z-50 border-b border-slate-700/50 ${karta.nav}`}>
+      <div className="mx-auto flex h-auto min-h-14 max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <Link href="/role-briefs" className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-lg font-semibold tracking-tight text-white">
+            {KARTA.name}
           </span>
-          <p className="truncate text-sm text-slate-600">
-            {activeBriefTitle ? (
-              <>
-                <span className="font-medium text-slate-900">Active role:</span>{" "}
-                {activeBriefTitle}
-              </>
-            ) : (
-              <span className="text-slate-500">No active role brief selected</span>
-            )}
-          </p>
-        </div>
+          <span className="text-xs font-light text-white/60">{KARTA.tagline}</span>
+        </Link>
         <nav className="flex shrink-0 items-center gap-1 text-sm">
-          <Link
-            href="/role-briefs"
-            className="rounded-md px-3 py-1.5 font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
-          >
-            Role Briefs
-          </Link>
-          <Link
-            href="/candidates"
-            className="rounded-md px-3 py-1.5 font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
-          >
-            Candidates
-          </Link>
-          <Link
-            href="/pipeline"
-            className="rounded-md px-3 py-1.5 font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
-          >
-            Pipeline
-          </Link>
-          <Link
-            href="/analysis"
-            className="rounded-md px-3 py-1.5 font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
-          >
-            Analysis
-          </Link>
-          <button
-            type="button"
-            onClick={togglePanel}
-            className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
-              panelOpen
-                ? "bg-slate-900 text-white"
-                : "text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100"
-            }`}
-            title="Scoring debug log (session only)"
-          >
-            <Bug className="h-3.5 w-3.5" aria-hidden />
-            Debug
-            {entries.length > 0 && (
-              <span
-                className={`min-w-[1.25rem] rounded-full px-1 py-0.5 text-center text-[10px] font-semibold ${
-                  panelOpen ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"
-                }`}
-              >
-                {entries.length}
-              </span>
-            )}
-          </button>
+          {NAV.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={navLinkClass(pathname.startsWith(item.href))}
+            >
+              {item.label}
+            </Link>
+          ))}
         </nav>
       </div>
     </header>

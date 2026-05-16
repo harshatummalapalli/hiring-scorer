@@ -1,7 +1,7 @@
 import { SavedScoresManager } from "@/components/saved-scores/saved-scores-manager";
 
 export const metadata = {
-  title: "Saved Scores | Hiring Scorer",
+  title: "Saved Matches | Karta",
   description: "View and manage saved candidate score cards",
 };
 

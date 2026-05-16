@@ -145,7 +145,7 @@ export function CandidateScoreCard({
         {what_stands_out.length > 0 && (
           <section className="space-y-4">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-              What stands out
+              Why This Candidate
             </h3>
             <ul className="space-y-6">
               {what_stands_out.map((item, i) => (
@@ -224,7 +224,7 @@ export function CandidateScoreCard({
                 {actionBusy ? (
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                 ) : null}
-                Save to Pipeline
+                Shortlist
               </button>
             )}
             {savedLabel && (
@@ -242,7 +242,7 @@ export function CandidateScoreCard({
           className="flex w-full items-center justify-center gap-2 px-6 py-4 text-sm font-medium text-slate-600 transition hover:bg-slate-100/80 hover:text-slate-900"
           aria-expanded={detailOpen}
         >
-          View detailed analysis
+          See Full Breakdown
           {detailOpen ? (
             <ChevronUp className="h-4 w-4" aria-hidden />
           ) : (

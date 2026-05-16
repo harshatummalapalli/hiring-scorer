@@ -12,7 +12,6 @@ import {
   X,
 } from "lucide-react";
 import { useActiveRoleBrief } from "@/contexts/active-role-brief-context";
-import { useScoringDebug } from "@/contexts/scoring-debug-context";
 import {
   getScoreForRole,
   isScoredForRole,
@@ -25,17 +24,9 @@ import type {
   CandidatePoolFilter,
 } from "@/types/candidate";
 import type { RoleBrief } from "@/types/role-brief";
-import type { FitVerdict } from "@/types/score";
-import { VERDICT_BADGE } from "./profile-shared";
+import { karta } from "@/lib/brand/karta";
+import { VerdictBadge } from "./profile-shared";
 import { CandidateSlidePanel } from "./candidate-slide-panel";
-
-function shortVerdict(verdict: FitVerdict): string {
-  if (verdict === "STRONG FIT") return "Strong";
-  if (verdict === "POSSIBLE FIT") return "Possible";
-  if (verdict === "WEAK FIT") return "Weak";
-  if (verdict === "NOT SUITABLE") return "Not suitable";
-  return verdict;
-}
 
 function experienceLabel(candidate: CandidateListItem): string {
   const t = candidate.signal_profile.total_years_experience?.trim();
@@ -45,8 +36,8 @@ function experienceLabel(candidate: CandidateListItem): string {
 
 const TABS: { id: CandidatePoolFilter; label: string }[] = [
   { id: "all", label: "All" },
-  { id: "scored", label: "Scored" },
-  { id: "unscored", label: "Unscored" },
+  { id: "scored", label: "Matched" },
+  { id: "unscored", label: "Not Matched Yet" },
 ];
 
 export function CandidatesWorkspace() {
@@ -54,8 +45,6 @@ export function CandidatesWorkspace() {
   const searchParams = useSearchParams();
   const { activeBriefId, hydrated, setActiveBrief, syncActiveBriefFromList } =
     useActiveRoleBrief();
-  const { appendRun } = useScoringDebug();
-
   const [candidates, setCandidates] = useState<CandidateListItem[]>([]);
   const [roleBriefs, setRoleBriefs] = useState<RoleBrief[]>([]);
   const [activeBrief, setActiveBriefLocal] = useState<RoleBrief | null>(null);
@@ -197,21 +186,11 @@ export function CandidatesWorkspace() {
         body: JSON.stringify({ roleBriefId: roleId }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Scoring failed");
-      if (json.result && activeBrief) {
-        appendRun({
-          candidateFilename:
-            candidates.find((c) => c.id === candidateId)?.resume_filename ??
-            "candidate",
-          roleBrief: activeBrief,
-          result: json.result,
-          durationMs: Date.now() - startedAt,
-        });
-      }
+      if (!res.ok) throw new Error(json.error ?? "Matching failed");
       await loadCandidates();
       if (panelId === candidateId) setPanelRefresh((k) => k + 1);
     } catch (err) {
-      setError(getErrorMessage(err, "Scoring failed"));
+      setError(getErrorMessage(err, "Matching failed"));
     } finally {
       setScoringIds((prev) => {
         const next = new Set(prev);
@@ -310,15 +289,16 @@ export function CandidatesWorkspace() {
     return (
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-6 py-10 text-center">
         <AlertCircle className="mx-auto mb-2 h-8 w-8 text-amber-600" />
-        <p className="font-medium text-amber-900">No role briefs yet</p>
+        <p className="font-medium text-amber-900">No job roles yet</p>
         <p className="mt-1 text-sm text-amber-800">
-          Create a role brief before scoring candidates.
+          Add your first job role to get started — paste a JD and Karta will break
+          it down instantly.
         </p>
         <Link
           href="/role-briefs"
           className="mt-4 inline-block text-sm font-semibold text-amber-900 underline"
         >
-          Go to Role Briefs
+          Go to Job Roles
         </Link>
       </div>
     );
@@ -327,14 +307,17 @@ export function CandidatesWorkspace() {
   return (
     <div className="pb-20">
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">
-          Candidates
-        </h1>
+        <div>
+          <h1 className={karta.pageTitle}>Candidates</h1>
+          <p className="mt-1 text-[15px] text-[#64748B]">
+            Upload resumes and match them against your active job role.
+          </p>
+        </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           <button
             type="button"
             onClick={() => setShowUpload((s) => !s)}
-            className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50"
+            className={`inline-flex items-center gap-1.5 ${karta.btnPrimary}`}
           >
             <Upload className="h-4 w-4" />
             Upload Resumes
@@ -343,14 +326,14 @@ export function CandidatesWorkspace() {
             type="button"
             disabled={busy || unscoredCount === 0 || !roleId}
             onClick={() => void handleScoreAll()}
-            className="inline-flex items-center gap-1.5 rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+            className={`inline-flex items-center gap-1.5 ${karta.btnOutlineTeal}`}
           >
             {scoringAll ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Sparkles className="h-4 w-4" />
             )}
-            Score All
+            Match All
             {unscoredCount > 0 && (
               <span className="text-slate-300">({unscoredCount})</span>
             )}
@@ -359,7 +342,7 @@ export function CandidatesWorkspace() {
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-slate-500">Active role:</span>
+        <span>Matching against:</span>
         {showRolePicker ? (
           <>
             <select
@@ -391,11 +374,9 @@ export function CandidatesWorkspace() {
           </>
         ) : (
           <>
-            <span className="font-medium text-slate-900">
+            <span className="font-medium text-[#1E293B]">
               {activeBrief?.title ?? "—"}
-              {activeBrief?.title_band && (
-                <span className="text-slate-500"> · {activeBrief.title_band}</span>
-              )}
+              {activeBrief?.title_band ? ` · ${activeBrief.title_band}` : ""}
             </span>
             <button
               type="button"
@@ -403,7 +384,7 @@ export function CandidatesWorkspace() {
                 setPickerBriefId(activeBrief?.id ?? "");
                 setShowRolePicker(true);
               }}
-              className="rounded border border-slate-300 px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              className="text-[13px] font-medium text-[#0D9488] underline hover:no-underline"
             >
               Change
             </button>
@@ -454,7 +435,7 @@ export function CandidatesWorkspace() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name…"
+            placeholder="Search by name"
             className="w-full rounded border border-slate-300 py-2 pl-9 pr-3 text-sm"
           />
         </div>
@@ -483,7 +464,7 @@ export function CandidatesWorkspace() {
       ) : filtered.length === 0 ? (
         <p className="py-12 text-center text-sm text-slate-500">
           {candidates.length === 0
-            ? "No candidates yet. Upload resumes to get started."
+            ? "Upload resumes to begin — Karta matches them against your active job role."
             : "No candidates match your filters."}
         </p>
       ) : (
@@ -505,7 +486,7 @@ export function CandidatesWorkspace() {
                 </th>
                 <th className="px-3 py-2">Name</th>
                 <th className="px-3 py-2">Experience</th>
-                <th className="px-3 py-2">Verdict</th>
+                <th className="px-3 py-2">Match</th>
                 <th className="px-3 py-2 w-28">Action</th>
               </tr>
             </thead>
@@ -513,10 +494,6 @@ export function CandidatesWorkspace() {
               {filtered.map((c) => {
                 const score = getScoreForRole(c, roleId);
                 const isScoring = scoringIds.has(c.id);
-                const styles = score
-                  ? VERDICT_BADGE[score.verdict]
-                  : null;
-
                 return (
                   <tr
                     key={c.id}
@@ -539,17 +516,7 @@ export function CandidatesWorkspace() {
                       {experienceLabel(c)}
                     </td>
                     <td className="px-3 py-2">
-                      {score && styles ? (
-                        <span
-                          className={`inline-flex rounded px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${styles.bg} ${styles.text} ${styles.ring}`}
-                        >
-                          {shortVerdict(score.verdict)} · {score.overall_score}
-                        </span>
-                      ) : (
-                        <span className="inline-flex rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
-                          Not scored
-                        </span>
-                      )}
+                      <VerdictBadge verdict={score?.verdict ?? null} compact />
                     </td>
                     <td
                       className="px-3 py-2"
@@ -564,9 +531,9 @@ export function CandidatesWorkspace() {
                         {isScoring ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : score ? (
-                          "Rescore"
+                          "Re-match"
                         ) : (
-                          "Score"
+                          "Match"
                         )}
                       </button>
                     </td>
@@ -585,15 +552,15 @@ export function CandidatesWorkspace() {
               <span className="font-semibold text-slate-900">
                 {selected.size}
               </span>{" "}
-              selected
+              candidates selected
             </span>
             <button
               type="button"
               disabled={busy || !roleId}
               onClick={() => void handleScoreSelected()}
-              className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+              className={karta.btnPrimary}
             >
-              Score Selected
+              Match Selected
             </button>
           </div>
         </div>

@@ -65,18 +65,18 @@ export const STRING_CATEGORIES: {
 }[] = [
   {
     id: "deal_breakers",
-    label: "Deal breakers",
-    description: "Must-haves — absence disqualifies the candidate",
+    label: "Must Haves",
+    description: "Required — absence disqualifies the candidate",
   },
   {
     id: "preferred_signals",
-    label: "Preferred signals",
-    description: "Nice to have — boosts score but absence is not penalised",
+    label: "Nice to Haves",
+    description: "Optional — boosts match but absence is not penalised",
   },
   {
     id: "cannot_assess",
-    label: "Cannot assess from resume",
-    description: "Soft skills or qualities not visible on a CV alone",
+    label: "Assess in Interview",
+    description: "Qualities to explore in conversation, not on a CV alone",
   },
   {
     id: "equivalent_titles",
@@ -110,7 +110,7 @@ export function deriveTitleFromAnalysis(
     .find((l) => l.length > 2 && l.length < 120);
   if (line) return line.replace(/^#+\s*/, "");
 
-  return "Role brief";
+  return "Job role";
 }
 
 export function analysisFromRoleBrief(brief: RoleBrief): RoleBriefAnalysis {
@@ -230,7 +230,7 @@ export function parseRoleBriefRow(row: Record<string, unknown>): RoleBrief {
 
   return {
     id: String(row.id),
-    title: String(row.title ?? "Role brief"),
+    title: String(row.title ?? "Job role"),
     job_description: row.job_description
       ? String(row.job_description)
       : [row.responsibilities, row.required_skills]

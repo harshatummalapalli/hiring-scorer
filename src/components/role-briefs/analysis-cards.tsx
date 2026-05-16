@@ -298,9 +298,9 @@ function CoreSignalsCard({
       onDrop={onDrop}
       className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
     >
-      <h3 className="font-semibold text-slate-900">Core signals</h3>
-      <p className="mt-1 text-xs text-slate-500">
-        Important skills that drive scoring — each with equivalent terms.
+      <h3 className="font-semibold text-[#1E293B]">Key Requirements</h3>
+      <p className="mt-1 text-xs text-[#64748B]">
+        Important skills for matching — each with equivalent terms.
       </p>
 
       <div className="mt-6 space-y-4">

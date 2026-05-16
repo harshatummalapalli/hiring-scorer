@@ -1,5 +1,6 @@
-import type { CompanyType, FitVerdict } from "@/types/score";
+import type { FitVerdict } from "@/types/score";
 import type { ReactNode } from "react";
+import { VERDICT_DISPLAY, verdictBadgeClass, verdictLabel, karta } from "@/lib/brand/karta";
 
 export function ProfileSection({
   children,
@@ -9,101 +10,48 @@ export function ProfileSection({
   className?: string;
 }) {
   return (
-    <section
-      className={`rounded-lg border border-slate-200 bg-white p-6 shadow-sm ${className}`}
-    >
-      {children}
-    </section>
+    <section className={`${karta.card} p-5 ${className}`}>{children}</section>
   );
 }
 
-export function ProfileSectionHeading({
-  children,
-  icon,
+export function ProfileSectionHeading({ children }: { children: ReactNode }) {
+  return <h2 className={`mb-3 ${karta.sectionHeading}`}>{children}</h2>;
+}
+
+export function VerdictBadge({
+  verdict,
+  score,
+  compact,
 }: {
-  children: ReactNode;
-  icon?: ReactNode;
+  verdict: string | null | undefined;
+  score?: number | null;
+  compact?: boolean;
 }) {
+  if (!verdict) {
+    return (
+      <span className={`${karta.badge} bg-slate-200 text-slate-600`}>
+        Not matched yet
+      </span>
+    );
+  }
   return (
-    <h2 className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-      {icon}
-      {children}
-    </h2>
-  );
-}
-
-const COMPANY_DOT: Record<CompanyType, string> = {
-  Product: "bg-emerald-500",
-  GCC: "bg-blue-500",
-  Services: "bg-amber-500",
-  Startup: "bg-purple-500",
-};
-
-const COMPANY_BADGE: Record<CompanyType, string> = {
-  Product: "bg-emerald-50 text-emerald-800 ring-emerald-200",
-  GCC: "bg-blue-50 text-blue-800 ring-blue-200",
-  Services: "bg-amber-50 text-amber-900 ring-amber-200",
-  Startup: "bg-purple-50 text-purple-800 ring-purple-200",
-};
-
-export function CompanyTypeBadge({ type }: { type: CompanyType }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${COMPANY_BADGE[type]}`}
-    >
-      <span
-        className={`h-1.5 w-1.5 shrink-0 rounded-full ${COMPANY_DOT[type]}`}
-        aria-hidden
-      />
-      {type}
+    <span className={`${karta.badge} ${verdictBadgeClass(verdict)}`}>
+      {verdictLabel(verdict)}
+      {score != null && !compact ? ` · ${score}` : null}
+      {score != null && compact ? ` ${score}` : null}
     </span>
   );
 }
 
-export function CompanyLogoPlaceholder({ company }: { company: string }) {
-  const initial = (company.trim()[0] ?? "?").toUpperCase();
-  const hues = [
-    "bg-slate-700",
-    "bg-indigo-600",
-    "bg-teal-600",
-    "bg-rose-600",
-    "bg-cyan-700",
-  ];
-  const idx = company.length % hues.length;
-  return (
-    <div
-      className={`flex h-12 w-12 shrink-0 items-center justify-center rounded text-lg font-semibold text-white ${hues[idx]}`}
-      aria-hidden
-    >
-      {initial}
-    </div>
-  );
-}
-
+/** @deprecated use VerdictBadge */
 export const VERDICT_BADGE: Record<
   FitVerdict,
   { text: string; bg: string; ring: string }
 > = {
-  "STRONG FIT": {
-    text: "text-emerald-700",
-    bg: "bg-emerald-50",
-    ring: "ring-emerald-200",
-  },
-  "POSSIBLE FIT": {
-    text: "text-amber-700",
-    bg: "bg-amber-50",
-    ring: "ring-amber-200",
-  },
-  "WEAK FIT": {
-    text: "text-orange-700",
-    bg: "bg-orange-50",
-    ring: "ring-orange-200",
-  },
-  "NOT SUITABLE": {
-    text: "text-red-700",
-    bg: "bg-red-50",
-    ring: "ring-red-200",
-  },
+  "STRONG FIT": { text: "text-white", bg: "bg-[#059669]", ring: "ring-transparent" },
+  "POSSIBLE FIT": { text: "text-white", bg: "bg-[#D97706]", ring: "ring-transparent" },
+  "WEAK FIT": { text: "text-white", bg: "bg-[#64748B]", ring: "ring-transparent" },
+  "NOT SUITABLE": { text: "text-white", bg: "bg-[#E11D48]", ring: "ring-transparent" },
 };
 
 export function SignalBar({
@@ -119,13 +67,13 @@ export function SignalBar({
 }) {
   return (
     <div className="space-y-1.5">
-      <div className="flex items-center justify-between text-sm">
-        <span className="font-medium text-slate-800">{label}</span>
-        <span className="text-slate-600">{rating}</span>
+      <div className="flex items-center justify-between text-[13px]">
+        <span className="font-medium text-[#334155]">{label}</span>
+        <span className="font-semibold text-[#1E293B]">{rating}</span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+      <div className={karta.barTrack}>
         <div
-          className="h-full rounded-full bg-slate-900 transition-all"
+          className={karta.barFill}
           style={{ width: `${Math.min(100, Math.max(0, fillPercent))}%` }}
         />
       </div>

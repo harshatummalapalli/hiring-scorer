@@ -3,8 +3,8 @@ import { Loader2 } from "lucide-react";
 import { CandidatesWorkspace } from "@/components/candidates/candidates-workspace";
 
 export const metadata = {
-  title: "Candidates | Hiring Scorer",
-  description: "Upload, score, and review candidates against your active role brief",
+  title: "Candidates | Karta",
+  description: "Upload resumes and match candidates against your active job role",
 };
 
 function CandidatesFallback() {

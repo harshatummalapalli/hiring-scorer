@@ -160,7 +160,7 @@ export function RoleBriefManager() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this role brief? This cannot be undone.")) return;
+    if (!confirm("Delete this job role? This cannot be undone.")) return;
 
     setDeletingId(id);
     setError(null);
@@ -178,7 +178,7 @@ export function RoleBriefManager() {
       if (editingId === id) resetCreator();
       await fetchBriefs();
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to delete role brief"));
+      setError(getErrorMessage(err, "Failed to delete job role"));
     } finally {
       setDeletingId(null);
     }
@@ -227,16 +227,16 @@ export function RoleBriefManager() {
 
       <section>
         <div className="mb-6">
-          <h2 className="text-lg font-semibold text-slate-900">Saved role briefs</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Select a brief as active to use it when scoring candidates.
+          <h2 className="text-lg font-semibold text-[#1E293B]">Your Job Roles</h2>
+          <p className="mt-1 text-sm text-[#64748B]">
+            Set a job role as active to match candidates against it.
           </p>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-slate-500">
             <Loader2 className="h-5 w-5 animate-spin" />
-            <span className="text-sm">Loading role briefs…</span>
+            <span className="text-sm">Loading job roles…</span>
           </div>
         ) : (
           <RoleBriefList
