@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { buildSignalProfile } from "@/lib/candidates/build-signal-profile";
 import { createActivity } from "@/lib/candidates/activity";
-import { insertCandidate, listCandidates } from "@/lib/supabase/candidates";
+import {
+  insertCandidate,
+  listCandidatesWithSummaries,
+} from "@/lib/supabase/candidates";
 
 export async function GET() {
   try {
-    const candidates = await listCandidates();
+    const candidates = await listCandidatesWithSummaries();
     return NextResponse.json({ candidates });
   } catch (err) {
     const message =
@@ -21,10 +24,23 @@ type PostBody = {
   displayName?: string;
 };
 
+function coerceResumeText(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (
+    value != null &&
+    typeof value === "object" &&
+    "stripped" in value &&
+    typeof (value as { stripped: unknown }).stripped === "string"
+  ) {
+    return (value as { stripped: string }).stripped.trim();
+  }
+  return "";
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as PostBody;
-    const resumeText = body.resumeText?.trim();
+    const resumeText = coerceResumeText(body.resumeText);
     if (!resumeText) {
       return NextResponse.json(
         { error: "Resume text is required." },
@@ -65,11 +81,14 @@ export async function POST(request: Request) {
       : message.includes("Supabase")
         ? 503
         : 500;
+    const hint =
+      message.includes("does not exist") ||
+      message.toLowerCase().includes("relation") ||
+      message.toLowerCase().includes("candidates")
+        ? "Run supabase/candidates.sql in your Supabase SQL editor."
+        : undefined;
     return NextResponse.json(
-      {
-        error: message,
-        hint: "Run supabase/candidates.sql in your Supabase SQL editor.",
-      },
+      { error: message, ...(hint ? { hint } : {}) },
       { status },
     );
   }

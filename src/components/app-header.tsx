@@ -58,12 +58,6 @@ export function AppHeader() {
             Score Candidate
           </Link>
           <Link
-            href="/saved-scores"
-            className="rounded-md px-3 py-1.5 font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
-          >
-            Saved Scores
-          </Link>
-          <Link
             href="/analysis"
             className="rounded-md px-3 py-1.5 font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
           >

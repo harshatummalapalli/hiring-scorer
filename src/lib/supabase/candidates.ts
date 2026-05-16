@@ -2,9 +2,11 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type {
   CandidateActivity,
   CandidateDetail,
+  CandidateListItem,
   CandidateNote,
   CandidateRow,
   CandidateRoleFitScore,
+  CandidateScoreSummary,
   CandidateSignalProfile,
   CandidateStage,
 } from "@/types/candidate";
@@ -58,6 +60,101 @@ export async function listCandidates(): Promise<CandidateRow[]> {
     throw new Error(error.message);
   }
   return (data ?? []).map((r) => rowToCandidate(r as Record<string, unknown>));
+}
+
+function mapScoreRow(row: Record<string, unknown>): CandidateScoreSummary {
+  const overall = Number(row.overall_score ?? 0);
+  return {
+    id: String(row.id),
+    role_brief_title:
+      row.role_brief_title != null ? String(row.role_brief_title) : null,
+    overall_score: overall,
+    verdict: scoreToVerdict(overall),
+  };
+}
+
+function attachScoresToCandidate(
+  candidate: CandidateRow,
+  scoresById: Map<string, CandidateScoreSummary[]>,
+  scoresByFilename: Map<string, CandidateScoreSummary[]>,
+): CandidateListItem {
+  const seen = new Set<string>();
+  const merged: CandidateScoreSummary[] = [];
+
+  for (const s of scoresById.get(candidate.id) ?? []) {
+    if (!seen.has(s.id)) {
+      seen.add(s.id);
+      merged.push(s);
+    }
+  }
+
+  if (candidate.resume_filename) {
+    const key = candidate.resume_filename.toLowerCase();
+    for (const s of scoresByFilename.get(key) ?? []) {
+      if (!seen.has(s.id)) {
+        seen.add(s.id);
+        merged.push(s);
+      }
+    }
+  }
+
+  const highest_score =
+    merged.length > 0
+      ? Math.max(...merged.map((s) => s.overall_score))
+      : 0;
+
+  const { resume_text: _omit, ...rest } = candidate;
+  return {
+    ...rest,
+    role_scores: merged,
+    highest_score,
+  };
+}
+
+export async function listCandidatesWithSummaries(): Promise<
+  CandidateListItem[]
+> {
+  const rows = await listCandidates();
+  if (rows.length === 0) return [];
+
+  const supabase = getServerSupabase();
+  const { data: scoreRows, error } = await supabase
+    .from("saved_scores")
+    .select(
+      "id, candidate_id, candidate_filename, overall_score, role_brief_title, created_at",
+    )
+    .order("created_at", { ascending: false });
+
+  if (error && !error.message?.includes("does not exist")) {
+    throw new Error(error.message);
+  }
+
+  const scoresById = new Map<string, CandidateScoreSummary[]>();
+  const scoresByFilename = new Map<string, CandidateScoreSummary[]>();
+
+  for (const raw of scoreRows ?? []) {
+    const row = raw as Record<string, unknown>;
+    const summary = mapScoreRow(row);
+    const cid = row.candidate_id != null ? String(row.candidate_id) : null;
+    if (cid) {
+      const list = scoresById.get(cid) ?? [];
+      list.push(summary);
+      scoresById.set(cid, list);
+    }
+    const fn =
+      row.candidate_filename != null
+        ? String(row.candidate_filename).toLowerCase()
+        : null;
+    if (fn) {
+      const list = scoresByFilename.get(fn) ?? [];
+      list.push(summary);
+      scoresByFilename.set(fn, list);
+    }
+  }
+
+  return rows.map((c) =>
+    attachScoresToCandidate(c, scoresById, scoresByFilename),
+  );
 }
 
 export async function getCandidateById(id: string): Promise<CandidateDetail | null> {

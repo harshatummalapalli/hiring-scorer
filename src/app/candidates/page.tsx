@@ -7,7 +7,7 @@ export const metadata = {
 
 export default function CandidatesPage() {
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
+    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
       <CandidatesManager />
     </div>
   );

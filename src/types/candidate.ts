@@ -113,7 +113,42 @@ export type CandidateRoleFitScore = {
   role_brief_snapshot: unknown;
 };
 
+export type CandidateScoreSummary = {
+  id: string;
+  role_brief_title: string | null;
+  overall_score: number;
+  verdict: FitVerdict;
+};
+
+export type CandidateListItem = Omit<CandidateRow, "resume_text"> & {
+  resume_text?: string;
+  role_scores: CandidateScoreSummary[];
+  highest_score: number;
+};
+
 export type CandidateDetail = CandidateRow & {
   notes: CandidateNote[];
   role_fit_scores: CandidateRoleFitScore[];
 };
+
+export type CandidateVerdictFilter =
+  | "all"
+  | "strong"
+  | "possible"
+  | "weak"
+  | "not_suitable"
+  | "unscored";
+
+export type CandidateCompanyTypeFilter = "all" | CompanyType;
+
+export type CandidateExperienceFilter =
+  | "all"
+  | "0-3"
+  | "4-7"
+  | "8-12"
+  | "13+";
+
+export type CandidateSortOption =
+  | "recent"
+  | "highest_score"
+  | "most_scored";
