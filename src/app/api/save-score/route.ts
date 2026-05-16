@@ -1,9 +1,21 @@
 import { NextResponse } from "next/server";
+import { sanitizeSavedScorePayload } from "@/lib/saved-scores/sanitize-save-payload";
 import { insertSavedScore } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
   try {
-    const payload = await request.json() as Record<string, unknown>;
+    const raw = (await request.json()) as Record<string, unknown>;
+    const payload = sanitizeSavedScorePayload(raw);
+
+    if (
+      typeof payload.overall_score !== "number" ||
+      Number.isNaN(payload.overall_score)
+    ) {
+      return NextResponse.json(
+        { error: "Overall score is missing or invalid; cannot save." },
+        { status: 400 },
+      );
+    }
 
     try {
       const { id } = await insertSavedScore(payload);

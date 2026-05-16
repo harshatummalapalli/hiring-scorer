@@ -1,3 +1,8 @@
+import {
+  CONSENSUS_SUMMARY,
+  MODEL_ROLE_DISPLAY,
+} from "@/lib/scoring/recruiter-labels";
+
 export type AiProvider = "anthropic" | "openai" | "google";
 
 export type ModelRole = "claude" | "gpt4o" | "gemini";
@@ -55,10 +60,7 @@ export type DimensionConsensusDetail = {
   };
   spread: number;
   agreement: "unanimous" | "majority" | "divergent";
-  dimension_confidence_label:
-    | "High Confidence"
-    | "Medium Confidence"
-    | "Review Recommended";
+  dimension_confidence_label: string;
   consensus_score: number | null;
   /** Average of model scores when agreement is divergent. */
   provisional_score: number | null;
@@ -132,12 +134,8 @@ export const SCORE_TAGS = [
   "Hold",
 ] as const;
 
-export const MODEL_ROLE_LABELS: Record<ModelRole, string> = {
-  gemini: "Gemini Flash (Signal Extractor)",
-  claude: "Claude (Devil's Advocate)",
-  gpt4o: "GPT-4o (Structured Scorer)",
-};
+/** Recruiter-facing role labels (no vendor/model names). */
+export const MODEL_ROLE_LABELS: Record<ModelRole, string> = MODEL_ROLE_DISPLAY;
 
 /** Short labels for consensus narrative */
-export const MODEL_CONSENSUS_DESCRIPTION =
-  "Gemini extracts signals, Claude identifies risks and gaps, and GPT-4o scores each dimension.";
+export const MODEL_CONSENSUS_DESCRIPTION = CONSENSUS_SUMMARY;

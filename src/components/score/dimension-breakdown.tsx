@@ -3,14 +3,8 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { DimensionConsensusDetail, DimensionKey } from "@/types/score";
-import { DIMENSION_LABELS } from "@/types/score";
-
-function confidenceStyles(label: string) {
-  if (label === "High Confidence") return "bg-emerald-100 text-emerald-800";
-  if (label === "Medium Confidence") return "bg-amber-100 text-amber-800";
-  if (label === "Review Recommended") return "bg-red-100 text-red-800";
-  return "bg-slate-100 text-slate-700";
-}
+import { confidenceBadgeClass, toRecruiterConfidenceLabel } from "@/lib/scoring/recruiter-labels";
+import { DIMENSION_LABELS, MODEL_ROLE_LABELS } from "@/types/score";
 
 type DimensionBreakdownProps = {
   dimensionKey: DimensionKey;
@@ -39,9 +33,9 @@ export function DimensionBreakdown({
               {DIMENSION_LABELS[dimensionKey]}
             </span>
             <span
-              className={`rounded-full px-2 py-0.5 text-xs font-medium ${confidenceStyles(detail.dimension_confidence_label)}`}
+              className={`rounded-full px-2 py-0.5 text-xs font-medium ${confidenceBadgeClass(toRecruiterConfidenceLabel(detail.dimension_confidence_label))}`}
             >
-              {detail.dimension_confidence_label}
+              {toRecruiterConfidenceLabel(detail.dimension_confidence_label)}
             </span>
           </div>
           <p className="mt-1 text-sm tabular-nums text-slate-600">
@@ -89,15 +83,15 @@ export function DimensionBreakdown({
               </thead>
               <tbody className="text-slate-700">
                 <ModelRow
-                  name="Gemini Flash (Signal Extractor)"
+                  name={MODEL_ROLE_LABELS.gemini}
                   cell={m.gemini}
                 />
                 <ModelRow
-                  name="Claude (Devil's Advocate)"
+                  name={MODEL_ROLE_LABELS.claude}
                   cell={m.claude}
                 />
                 <ModelRow
-                  name="GPT-4o (Structured Scorer)"
+                  name={MODEL_ROLE_LABELS.gpt4o}
                   cell={m.gpt4o}
                 />
               </tbody>
@@ -115,12 +109,12 @@ export function DimensionBreakdown({
                   </td>
                   <td colSpan={3} className="pb-2">
                     <span
-                      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${confidenceStyles(detail.dimension_confidence_label)}`}
+                      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${confidenceBadgeClass(toRecruiterConfidenceLabel(detail.dimension_confidence_label))}`}
                     >
-                      {detail.dimension_confidence_label}
+                      {toRecruiterConfidenceLabel(detail.dimension_confidence_label)}
                     </span>
                     <span className="ml-2 text-slate-500">
-                      (≤10 pts = High · two agree = Medium · all diverge = Review)
+                      (≤10 pts = strong agreement · two agree = minor disagreement · all diverge = review)
                     </span>
                   </td>
                 </tr>

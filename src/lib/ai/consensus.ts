@@ -7,6 +7,12 @@ import type {
   DimensionScore,
   ModelRole,
 } from "@/types/score";
+import {
+  CONFIDENCE_LABEL_HIGH,
+  CONFIDENCE_LABEL_MEDIUM,
+  CONFIDENCE_LABEL_REVIEW,
+  modelRoleDisplayName,
+} from "@/lib/scoring/recruiter-labels";
 import { DIMENSION_LABELS } from "@/types/score";
 import {
   flagTextsAreDuplicate,
@@ -37,9 +43,9 @@ const DIMENSION_KEYS: DimensionKey[] = [
 ];
 
 const MODEL_LABELS: Record<ModelRole, string> = {
-  claude: "Claude",
-  gpt4o: "GPT-4o",
-  gemini: "Gemini Flash",
+  claude: modelRoleDisplayName("claude"),
+  gpt4o: modelRoleDisplayName("gpt4o"),
+  gemini: modelRoleDisplayName("gemini"),
 };
 
 const AGREEMENT_THRESHOLD = 10;
@@ -59,10 +65,12 @@ function computeWeightedOverall(
   };
   const total = DIMENSION_KEYS.reduce((s, k) => s + weights[k], 0);
   const sum = DIMENSION_KEYS.reduce(
-    (s, k) => s + dimensions[k].score * weights[k],
+    (s, k) => s + (dimensions[k]?.score ?? 0) * weights[k],
     0,
   );
-  return Math.round(sum / total);
+  if (total <= 0 || !Number.isFinite(sum)) return 0;
+  const overall = Math.round(sum / total);
+  return Number.isFinite(overall) ? Math.max(0, Math.min(100, overall)) : 0;
 }
 
 function pairWithin(a: number, b: number): boolean {
@@ -138,9 +146,9 @@ function analyzeDimension(
   }
 
   const rationale = [
-    `Claude ${scores.claude}`,
-    `GPT-4o ${scores.gpt4o}`,
-    `Gemini ${scores.gemini}`,
+    `${modelRoleDisplayName("claude")} ${scores.claude}`,
+    `${modelRoleDisplayName("gpt4o")} ${scores.gpt4o}`,
+    `${modelRoleDisplayName("gemini")} ${scores.gemini}`,
     structuredScorer.dimensions[key].insufficient_data
       ? "(insufficient data flagged)"
       : "",
@@ -194,7 +202,7 @@ function buildWatchSignals(
   for (const key of DIMENSION_KEYS) {
     if (structuredScorer.dimensions[key].insufficient_data) {
       entries.push({
-        text: `${DIMENSION_LABELS[key]}: insufficient data in profile (GPT-4o scored 0)`,
+        text: `${DIMENSION_LABELS[key]}: insufficient data in profile (${modelRoleDisplayName("gpt4o")} scored 0)`,
         source: "gpt4o",
       });
     }
@@ -268,13 +276,13 @@ export function buildConsensusResult(
 
   if (anyDivergent) {
     review_recommended = true;
-    confidence_label = "Review Recommended";
+    confidence_label = CONFIDENCE_LABEL_REVIEW;
     confidence_level = "review";
   } else if (allUnanimous) {
-    confidence_label = "High Confidence";
+    confidence_label = CONFIDENCE_LABEL_HIGH;
     confidence_level = "high";
   } else {
-    confidence_label = "Medium Confidence";
+    confidence_label = CONFIDENCE_LABEL_MEDIUM;
     confidence_level = "medium";
   }
 

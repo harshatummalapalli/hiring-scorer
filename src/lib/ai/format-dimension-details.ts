@@ -1,3 +1,8 @@
+import {
+  CONFIDENCE_LABEL_HIGH,
+  CONFIDENCE_LABEL_MEDIUM,
+  CONFIDENCE_LABEL_REVIEW,
+} from "@/lib/scoring/recruiter-labels";
 import type { DimensionKey } from "@/types/score";
 import type {
   DevilsAdvocateResult,
@@ -15,10 +20,10 @@ export type DimensionModelCell = {
 
 export function agreementToConfidenceLabel(
   agreement: DimensionAgreement,
-): "High Confidence" | "Medium Confidence" | "Review Recommended" {
-  if (agreement === "unanimous") return "High Confidence";
-  if (agreement === "majority") return "Medium Confidence";
-  return "Review Recommended";
+): typeof CONFIDENCE_LABEL_HIGH | typeof CONFIDENCE_LABEL_MEDIUM | typeof CONFIDENCE_LABEL_REVIEW {
+  if (agreement === "unanimous") return CONFIDENCE_LABEL_HIGH;
+  if (agreement === "majority") return CONFIDENCE_LABEL_MEDIUM;
+  return CONFIDENCE_LABEL_REVIEW;
 }
 
 export function formatSignalExtractorDimension(

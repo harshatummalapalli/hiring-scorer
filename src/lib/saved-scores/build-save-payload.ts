@@ -62,14 +62,16 @@ export function buildSavedScoreInsertPayload(
   tag: string,
   recruiterNotes: string,
 ) {
-  const overall_score = ensureIntegerOverallScore(result, roleBrief);
+  const overall_score = Math.round(
+    Number(ensureIntegerOverallScore(result, roleBrief)),
+  );
   const role_brief_snapshot = roleBriefToSnapshot(roleBrief);
 
   return {
     candidate_filename: candidateFilename,
     role_brief_id: roleBrief.id,
     role_brief_title: roleBrief.title,
-    overall_score,
+    overall_score: Number.isFinite(overall_score) ? overall_score : 0,
     confidence_level: result.confidence_label,
     dimension_scores: result.dimension_scores,
     green_flags: result.green_flags,

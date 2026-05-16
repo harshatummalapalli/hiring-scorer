@@ -4,6 +4,12 @@ import type {
   DimensionKey,
 } from "@/types/score";
 import { DIMENSION_LABELS } from "@/types/score";
+import {
+  CONFIDENCE_LABEL_HIGH,
+  CONFIDENCE_LABEL_MEDIUM,
+  CONFIDENCE_LABEL_REVIEW,
+  toRecruiterConfidenceLabel,
+} from "@/lib/scoring/recruiter-labels";
 import type { SavedScoreRow } from "@/types/saved-score";
 
 const DIMENSION_KEYS: DimensionKey[] = [
@@ -59,10 +65,10 @@ function buildConsensusFallback(
       agreement,
       dimension_confidence_label:
         agreement === "unanimous"
-          ? "High Confidence"
+          ? CONFIDENCE_LABEL_HIGH
           : agreement === "majority"
-            ? "Medium Confidence"
-            : "Review Recommended",
+            ? CONFIDENCE_LABEL_MEDIUM
+            : CONFIDENCE_LABEL_REVIEW,
       consensus_score: agreement === "divergent" ? null : dim.score,
       provisional_score: agreement === "divergent" ? dim.score : null,
       dissent: dim.dissent,
@@ -81,8 +87,7 @@ export function reconstructCandidateResult(
   if (!row.dimension_scores) return null;
 
   const dimension_consensus = buildConsensusFallback(row.dimension_scores);
-  const confidence_label =
-    row.confidence_level ?? "Medium Confidence";
+  const confidence_label = toRecruiterConfidenceLabel(row.confidence_level);
 
   return {
     overall_score: row.overall_score ?? 0,
@@ -90,13 +95,13 @@ export function reconstructCandidateResult(
       (d) => d.agreement === "divergent",
     ),
     confidence_level:
-      confidence_label === "High Confidence"
+      confidence_label === CONFIDENCE_LABEL_HIGH
         ? "high"
-        : confidence_label === "Review Recommended"
+        : confidence_label === CONFIDENCE_LABEL_REVIEW
           ? "review"
           : "medium",
     confidence_label,
-    review_recommended: confidence_label === "Review Recommended",
+    review_recommended: confidence_label === CONFIDENCE_LABEL_REVIEW,
     dimension_scores: row.dimension_scores,
     dimension_consensus,
     green_flags: normalizeFlags(row.green_flags),

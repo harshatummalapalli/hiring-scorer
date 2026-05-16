@@ -30,7 +30,7 @@ export function ModelRawResponsesPanel({ raw }: ModelRawResponsesPanelProps) {
       >
         <span className="inline-flex items-center gap-2">
           <Code2 className="h-4 w-4 text-slate-500" aria-hidden />
-          Full model responses (calibration)
+          Full evaluator responses (technical)
         </span>
         <ChevronDown
           className={`h-4 w-4 shrink-0 text-slate-500 transition ${expanded ? "rotate-180" : ""}`}

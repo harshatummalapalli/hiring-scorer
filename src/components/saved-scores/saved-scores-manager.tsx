@@ -11,7 +11,11 @@ import {
 import { SavedScoreDetailModal } from "@/components/saved-scores/saved-score-detail-modal";
 import { getErrorMessage } from "@/lib/errors";
 import { snapshotToRoleBrief } from "@/lib/saved-scores/build-save-payload";
-import { confidenceBadgeClass, CONFIDENCE_FILTER_OPTIONS } from "@/lib/saved-scores/confidence-badge";
+import { CONFIDENCE_FILTER_OPTIONS } from "@/lib/saved-scores/confidence-badge";
+import {
+  confidenceBadgeClass,
+  toRecruiterConfidenceLabel,
+} from "@/lib/scoring/recruiter-labels";
 import { downloadSavedScoresCsv } from "@/lib/saved-scores/export-csv";
 import { normalizeStoredOverallScore } from "@/lib/saved-scores/normalize-score";
 import { reconstructCandidateResult } from "@/lib/saved-scores/reconstruct-result";
@@ -121,7 +125,9 @@ export function SavedScoresManager() {
       list = list.filter((r) => r.tag === tagFilter);
     }
     if (confidenceFilter) {
-      list = list.filter((r) => r.confidence_level === confidenceFilter);
+      list = list.filter(
+        (r) => toRecruiterConfidenceLabel(r.confidence_level) === confidenceFilter,
+      );
     }
 
     list.sort((a, b) => {
@@ -351,7 +357,7 @@ export function SavedScoresManager() {
                         <span
                           className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${confidenceBadgeClass(row.confidence_level)}`}
                         >
-                          {row.confidence_level ?? "—"}
+                          {toRecruiterConfidenceLabel(row.confidence_level)}
                         </span>
                       </td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>

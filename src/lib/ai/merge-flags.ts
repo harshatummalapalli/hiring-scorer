@@ -1,10 +1,7 @@
+import { MODEL_ROLE_DISPLAY } from "@/lib/scoring/recruiter-labels";
 import type { AttributedFlag, ModelRole } from "@/types/score";
 
-const SOURCE_SHORT: Record<ModelRole, string> = {
-  claude: "Claude",
-  gpt4o: "GPT-4o",
-  gemini: "Gemini",
-};
+const SOURCE_SHORT: Record<ModelRole, string> = MODEL_ROLE_DISPLAY;
 
 export const MAX_GREEN_FLAGS = 3;
 export const MAX_WATCH_SIGNALS = 4;

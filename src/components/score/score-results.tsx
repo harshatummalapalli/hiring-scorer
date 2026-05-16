@@ -12,6 +12,7 @@ import type {
   CandidateScoreResult,
   DimensionKey,
 } from "@/types/score";
+import { confidenceBadgeClass, toRecruiterConfidenceLabel } from "@/lib/scoring/recruiter-labels";
 import {
   DIMENSION_LABELS,
   MODEL_CONSENSUS_DESCRIPTION,
@@ -43,14 +44,8 @@ function weightFor(key: DimensionKey, brief: RoleBrief): number {
   }[key];
 }
 
-function confidenceStyles(label: string) {
-  if (label === "High Confidence") return "bg-emerald-100 text-emerald-800";
-  if (label === "Medium Confidence") return "bg-amber-100 text-amber-800";
-  if (label === "Review Recommended") return "bg-red-100 text-red-800";
-  return "bg-slate-100 text-slate-700";
-}
-
 export function ScoreResults({ result, roleBrief }: ScoreResultsProps) {
+  const confidenceLabel = toRecruiterConfidenceLabel(result.confidence_label);
   return (
     <div className="space-y-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-100 pb-6">
@@ -69,9 +64,9 @@ export function ScoreResults({ result, roleBrief }: ScoreResultsProps) {
           )}
         </div>
         <span
-          className={`rounded-full px-3 py-1 text-sm font-medium ${confidenceStyles(result.confidence_label)}`}
+          className={`rounded-full px-3 py-1 text-sm font-medium ${confidenceBadgeClass(confidenceLabel)}`}
         >
-          {result.confidence_label}
+          {confidenceLabel}
         </span>
       </div>
 
@@ -162,21 +157,21 @@ export function ScoreResults({ result, roleBrief }: ScoreResultsProps) {
           <p className="font-medium">What each model flagged</p>
           <ul className="mt-2 space-y-2 text-xs">
             <li>
-              <strong>Gemini (signals):</strong>{" "}
+              <strong>{MODEL_ROLE_LABELS.gemini} — watch signals:</strong>{" "}
               {result.model_flags.gemini.watch_signals.length > 0
                 ? result.model_flags.gemini.watch_signals.join("; ")
                 : "No watch signals"}
             </li>
             <li>
-              <strong>Claude risks:</strong>{" "}
+              <strong>{MODEL_ROLE_LABELS.claude} — risks:</strong>{" "}
               {result.model_flags.claude.risks.join("; ") || "None"}
             </li>
             <li>
-              <strong>Claude gaps:</strong>{" "}
+              <strong>{MODEL_ROLE_LABELS.claude} — gaps:</strong>{" "}
               {result.model_flags.claude.gaps.join("; ") || "None"}
             </li>
             <li>
-              <strong>GPT-4o insufficient data:</strong>{" "}
+              <strong>{MODEL_ROLE_LABELS.gpt4o} — insufficient data:</strong>{" "}
               {result.model_flags.gpt4o.insufficient.join(", ") || "None"}
             </li>
           </ul>

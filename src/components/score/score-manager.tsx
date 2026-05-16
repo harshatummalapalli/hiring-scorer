@@ -415,8 +415,8 @@ export function ScoreManager() {
           Multi-model consensus scoring
         </h2>
         <p className="mt-1 mb-4 text-sm text-slate-500">
-          Gemini Flash extracts signals, Claude challenges with risks and gaps, and
-          GPT-4o scores each dimension — all three run in parallel. Set all keys in{" "}
+          Three evaluators run in parallel — signal extraction, risk review, and
+          structured dimension scoring. Set all keys in{" "}
           <code className="text-xs">.env.local</code> and restart the dev server
           after changes.
         </p>
