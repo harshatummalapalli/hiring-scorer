@@ -10,6 +10,7 @@ import type {
   DevilsAdvocateResult,
   SignalExtractorResult,
 } from "@/lib/ai/model-runners";
+import { normalizeInterviewQuestions } from "@/lib/scoring/interview-questions";
 
 const COMPANY_TYPES: CompanyType[] = [
   "Services",
@@ -166,15 +167,17 @@ export function buildRecruiterCard(
     .filter((text, i, arr) => arr.indexOf(text) === i)
     .slice(0, 2);
 
-  const interview_questions = devilsAdvocate.interview_questions
-    .map((q) => q.trim())
-    .filter(Boolean)
-    .slice(0, 2);
+  let interview_questions = normalizeInterviewQuestions(
+    devilsAdvocate.interview_questions,
+  );
 
   while (interview_questions.length < 2) {
+    const gap = worth_exploring[interview_questions.length];
     interview_questions.push(
-      worth_exploring[interview_questions.length]
-        ? `Can you walk me through how you have addressed: ${worth_exploring[interview_questions.length]}?`
+      gap
+        ? normalizeInterviewQuestions([
+            `Can you walk me through how you would address: ${gap}`,
+          ])[0]
         : "What would you want us to understand about your experience that is not obvious from your resume?",
     );
   }

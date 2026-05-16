@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { CandidateListItem } from "@/types/candidate";
+import { getDisplayJobTitle } from "@/lib/candidates/profile-display";
 import { initialsFromName, shortVerdictLabel } from "@/lib/candidates/list-filters";
 import { VERDICT_BADGE } from "./profile-shared";
 
@@ -37,7 +38,7 @@ export function CandidateListCard({ candidate }: CandidateListCardProps) {
           </div>
 
           <p className="mt-0.5 text-sm text-slate-600">
-            <span className="text-slate-800">{profile.most_recent_title}</span>
+            <span className="text-slate-800">{getDisplayJobTitle(profile)}</span>
             {profile.career_pattern &&
               profile.career_pattern !== "Not available" && (
                 <>

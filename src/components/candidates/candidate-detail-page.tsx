@@ -15,6 +15,10 @@ import { createClient } from "@supabase/supabase-js";
 import type { CandidateDetail } from "@/types/candidate";
 import type { RoleBrief } from "@/types/role-brief";
 import {
+  formatProfileSubtitle,
+  sanitizeEvidenceForDisplay,
+} from "@/lib/candidates/profile-display";
+import {
   ownershipLabel,
   quantificationLabel,
   trajectoryBarPercent,
@@ -186,6 +190,7 @@ export function CandidateDetailPage({ candidateId }: { candidateId: string }) {
 
   const profile = candidate.signal_profile;
   const experience = profile.experience;
+  const experienceFallback = profile.experience_fallback_raw;
   const visibleExp = expExpanded ? experience : experience.slice(0, 3);
   const aboutLong = profile.professional_summary.length > 280;
 
@@ -222,13 +227,8 @@ export function CandidateDetailPage({ candidateId }: { candidateId: string }) {
                     {candidate.display_name}
                   </h1>
                   <p className="mt-1 text-lg text-slate-500">
-                    {profile.most_recent_title}
+                    {formatProfileSubtitle(profile)}
                   </p>
-                  {profile.location && (
-                    <p className="mt-2 text-sm text-slate-600">
-                      {profile.location} · {profile.total_years_experience}
-                    </p>
-                  )}
                   <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-600">
                     {profile.career_pattern}
                     {profile.shows_product_progression && (
@@ -340,7 +340,9 @@ export function CandidateDetailPage({ candidateId }: { candidateId: string }) {
                     />
                     <span>
                       {s.signal}{" "}
-                      <em className="text-slate-600">“{s.evidence}”</em>
+                      <em className="text-slate-600">
+                        {sanitizeEvidenceForDisplay(s.signal, s.evidence)}
+                      </em>
                     </span>
                   </li>
                 ))}
@@ -365,9 +367,15 @@ export function CandidateDetailPage({ candidateId }: { candidateId: string }) {
           </ProfileSection>
 
           {/* Experience */}
-          {experience.length > 0 && (
+          {(experience.length > 0 || experienceFallback) && (
             <ProfileSection>
               <ProfileSectionHeading>Experience</ProfileSectionHeading>
+              {experienceFallback ? (
+                <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                  {experienceFallback}
+                </div>
+              ) : (
+              <>
               <ul className="space-y-8">
                 {visibleExp.map((job, i) => (
                   <li key={i} className="flex gap-4">
@@ -407,6 +415,8 @@ export function CandidateDetailPage({ candidateId }: { candidateId: string }) {
                     : "Show all experience"}
                 </button>
               )}
+              </>
+              )}
             </ProfileSection>
           )}
 
@@ -424,7 +434,10 @@ export function CandidateDetailPage({ candidateId }: { candidateId: string }) {
                     {profile.skills_verified.map((s) => (
                       <span
                         key={s.skill}
-                        title={s.evidence}
+                        title={sanitizeEvidenceForDisplay(
+                          s.skill,
+                          s.evidence,
+                        )}
                         className="cursor-default rounded-full border border-emerald-400 bg-white px-3 py-1 text-sm text-slate-800"
                       >
                         {s.skill}

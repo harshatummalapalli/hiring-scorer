@@ -58,6 +58,7 @@ export type CandidateSignalProfile = {
   positive_signals: ProfileSignal[];
   watch_signals: string[];
   experience: ExperienceEntry[];
+  experience_fallback_raw: string | null;
   education: EducationEntry[];
   skills_verified: VerifiedSkill[];
   skills_listed_only: string[];

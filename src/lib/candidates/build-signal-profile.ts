@@ -7,17 +7,24 @@ import type {
   VerifiedSkill,
 } from "@/types/candidate";
 import {
+  inferTitleBand,
+  isValidExperienceEntry,
+  resolveMostRecentJobTitle,
+} from "./profile-display";
+import {
   computeTrajectoryVelocity,
   estimateYearsExperience,
+  extractExplicitYearsOfExperience,
   extractLocation,
   extractProfessionalSummary,
-  inferCompanyType,
   parseEducationEntries,
-  parseExperienceEntries,
+  parseExperienceWithFallback,
   parseSkillsFromSection,
   splitResumeSections,
   summaryFromRecentRole,
 } from "./parse-resume-structure";
+import { prepareSignalQuote, toStrippedResumeText } from "./resume-text";
+
 function skillInText(skill: string, text: string): { index: number; len: number } | null {
   const needle = skill.trim();
   if (!needle || needle.length < 2) return null;
@@ -54,7 +61,7 @@ function extractContextQuote(
 }
 
 function classifySkills(
-  resumeText: string,
+  strippedResume: string,
   skillNames: string[],
   experienceBullets: string[],
 ): { verified: VerifiedSkill[]; listedOnly: string[] } {
@@ -69,16 +76,17 @@ function classifySkills(
     seen.add(key);
 
     const inWork = skillInText(skill, workBlob) != null;
-    const inResume = skillInText(skill, resumeText);
+    const inResume = skillInText(skill, strippedResume);
 
     if (inWork && inResume) {
+      const rawQuote = extractContextQuote(
+        strippedResume,
+        inResume.index,
+        inResume.len,
+      );
       verified.push({
         skill,
-        evidence: extractContextQuote(
-          resumeText,
-          inResume.index,
-          inResume.len,
-        ),
+        evidence: prepareSignalQuote(skill, rawQuote),
       });
     } else if (inResume || skillNames.includes(skill)) {
       listedOnly.push(skill);
@@ -89,28 +97,30 @@ function classifySkills(
 }
 
 function buildPositiveSignals(
-  resumeText: string,
   ownershipExamples: string[],
   quantifiedExamples: string[],
 ): ProfileSignal[] {
   const signals: ProfileSignal[] = [];
   for (const ex of ownershipExamples.slice(0, 2)) {
+    const signal = "Demonstrates ownership language";
     signals.push({
-      signal: "Demonstrates ownership language",
-      evidence: ex.slice(0, 120),
+      signal,
+      evidence: prepareSignalQuote(signal, ex.slice(0, 120)),
     });
   }
   for (const ex of quantifiedExamples.slice(0, 1)) {
     if (signals.length >= 3) break;
+    const signal = "Quantified business impact";
     signals.push({
-      signal: "Quantified business impact",
-      evidence: ex.slice(0, 120),
+      signal,
+      evidence: prepareSignalQuote(signal, ex.slice(0, 120)),
     });
   }
-  if (signals.length === 0 && resumeText.length > 200) {
+  if (signals.length === 0) {
+    const signal = "Relevant professional background";
     signals.push({
-      signal: "Relevant professional background",
-      evidence: resumeText.slice(0, 100).replace(/\s+/g, " ") + "…",
+      signal,
+      evidence: prepareSignalQuote(signal, ""),
     });
   }
   return signals.slice(0, 3);
@@ -147,20 +157,24 @@ export function buildSignalProfile(
   resumeText: string,
   resumeFilename: string,
 ): CandidateSignalProfile {
-  const sections = splitResumeSections(resumeText);
-  const resumeQuality = analyseResumeSignals(resumeText);
-  const experience = parseExperienceEntries(resumeText, sections);
+  const strippedResume = toStrippedResumeText(resumeText);
+  const sections = splitResumeSections(strippedResume);
+  const resumeQuality = analyseResumeSignals(strippedResume);
+  const { experience, experience_fallback_raw } = parseExperienceWithFallback(
+    strippedResume,
+    sections,
+  );
   const education = parseEducationEntries(sections);
   const skillsSection = parseSkillsFromSection(sections);
   const allBullets = experience.flatMap((e) => e.bullets);
 
   const { verified, listedOnly } = classifySkills(
-    resumeText,
+    strippedResume,
     skillsSection,
     allBullets,
   );
 
-  let professional_summary = extractProfessionalSummary(resumeText, sections);
+  let professional_summary = extractProfessionalSummary(strippedResume, sections);
   if (!professional_summary || professional_summary.length < 40) {
     professional_summary = summaryFromRecentRole(experience);
   }
@@ -172,12 +186,20 @@ export function buildSignalProfile(
       : "Not available";
 
   const display_name = filenameToDisplayName(resumeFilename);
-  const most_recent_title = experience[0]?.title ?? "Not stated";
-  const location = extractLocation(resumeText);
-  const total_years_experience = estimateYearsExperience(experience);
+  const title_band = inferTitleBand(
+    experience[0]?.title ?? professional_summary.slice(0, 200),
+  );
+  const most_recent_title = resolveMostRecentJobTitle(experience, title_band);
+  const location = extractLocation(strippedResume);
+  const explicitYears = extractExplicitYearsOfExperience(strippedResume, sections);
+  const fromRoles = estimateYearsExperience(experience);
+  const total_years_experience =
+    fromRoles !== "Not stated"
+      ? fromRoles
+      : explicitYears != null
+        ? `${Math.round(explicitYears)} years`
+        : "Not stated";
   const trajectory_velocity = computeTrajectoryVelocity(experience);
-
-  const title_band = inferTitleBand(most_recent_title);
 
   return {
     display_name,
@@ -196,7 +218,6 @@ export function buildSignalProfile(
     keyword_stuffing_explanation: resumeQuality.keyword_stuffing.explanation,
     trajectory_velocity,
     positive_signals: buildPositiveSignals(
-      resumeText,
       resumeQuality.ownership.ownership_examples,
       resumeQuality.quantification.quantified_examples,
     ),
@@ -206,6 +227,7 @@ export function buildSignalProfile(
       resumeQuality.ownership.ratio_percent,
     ),
     experience,
+    experience_fallback_raw,
     education,
     skills_verified: verified,
     skills_listed_only: listedOnly,
@@ -213,24 +235,13 @@ export function buildSignalProfile(
   };
 }
 
-function inferTitleBand(title: string): string | null {
-  const t = title.toLowerCase();
-  if (/\b(?:chief|cto|ceo|vp|vice president|director)\b/.test(t))
-    return "Executive";
-  if (/\b(?:principal|staff|distinguished)\b/.test(t)) return "Staff+";
-  if (/\b(?:senior|sr\.?|lead|manager)\b/.test(t)) return "Senior";
-  if (/\b(?:junior|jr\.?|associate|intern)\b/.test(t)) return "Junior";
-  return "Mid";
-}
-
-/** Re-export for skills — thin helper if semantic-matcher doesn't export findTermInResume */
 export function normalizeSignalProfile(
   raw: unknown,
   resumeText: string,
   resumeFilename: string,
 ): CandidateSignalProfile {
   if (typeof raw === "object" && raw != null && "display_name" in raw) {
-    return raw as CandidateSignalProfile;
+    return buildSignalProfile(resumeText, resumeFilename);
   }
   return buildSignalProfile(resumeText, resumeFilename);
 }

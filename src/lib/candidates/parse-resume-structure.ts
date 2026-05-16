@@ -4,8 +4,17 @@ import type { EducationEntry, ExperienceEntry } from "@/types/candidate";
 const SECTION_HEADERS =
   /^(?:professional\s+)?(?:summary|profile|objective|about)\s*$|^(?:work\s+)?experience|employment|professional\s+experience|career\s+history|education|academic|skills|technical\s+skills|core\s+competencies$/i;
 
+const MONTH =
+  "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
+
 const DATE_RANGE =
-  /(\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}|\b\d{1,2}\/\d{4}|\b\d{4})\s*[-–—]\s*(\b(?:Present|Current|Now|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*(?:\d{4})?|\b\d{1,2}\/\d{4}|\b\d{4})/i;
+  new RegExp(
+    `(\\b${MONTH}\\.?\\s*\\d{4}|\\b\\d{1,2}\\/\\d{4}|\\b(?:19|20)\\d{2})\\s*(?:[-–—]|\\s+to\\s+)\\s*(\\b${MONTH}\\.?\\s*(?:\\d{4})?|\\b(?:Present|Current|Now)|\\b\\d{1,2}\\/\\d{4}|\\b(?:19|20)\\d{2})`,
+    "i",
+  );
+
+const JOB_TITLE_HINT =
+  /\b(?:engineer|developer|architect|manager|lead|analyst|consultant|director|specialist|designer|scientist|administrator|coordinator|associate|intern|tester|qa)\b/i;
 
 const PRODUCT_HINTS =
   /\b(?:google|meta|microsoft|amazon|apple|netflix|spotify|uber|airbnb|stripe|shopify|atlassian|salesforce|adobe|linkedin|twitter|x\.com|flipkart|swiggy|zomato|razorpay|phonepe|paytm|freshworks|zendesk|hubspot|notion|figma|slack|dropbox|palantir|snowflake|databricks|openai|anthropic)\b/i;
@@ -18,6 +27,11 @@ const GCC_HINTS =
 
 const STARTUP_HINTS =
   /\b(?:startup|series\s+[a-d]|seed\s+stage|early[- ]stage|venture[- ]backed)\b/i;
+
+const EDUCATION_SECTION_LINE =
+  /^(?:#{1,3}\s*)?(?:education|academic(?:\s+background)?|qualifications|degrees)\s*:?\s*$/i;
+
+import { isEducationTitle, isValidExperienceEntry } from "./profile-display";
 
 export function inferCompanyType(company: string, context = ""): CompanyType {
   const blob = `${company} ${context}`.toLowerCase();
@@ -143,12 +157,155 @@ export function extractLocation(resumeText: string): string | null {
   return cityState?.[1]?.trim() ?? null;
 }
 
-function parseBullets(lines: string[]): string[] {
+function parseBulletsFromLines(lines: string[]): string[] {
   return lines
-    .filter((l) => /^[•\-\*▪]/.test(l) || /^\d+\./.test(l))
+    .filter((l) => /^[•\-\*▪]/.test(l) || /^\d+\.\s/.test(l))
     .map((l) => l.replace(/^[•\-\*▪]\s*|\d+\.\s*/, "").trim())
     .filter((l) => l.length > 10)
     .slice(0, 3);
+}
+
+function lineHasDateRange(line: string): boolean {
+  DATE_RANGE.lastIndex = 0;
+  return DATE_RANGE.test(line);
+}
+
+function extractDates(line: string): { start: string; end: string } | null {
+  DATE_RANGE.lastIndex = 0;
+  const m = DATE_RANGE.exec(line);
+  if (!m?.[1] || !m[2]) return null;
+  return { start: m[1].trim(), end: m[2].trim() };
+}
+
+function stripDatesFromLine(line: string): string {
+  return line.replace(DATE_RANGE, "").replace(/\s+/g, " ").trim();
+}
+
+function looksLikeJobTitle(line: string): boolean {
+  const t = line.trim();
+  if (!t || t.length > 80) return false;
+  if (isEducationTitle(t)) return false;
+  if (lineHasDateRange(t)) return false;
+  return JOB_TITLE_HINT.test(t) || (t.length < 55 && /^[A-Z]/.test(t));
+}
+
+function looksLikeCompany(line: string): boolean {
+  const t = stripDatesFromLine(line);
+  if (!t || t.length > 70) return false;
+  if (isEducationTitle(t)) return false;
+  if (/^[•\-\*]/.test(t)) return false;
+  return true;
+}
+
+function parseRoleAtAnchor(
+  lines: string[],
+  anchorIdx: number,
+  endIdx: number,
+): ExperienceEntry | null {
+  const dateLine = lines[anchorIdx];
+  const dates = extractDates(dateLine);
+  if (!dates) return null;
+
+  let title = "";
+  let company = "";
+  let location: string | null = null;
+
+  const withoutDates = stripDatesFromLine(dateLine);
+  const atSplit = withoutDates.split(/\s+at\s+/i);
+  if (atSplit.length === 2) {
+    title = atSplit[0].trim();
+    company = atSplit[1].trim();
+  } else if (withoutDates.includes("|")) {
+    const pipe = withoutDates.split("|").map((s) => s.trim());
+    if (looksLikeJobTitle(pipe[0] ?? "")) {
+      title = pipe[0] ?? "";
+      company = pipe[1] ?? "";
+      location = pipe[2] ?? null;
+    } else {
+      company = pipe[0] ?? "";
+      title = pipe[1] ?? "";
+    }
+  } else if (looksLikeJobTitle(withoutDates)) {
+    title = withoutDates;
+  } else if (looksLikeCompany(withoutDates)) {
+    company = withoutDates;
+  }
+
+  if (anchorIdx > 0) {
+    const prev = lines[anchorIdx - 1];
+    if (!title && looksLikeJobTitle(prev)) title = prev.trim();
+    else if (!company && looksLikeCompany(prev) && !lineHasDateRange(prev)) {
+      company = stripDatesFromLine(prev);
+    }
+  }
+
+  if (anchorIdx + 1 < endIdx) {
+    const next = lines[anchorIdx + 1];
+    if (!company && looksLikeCompany(next) && !/^[•\-\*]/.test(next)) {
+      company = stripDatesFromLine(next);
+    } else if (!title && looksLikeJobTitle(next)) {
+      title = next.trim();
+    }
+  }
+
+  let bodyStart = anchorIdx + 1;
+  while (bodyStart < endIdx) {
+    const bl = lines[bodyStart];
+    if (/^[•\-\*▪]/.test(bl) || /^\d+\.\s/.test(bl)) break;
+    if (lineHasDateRange(bl)) break;
+    const norm = stripDatesFromLine(bl);
+    if (norm === company || norm === title) {
+      bodyStart += 1;
+      continue;
+    }
+    if (looksLikeCompany(bl) || looksLikeJobTitle(bl)) {
+      bodyStart += 1;
+      continue;
+    }
+    break;
+  }
+  const bullets = parseBulletsFromLines(lines.slice(bodyStart, endIdx));
+
+  title = title.trim();
+  company = company.trim();
+  if (!title || !company) return null;
+
+  return {
+    title,
+    company,
+    company_type: inferCompanyType(company, bullets.join(" ")),
+    location,
+    start_date: dates.start,
+    end_date: dates.end,
+    bullets,
+  };
+}
+
+export function extractExperienceSectionRaw(
+  resumeText: string,
+  sections: Map<string, string[]>,
+): string {
+  const expLines =
+    sections.get("experience") ??
+    sections.get("work experience") ??
+    sections.get("professional experience") ??
+    [];
+  if (expLines.length) {
+    return expLines.join("\n").trim();
+  }
+  const lines = resumeText.split(/\r?\n/).map((l) => l.trim());
+  const out: string[] = [];
+  let inExp = false;
+  for (const line of lines) {
+    const clean = line.replace(/[#*_]/g, "").trim();
+    if (/^(?:work\s+)?experience|employment|professional\s+experience/i.test(clean)) {
+      inExp = true;
+      continue;
+    }
+    if (inExp && EDUCATION_SECTION_LINE.test(clean)) break;
+    if (inExp && line) out.push(line);
+  }
+  return out.join("\n").trim();
 }
 
 export function parseExperienceEntries(
@@ -161,111 +318,64 @@ export function parseExperienceEntries(
     sections.get("professional experience") ??
     [];
 
+  const usingFullResume = expLines.length === 0;
   const source =
     expLines.length > 0
       ? expLines
       : resumeText.split(/\r?\n/).map((l) => l.trim());
 
+  const lines: string[] = [];
+  for (const line of source) {
+    if (!line) {
+      if (lines.length && lines[lines.length - 1] !== "") lines.push("");
+      continue;
+    }
+    if (usingFullResume && EDUCATION_SECTION_LINE.test(line.replace(/[#*_]/g, "").trim())) {
+      break;
+    }
+    if (SECTION_HEADERS.test(line.replace(/[#*_]/g, "").trim()) && lines.length) {
+      break;
+    }
+    lines.push(line);
+  }
+
+  const anchors: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (lineHasDateRange(lines[i])) anchors.push(i);
+  }
+
   const entries: ExperienceEntry[] = [];
-  let i = 0;
-
-  while (i < source.length && entries.length < 12) {
-    const line = source[i];
-    if (!line || SECTION_HEADERS.test(line)) {
-      i += 1;
-      continue;
+  for (let a = 0; a < anchors.length; a++) {
+    const start = anchors[a];
+    const end = a + 1 < anchors.length ? anchors[a + 1] : lines.length;
+    const entry = parseRoleAtAnchor(lines, start, end);
+    if (entry && isValidExperienceEntry(entry)) {
+      entries.push(entry);
     }
-
-    const dateOnLine = DATE_RANGE.exec(line);
-    let title = "";
-    let company = "";
-    let location: string | null = null;
-    let start_date: string | null = null;
-    let end_date: string | null = null;
-    const bullets: string[] = [];
-    let j = i;
-
-    if (dateOnLine) {
-      const parts = line.split(/\s*[-–—|@]\s*/);
-      title = parts[0]?.replace(DATE_RANGE, "").trim() ?? "";
-      start_date = dateOnLine[1] ?? null;
-      end_date = dateOnLine[2] ?? null;
-      j = i + 1;
-      if (j < source.length && !DATE_RANGE.test(source[j])) {
-        const next = source[j];
-        if (!/^[•\-\*]/.test(next) && next.length < 80) {
-          company = next;
-          j += 1;
-        }
-      }
-    } else if (i + 1 < source.length && DATE_RANGE.test(source[i + 1])) {
-      title = line;
-      const dateLine = source[i + 1];
-      const dr = DATE_RANGE.exec(dateLine);
-      if (dr) {
-        start_date = dr[1];
-        end_date = dr[2];
-      }
-      const companyPart = dateLine.replace(DATE_RANGE, "").trim();
-      if (companyPart) company = companyPart;
-      j = i + 2;
-    } else if (line.includes("|") || line.includes(" at ")) {
-      const atSplit = line.split(/\s+at\s+/i);
-      if (atSplit.length === 2) {
-        title = atSplit[0].trim();
-        company = atSplit[1].replace(DATE_RANGE, "").trim();
-      } else {
-        const pipe = line.split("|").map((s) => s.trim());
-        title = pipe[0] ?? line;
-        company = pipe[1] ?? "";
-        location = pipe[2] ?? null;
-      }
-      j = i + 1;
-    } else {
-      i += 1;
-      continue;
-    }
-
-    while (j < source.length) {
-      const bl = source[j];
-      if (!bl) {
-        j += 1;
-        break;
-      }
-      if (DATE_RANGE.test(bl) && bullets.length > 0) break;
-      if (SECTION_HEADERS.test(bl)) break;
-      if (/^[•\-\*▪]/.test(bl) || /^\d+\./.test(bl)) {
-        bullets.push(bl.replace(/^[•\-\*▪]\s*|\d+\.\s*/, "").trim());
-        if (bullets.length >= 3) {
-          j += 1;
-          continue;
-        }
-      } else if (bullets.length > 0 && bl.length > 20) {
-        break;
-      } else if (!company && bl.length < 60 && !DATE_RANGE.test(bl)) {
-        company = bl;
-      }
-      j += 1;
-      if (bullets.length >= 3 && j < source.length && DATE_RANGE.test(source[j]))
-        break;
-    }
-
-    if (title || company) {
-      const companyClean = company.replace(DATE_RANGE, "").trim() || "Company";
-      entries.push({
-        title: title || "Role",
-        company: companyClean,
-        company_type: inferCompanyType(companyClean, bullets.join(" ")),
-        location,
-        start_date,
-        end_date,
-        bullets: bullets.slice(0, 3),
-      });
-    }
-    i = j > i ? j : i + 1;
   }
 
   return entries;
+}
+
+export type ExperienceParseResult = {
+  experience: ExperienceEntry[];
+  experience_fallback_raw: string | null;
+};
+
+export function parseExperienceWithFallback(
+  resumeText: string,
+  sections: Map<string, string[]>,
+): ExperienceParseResult {
+  const experience = parseExperienceEntries(resumeText, sections);
+  const valid = experience.filter((e) => isValidExperienceEntry(e));
+  if (valid.length >= 2) {
+    return { experience: valid, experience_fallback_raw: null };
+  }
+  const raw = extractExperienceSectionRaw(resumeText, sections);
+  return {
+    experience: [],
+    experience_fallback_raw: raw.length > 40 ? raw : null,
+  };
 }
 
 export function parseEducationEntries(
@@ -306,33 +416,108 @@ export function parseSkillsFromSection(
     .slice(0, 40);
 }
 
-export function estimateYearsExperience(
-  experience: ExperienceEntry[],
-): string {
-  if (!experience.length) return "Not stated";
-  let earliest = Infinity;
-  let latest = 0;
-  const yearRe = /\b(19|20)(\d{2})\b/g;
+export function extractExplicitYearsOfExperience(
+  resumeText: string,
+  sections: Map<string, string[]>,
+): number | null {
+  const summaryBlock = [
+    ...(sections.get("summary") ?? []),
+    ...(sections.get("professional summary") ?? []),
+    ...(sections.get("profile") ?? []),
+  ].join(" ");
+  const blob = `${summaryBlock} ${resumeText.slice(0, 2000)}`;
 
-  for (const job of experience) {
-    for (const part of [job.start_date, job.end_date]) {
-      if (!part || /present|current/i.test(part)) {
-        latest = Math.max(latest, new Date().getFullYear());
-        continue;
-      }
-      let m: RegExpExecArray | null;
-      const s = part;
-      yearRe.lastIndex = 0;
-      while ((m = yearRe.exec(s))) {
-        const y = Number(m[0]);
-        earliest = Math.min(earliest, y);
-        latest = Math.max(latest, y);
+  const patterns = [
+    /(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)(?:\s+of)?(?:\s+(?:professional|work|industry|software|engineering|IT|relevant))?\s+experience/i,
+    /(?:over|more than|at least)\s+(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)/i,
+    /(?:experience)\s*[:\-–]\s*(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)/i,
+    /(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)\s+(?:of\s+)?(?:experience|in\s+(?:software|engineering|the\s+industry))/i,
+    /(?:with|having)\s+(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = blob.match(pattern);
+    if (match?.[1]) {
+      const n = parseFloat(match[1]);
+      if (Number.isFinite(n) && n >= 0 && n <= 50) {
+        return Math.round(n * 10) / 10;
       }
     }
   }
+  return null;
+}
 
-  if (earliest === Infinity) return "Not stated";
-  const years = Math.max(1, latest - earliest + 1);
+const MONTH_INDEX: Record<string, number> = {
+  jan: 0,
+  feb: 1,
+  mar: 2,
+  apr: 3,
+  may: 4,
+  jun: 5,
+  jul: 6,
+  aug: 7,
+  sep: 8,
+  oct: 9,
+  nov: 10,
+  dec: 11,
+};
+
+export function parseDateToMonth(value: string | null, asEnd: boolean): number | null {
+  if (!value) return null;
+  const v = value.trim();
+  if (/present|current|now/i.test(v)) {
+    const d = new Date();
+    return d.getFullYear() * 12 + d.getMonth();
+  }
+  const monthYear = v.match(
+    new RegExp(`\\b(${MONTH})\\.?\\s*((?:19|20)\\d{2})`, "i"),
+  );
+  if (monthYear) {
+    const key = monthYear[1].slice(0, 3).toLowerCase();
+    const month = MONTH_INDEX[key];
+    const year = Number(monthYear[2]);
+    if (month != null && Number.isFinite(year)) {
+      return year * 12 + month;
+    }
+  }
+  const slash = v.match(/\b(\d{1,2})\/(\d{4})\b/);
+  if (slash) {
+    return Number(slash[2]) * 12 + (Number(slash[1]) - 1);
+  }
+  const yearOnly = v.match(/\b((?:19|20)\d{2})\b/);
+  if (yearOnly) {
+    const year = Number(yearOnly[1]);
+    return year * 12 + (asEnd ? 11 : 0);
+  }
+  return null;
+}
+
+export function roleDurationMonths(
+  start: string | null,
+  end: string | null,
+): number {
+  const startM = parseDateToMonth(start, false);
+  const endM = parseDateToMonth(end, true);
+  if (startM == null || endM == null) return 0;
+  return Math.max(1, endM - startM + 1);
+}
+
+export function sumExperienceMonths(experience: ExperienceEntry[]): number {
+  return experience
+    .filter((e) => isValidExperienceEntry(e))
+    .reduce((sum, job) => sum + roleDurationMonths(job.start_date, job.end_date), 0);
+}
+
+export function estimateYearsExperience(
+  experience: ExperienceEntry[],
+): string {
+  const valid = experience.filter((e) => isValidExperienceEntry(e));
+  if (!valid.length) return "Not stated";
+
+  const totalMonths = sumExperienceMonths(valid);
+  if (totalMonths <= 0) return "Not stated";
+
+  const years = Math.max(1, Math.round(totalMonths / 12));
   return `${years} years`;
 }
 

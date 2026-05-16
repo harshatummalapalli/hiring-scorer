@@ -9,6 +9,7 @@ import {
   buildFallbackRecruiterCard,
   scoreToVerdict,
 } from "@/lib/scoring/recruiter-card";
+import { normalizeInterviewQuestions } from "@/lib/scoring/interview-questions";
 import { ScoreResultsDetail } from "./score-results-detail";
 
 type CandidateScoreCardProps = {
@@ -70,12 +71,11 @@ export function CandidateScoreCard({
         ...result.gaps.map((f) => f.text),
       ],
       result.model_flags.claude.gaps.length > 0
-        ? [
-            `Can you walk me through how you would address: ${result.model_flags.claude.gaps[0]}?`,
-            result.model_flags.claude.gaps[1]
-              ? `Tell me about a time you closed this gap: ${result.model_flags.claude.gaps[1]}`
-              : "What should we know about your experience that is not on your resume?",
-          ]
+        ? normalizeInterviewQuestions(
+            result.model_flags.claude.gaps.map(
+              (g) => `Can you walk me through how you would address: ${g}`,
+            ),
+          )
         : [],
     );
 

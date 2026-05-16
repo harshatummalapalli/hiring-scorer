@@ -6,6 +6,7 @@ import type {
   CandidateVerdictFilter,
 } from "@/types/candidate";
 import type { CompanyType, FitVerdict } from "@/types/score";
+import { getDisplayJobTitle } from "./profile-display";
 
 export function parseYearsFromLabel(label: string): number | null {
   const m = label.match(/(\d+(?:\.\d+)?)/);
@@ -69,7 +70,7 @@ export function matchesSearch(item: CandidateListItem, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
   const name = item.display_name.toLowerCase();
-  const title = item.signal_profile.most_recent_title.toLowerCase();
+  const title = getDisplayJobTitle(item.signal_profile).toLowerCase();
   return name.includes(q) || title.includes(q);
 }
 

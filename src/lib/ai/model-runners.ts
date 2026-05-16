@@ -9,6 +9,7 @@ import type { ResumeQualitySignals } from "@/lib/intelligence/beyond-keywords";
 import type { SkillsIntelligence } from "@/lib/intelligence/semantic-matcher";
 import type { CandidateSignalProfile } from "@/types/candidate";
 import { parseJsonFromModel } from "./parse-json";
+import { normalizeInterviewQuestions } from "@/lib/scoring/interview-questions";
 
 const DIMENSION_KEYS: DimensionKey[] = [
   "skills",
@@ -20,7 +21,9 @@ const DIMENSION_KEYS: DimensionKey[] = [
 
 const SIGNAL_EXTRACTOR_SYSTEM = `You are an expert recruiter with 18 years of enterprise technology hiring experience. Analyse this candidate profile against the role brief. For each of the five dimensions identify the strongest signals both positive and concerning. Base your analysis ONLY on information explicitly stated in the profile. Label any inference clearly. When a RESUME QUALITY SIGNALS block is present, use it to assess signal quality (ownership language, quantification, keyword stuffing). Return structured JSON only.`;
 
-const DEVILS_ADVOCATE_SYSTEM = `You are a rigorous hiring committee member whose job is to identify risks gaps and red flags. What critical information is missing? What patterns suggest risk? What gaps exist between role requirements and demonstrated experience? When a RESUME QUALITY SIGNALS block is present, factor it into risks and gaps. Return structured JSON with a risks array and a gaps array.`;
+const DEVILS_ADVOCATE_SYSTEM = `You are a rigorous hiring committee member whose job is to identify risks gaps and red flags. What critical information is missing? What patterns suggest risk? What gaps exist between role requirements and demonstrated experience? When a RESUME QUALITY SIGNALS block is present, factor it into risks and gaps.
+
+For interview_questions: write exactly two complete, natural, open-ended questions a senior interviewer would ask in a live screen. Each question must probe a specific gap through experience and judgment — never paste the gap text into the question, never use templates like "Can you walk me through how you would address…", and never mention the gap as a quoted deficiency. Example gap "no Azure experience" → "Walk me through your cloud infrastructure experience — which providers have you worked with deeply and what was your most complex cloud architecture challenge?"`;
 
 const STRUCTURED_SCORER_SYSTEM = `Score this candidate against the role brief on each of the five dimensions from 0 to 100. Score only on explicitly stated information. Do not infer. If information is absent score it 0 and flag as insufficient data. When a RESUME QUALITY SIGNALS block is present, use it when assessing signal quality. Return JSON only with dimension name score and one line reason.`;
 
@@ -195,7 +198,7 @@ Return JSON only with this shape (at most 3 risks, 2 gaps, exactly 2 interview_q
   }
 }
 dimension_scores should reflect how risks and gaps affect each dimension.
-interview_questions must be open questions that probe the specific gaps found — not generic interview questions.`;
+interview_questions: two standalone questions only — conversational, specific, no gap text copied verbatim, no template wrappers.`;
 
   const message = await client.messages.create({
     model: "claude-sonnet-4-20250514",
@@ -344,7 +347,9 @@ function parseDevilsAdvocateResponse(
   return {
     risks: stringArray(parsed.risks).slice(0, 3),
     gaps: stringArray(parsed.gaps).slice(0, 2),
-    interview_questions: stringArray(parsed.interview_questions).slice(0, 2),
+    interview_questions: normalizeInterviewQuestions(
+      stringArray(parsed.interview_questions),
+    ),
     dimension_scores,
   };
 }
