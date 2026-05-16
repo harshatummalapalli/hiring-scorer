@@ -10,13 +10,18 @@ import {
   inferTitleBand,
   isValidExperienceEntry,
   resolveMostRecentJobTitle,
+  titleBandToDisplayLabel,
 } from "./profile-display";
 import {
   computeTrajectoryVelocity,
   estimateYearsExperience,
+  extractCurrentCompany,
   extractExplicitYearsOfExperience,
+  extractFirstSubstantialLine,
   extractLocation,
+  extractNameFromRawResume,
   extractProfessionalSummary,
+  extractTitleFromResumeHeader,
   parseEducationEntries,
   parseExperienceWithFallback,
   parseSkillsFromSection,
@@ -157,15 +162,18 @@ export function buildSignalProfile(
   resumeText: string,
   resumeFilename: string,
 ): CandidateSignalProfile {
-  const strippedResume = toStrippedResumeText(resumeText);
-  const sections = splitResumeSections(strippedResume);
-  const resumeQuality = analyseResumeSignals(strippedResume);
+  // Raw text → structural extraction (name, title, company, experience, education, skills, summary)
+  const rawSections = splitResumeSections(resumeText);
   const { experience, experience_fallback_raw } = parseExperienceWithFallback(
-    strippedResume,
-    sections,
+    resumeText,
+    rawSections,
   );
-  const education = parseEducationEntries(sections);
-  const skillsSection = parseSkillsFromSection(sections);
+  const education = parseEducationEntries(rawSections);
+  const skillsSection = parseSkillsFromSection(rawSections);
+
+  // Stripped text → signal analysis only (ownership, quantification, keyword stuffing)
+  const strippedResume = toStrippedResumeText(resumeText);
+  const resumeQuality = analyseResumeSignals(strippedResume);
   const allBullets = experience.flatMap((e) => e.bullets);
 
   const { verified, listedOnly } = classifySkills(
@@ -174,9 +182,12 @@ export function buildSignalProfile(
     allBullets,
   );
 
-  let professional_summary = extractProfessionalSummary(strippedResume, sections);
+  let professional_summary = extractProfessionalSummary(resumeText, rawSections);
   if (!professional_summary || professional_summary.length < 40) {
     professional_summary = summaryFromRecentRole(experience);
+  }
+  if (!professional_summary || professional_summary.length < 40) {
+    professional_summary = extractFirstSubstantialLine(resumeText);
   }
 
   const career_types_sequence = experience.map((e) => e.company_type);
@@ -185,13 +196,21 @@ export function buildSignalProfile(
       ? career_types_sequence.join(" → ")
       : "Not available";
 
-  const display_name = filenameToDisplayName(resumeFilename);
+  const display_name =
+    extractNameFromRawResume(resumeText) ?? filenameToDisplayName(resumeFilename);
   const title_band = inferTitleBand(
     experience[0]?.title ?? professional_summary.slice(0, 200),
   );
-  const most_recent_title = resolveMostRecentJobTitle(experience, title_band);
-  const location = extractLocation(strippedResume);
-  const explicitYears = extractExplicitYearsOfExperience(strippedResume, sections);
+  const experienceTitle = experience.find((e) => isValidExperienceEntry(e))?.title.trim();
+  const most_recent_title =
+    experienceTitle ??
+    extractTitleFromResumeHeader(resumeText) ??
+    titleBandToDisplayLabel(title_band);
+  const current_company =
+    experience.find((e) => isValidExperienceEntry(e))?.company.trim() ??
+    extractCurrentCompany(resumeText);
+  const location = extractLocation(resumeText);
+  const explicitYears = extractExplicitYearsOfExperience(resumeText, rawSections);
   const fromRoles = estimateYearsExperience(experience);
   const total_years_experience =
     fromRoles !== "Not stated"
@@ -204,6 +223,7 @@ export function buildSignalProfile(
   return {
     display_name,
     most_recent_title,
+    current_company,
     location,
     total_years_experience,
     career_pattern,

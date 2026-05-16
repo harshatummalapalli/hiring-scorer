@@ -20,20 +20,39 @@ const COMPANY_TYPES: CompanyType[] = [
 ];
 
 export function filenameToDisplayName(filename: string): string {
-  const base = filename.replace(/\.[^.]+$/, "");
-  const cleaned = base
-    .replace(/[_-]+/g, " ")
-    .replace(/\b(resume|cv)\b/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  let base = filename.replace(/\.[^.]+$/, "");
+  base = base.replace(/\[[^\]]*\]/g, "");
+  base = base.replace(/\([^)]*\)/g, "");
+  base = base.replace(/[_-]+/g, " ");
+  base = base.replace(
+    /\b(?:naukri|linkedin|indeed|monster|glassdoor|jobsearch|hirist|apna|shine)\b/gi,
+    "",
+  );
+  base = base.replace(/\b\d+\s*y(?:rs?|ears?)?\b/gi, "");
+  base = base.replace(
+    /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/gi,
+    "",
+  );
+  base = base.replace(/\b20\d{2}\b/g, "");
+  base = base.replace(
+    /\b(?:resume|cv|curriculum vitae|final|new|updated|revised|v\d+)\b/gi,
+    "",
+  );
+  base = base.replace(/\b(?:mle|ml|be|btech|b\.tech)\b/gi, "");
+  base = base.replace(/\s+/g, " ").trim();
 
-  if (!cleaned) return "Candidate";
+  if (!base) return "Candidate";
 
-  return cleaned
+  const words = base
     .split(" ")
     .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+
+  const result = words.join(" ");
+  if (words.length > 4 || result.length > 30) {
+    return words.slice(0, 2).join(" ") || "Candidate";
+  }
+  return result;
 }
 
 export function scoreToVerdict(score: number): FitVerdict {

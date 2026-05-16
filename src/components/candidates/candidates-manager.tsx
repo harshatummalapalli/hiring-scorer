@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, Loader2, Search, UserPlus, X } from "lucide-react";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
-import { stripPII } from "@/lib/resume/strip-pii";
 import {
   filterCandidates,
   sortCandidates,
@@ -145,8 +144,7 @@ export function CandidatesManager() {
     setError(null);
     try {
       for (const file of Array.from(files)) {
-        const raw = await parseResumeFile(file);
-        const { stripped: resumeText } = stripPII(raw);
+        const resumeText = await parseResumeFile(file);
         const res = await fetch("/api/candidates", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

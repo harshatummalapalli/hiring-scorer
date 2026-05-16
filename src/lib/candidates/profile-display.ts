@@ -23,15 +23,36 @@ export function isSummaryLikeTitle(title: string): boolean {
   return false;
 }
 
+const JOB_MODIFIER =
+  /^(?:Senior|Sr|Junior|Jr|Staff|Principal|Lead|Associate|Head|VP|Chief|Director|Manager|Software|Data|ML|Backend|Frontend|Full|Cloud|DevOps|Platform|Product|QA|Mobile|iOS|Android)$/i;
+
+const JOB_TITLE_KEYWORD =
+  /\b(?:engineer|developer|architect|manager|lead|analyst|consultant|director|specialist|designer|scientist|administrator|coordinator|associate|intern|tester|qa)\b/i;
+
 export function isValidExperienceEntry(entry: ExperienceEntry): boolean {
   const title = entry.title.trim();
   const company = entry.company.trim();
   if (!title || !company) return false;
   if (title === "Role" && company === "Company") return false;
   if (/^company$/i.test(company)) return false;
+  if (/\[REDACTED/i.test(title) || /\[REDACTED/i.test(company)) return false;
+  if (/\+?\d{1,4}[-.\s]?\d{6,12}/.test(title) || /@/.test(title)) return false;
   if (isEducationTitle(title)) return false;
   if (isSummaryLikeTitle(title)) return false;
   if (title.length > 90) return false;
+  // Reject "FIRSTNAME LASTNAME Title" — 2+ consecutive ALL_CAPS words
+  const allCapsCount = title.split(/\s+/).filter((w) => /^[A-Z]{2,}$/.test(w)).length;
+  if (allCapsCount >= 2) return false;
+  // Reject "Firstname Lastname Staff Engineer" — 2+ leading proper-case non-job-modifier words
+  if (JOB_TITLE_KEYWORD.test(title)) {
+    const words = title.split(/\s+/);
+    let leadingNameCount = 0;
+    for (const w of words) {
+      if (/^[A-Z][a-z]+$/.test(w) && !JOB_MODIFIER.test(w)) leadingNameCount++;
+      else break;
+    }
+    if (leadingNameCount >= 2) return false;
+  }
   return true;
 }
 
@@ -42,12 +63,16 @@ export function parseYearsNumber(yearsLabel: string): number | null {
 
 export function formatProfileSubtitle(profile: CandidateSignalProfile): string {
   const parts: string[] = [];
-  if (profile.location?.trim()) {
-    parts.push(profile.location.trim());
+  const title = getDisplayJobTitle(profile);
+  if (title) {
+    const withCompany = profile.current_company?.trim()
+      ? `${title} at ${profile.current_company.trim()}`
+      : title;
+    parts.push(withCompany);
   }
-  parts.push(getDisplayJobTitle(profile));
   const n = parseYearsNumber(profile.total_years_experience);
-  parts.push(n != null ? `${n} years` : "Experience not stated");
+  parts.push(n != null ? `${n} yrs exp` : "Experience not stated");
+  if (profile.location?.trim()) parts.push(profile.location.trim());
   return parts.join(" · ");
 }
 
@@ -84,6 +109,7 @@ export function getDisplayJobTitle(profile: CandidateSignalProfile): string {
     stored &&
     stored !== "Not stated" &&
     !isEducationTitle(stored) &&
+    !/\[REDACTED/i.test(stored) &&
     stored.length <= 90
   ) {
     return stored;

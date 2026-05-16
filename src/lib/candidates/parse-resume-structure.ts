@@ -368,7 +368,7 @@ export function parseExperienceWithFallback(
 ): ExperienceParseResult {
   const experience = parseExperienceEntries(resumeText, sections);
   const valid = experience.filter((e) => isValidExperienceEntry(e));
-  if (valid.length >= 2) {
+  if (valid.length >= 1) {
     return { experience: valid, experience_fallback_raw: null };
   }
   const raw = extractExperienceSectionRaw(resumeText, sections);
@@ -545,6 +545,128 @@ function parseYear(value: string | null): number | null {
 
 export function splitResumeSections(resumeText: string) {
   return splitSections(resumeText);
+}
+
+const PORTAL_NAMES =
+  /\b(?:naukri|linkedin|indeed|monster|glassdoor|jobsearch|resumecom|hirist|apna|shine)\b/i;
+
+const PHONE_PATTERN =
+  /\+?\d{1,4}[-.\s]?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}|\b\d{10,15}\b/;
+
+function looksLikeName(line: string): boolean {
+  if (JOB_TITLE_HINT.test(line)) return false;
+  const words = line.trim().split(/\s+/);
+  if (words.length < 2 || words.length > 3) return false;
+  return words.every((w) => /^[A-Z][A-Za-z'-]{1,}$/.test(w));
+}
+
+export function extractNameFromRawResume(rawResumeText: string): string | null {
+  const lines = rawResumeText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  for (const line of lines.slice(0, 6)) {
+    if (/\d/.test(line)) continue;
+    if (/@/.test(line)) continue;
+    if (/[|•·,;:(){}\[\]#@+~!%^&*<>]/.test(line)) continue;
+    if (/linkedin\.com|github\.com|http/i.test(line)) continue;
+    if (PORTAL_NAMES.test(line)) continue;
+    if (line.length < 4 || line.length > 40) continue;
+    if (!looksLikeName(line)) continue;
+    return line
+      .split(/\s+/)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(" ");
+  }
+  return null;
+}
+
+export function extractTitleFromResumeHeader(resumeText: string): string | null {
+  const lines = resumeText.split(/\r?\n/).slice(0, 50);
+  for (const line of lines) {
+    const t = line.trim();
+    if (t.length < 5 || t.length > 120) continue;
+    if (/\[REDACTED/i.test(t)) continue;
+    if (/@/.test(t) || PHONE_PATTERN.test(t) || /linkedin\.com|github\.com|http/i.test(t)) continue;
+    if (PORTAL_NAMES.test(t)) continue;
+    DATE_RANGE.lastIndex = 0;
+    if (DATE_RANGE.test(t) || isEducationTitle(t)) continue;
+    if (SECTION_HEADERS.test(t.replace(/[#*_]/g, "").trim())) continue;
+    if (/^[•\-\*]/.test(t)) continue;
+    if (!JOB_TITLE_HINT.test(t)) continue;
+    // Extract just the title portion if the line has a name prefix or pipe-separated junk
+    const titleMatch = t.match(
+      /(?:^|(?<=[|\s,]))\s*((?:(?:Staff|Senior|Sr\.?|Junior|Jr\.?|Principal|Lead|Associate|Head\s+of)\s+)?(?:Software|Data|ML|Machine\s+Learning|Frontend|Back[- ]?end|Full[- ]?Stack|Cloud|DevOps|Platform|Site\s+Reliability|Product|QA|Mobile|iOS|Android|Embedded)?\s*(?:Engineer|Developer|Architect|Manager|Analyst|Consultant|Scientist|Designer|Director|Specialist|Administrator|Tester|Coordinator|Lead)\b[^|,\n]{0,40})/i,
+    );
+    if (titleMatch?.[1]?.trim()) return titleMatch[1].trim().slice(0, 70);
+    // Fall back to the full line only if it doesn't look like a name
+    if (!looksLikeName(t) && t.length <= 70) return t;
+  }
+  return null;
+}
+
+export function extractCurrentCompany(rawResumeText: string): string | null {
+  const lines = rawResumeText.split(/\r?\n/).slice(0, 60);
+
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim();
+    if (!t || t.length > 100) continue;
+    if (/\[REDACTED/i.test(t) || /@/.test(t) || PHONE_PATTERN.test(t)) continue;
+    if (/linkedin\.com|github\.com|http/i.test(t)) continue;
+    if (PORTAL_NAMES.test(t)) continue;
+    DATE_RANGE.lastIndex = 0;
+    if (DATE_RANGE.test(t)) continue;
+
+    // "Software Engineer at Google" on one line
+    const atMatch = t.match(/^.+?\s+at\s+(.+)$/i);
+    if (atMatch && JOB_TITLE_HINT.test(t)) {
+      const co = atMatch[1].split(/[|,]/)[0].trim();
+      if (co.length >= 2 && co.length <= 60) return co;
+    }
+
+    // Pipe-separated: "Software Engineer | Google | Bangalore"
+    if (JOB_TITLE_HINT.test(t) && t.includes("|")) {
+      const parts = t.split("|").map((s) => s.trim());
+      for (let j = 0; j < parts.length; j++) {
+        if (JOB_TITLE_HINT.test(parts[j])) {
+          const co = parts[j + 1];
+          if (co && co.length >= 2 && co.length <= 60 && !/\d{3}/.test(co) && !/@/.test(co)) {
+            return co;
+          }
+        }
+      }
+    }
+
+    // Title on one line, company on the very next non-empty line
+    if (JOB_TITLE_HINT.test(t) && !looksLikeName(t)) {
+      for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+        const next = lines[j].trim();
+        if (!next) continue;
+        if (/\[REDACTED/i.test(next) || /@/.test(next) || PHONE_PATTERN.test(next)) continue;
+        DATE_RANGE.lastIndex = 0;
+        if (DATE_RANGE.test(next)) break;
+        if (JOB_TITLE_HINT.test(next)) break;
+        if (SECTION_HEADERS.test(next.replace(/[#*_]/g, "").trim())) break;
+        if (/^[•\-\*]/.test(next)) break;
+        if (isEducationTitle(next)) continue;
+        if (next.length >= 2 && next.length <= 60 && /^[A-Z]/.test(next)) return next;
+      }
+      break;
+    }
+  }
+  return null;
+}
+
+export function extractFirstSubstantialLine(resumeText: string): string {
+  const lines = resumeText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  for (const line of lines.slice(3, 30)) {
+    if (/@/.test(line) || /\d{3}[-.\s]\d{3}/.test(line)) continue;
+    if (SECTION_HEADERS.test(line.replace(/[#*_]/g, "").trim())) break;
+    if (/^[•\-\*]/.test(line)) continue;
+    DATE_RANGE.lastIndex = 0;
+    if (DATE_RANGE.test(line)) continue;
+    if (isEducationTitle(line)) continue;
+    const wordCount = line.split(/\s+/).length;
+    if (wordCount >= 6 && line.length >= 40) return line.slice(0, 300);
+  }
+  return "";
 }
 
 export function summaryFromRecentRole(experience: ExperienceEntry[]): string {

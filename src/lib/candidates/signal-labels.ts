@@ -1,9 +1,9 @@
 import type { SignalRating } from "@/types/candidate";
 import type { TrajectoryVelocity } from "@/types/candidate";
 
-export function ownershipLabel(ratioPercent: number): SignalRating {
-  if (ratioPercent > 65) return "Strong";
-  if (ratioPercent >= 35) return "Moderate";
+export function ownershipLabel(ownershipCount: number): SignalRating {
+  if (ownershipCount >= 3) return "Strong";
+  if (ownershipCount >= 1) return "Moderate";
   return "Weak";
 }
 

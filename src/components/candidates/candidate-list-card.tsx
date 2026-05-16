@@ -39,12 +39,17 @@ export function CandidateListCard({ candidate }: CandidateListCardProps) {
 
           <p className="mt-0.5 text-sm text-slate-600">
             <span className="text-slate-800">{getDisplayJobTitle(profile)}</span>
-            {profile.career_pattern &&
+            {profile.current_company && (
+              <>
+                <span className="mx-1.5 text-slate-300" aria-hidden>·</span>
+                <span>{profile.current_company}</span>
+              </>
+            )}
+            {!profile.current_company &&
+              profile.career_pattern &&
               profile.career_pattern !== "Not available" && (
                 <>
-                  <span className="mx-1.5 text-slate-300" aria-hidden>
-                    ·
-                  </span>
+                  <span className="mx-1.5 text-slate-300" aria-hidden>·</span>
                   <span>{profile.career_pattern}</span>
                 </>
               )}

@@ -303,7 +303,7 @@ export function CandidateDetailPage({ candidateId }: { candidateId: string }) {
             <div className="space-y-4">
               <SignalBar
                 label="Ownership Language"
-                rating={ownershipLabel(profile.ownership_ratio_percent)}
+                rating={ownershipLabel(profile.resume_quality.ownership.ownership_count)}
                 fillPercent={profile.ownership_ratio_percent}
               />
               <SignalBar

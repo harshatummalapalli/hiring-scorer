@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { geminiExtractProfile } from "@/lib/candidates/gemini-profile-extractor";
 import { buildSignalProfile } from "@/lib/candidates/build-signal-profile";
 import { createActivity } from "@/lib/candidates/activity";
 import {
@@ -56,7 +57,17 @@ export async function POST(request: Request) {
 
     const resumeFilename =
       body.resumeFilename?.trim() || "candidate-resume.pdf";
-    const signal_profile = buildSignalProfile(resumeText, resumeFilename);
+
+    let signal_profile;
+    let extractionSource = "gemini";
+    try {
+      signal_profile = await geminiExtractProfile(resumeText);
+    } catch (geminiErr) {
+      console.error("[candidates] Gemini extraction failed, falling back to code parser:", geminiErr);
+      extractionSource = "code";
+      signal_profile = buildSignalProfile(resumeText, resumeFilename);
+    }
+
     const display_name =
       body.displayName?.trim() || signal_profile.display_name;
 
@@ -72,7 +83,7 @@ export async function POST(request: Request) {
       activity,
     });
 
-    return NextResponse.json({ id, signal_profile });
+    return NextResponse.json({ id, signal_profile, extractionSource });
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to create candidate";

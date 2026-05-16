@@ -42,6 +42,7 @@ export type EducationEntry = {
 export type CandidateSignalProfile = {
   display_name: string;
   most_recent_title: string;
+  current_company: string | null;
   location: string | null;
   total_years_experience: string;
   career_pattern: string;
