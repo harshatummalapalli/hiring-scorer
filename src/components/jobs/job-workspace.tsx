@@ -33,7 +33,15 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
     setError(null);
     try {
       const res = await fetch(`/api/jobs/${jobId}`);
-      const json = await res.json();
+      const text = await res.text();
+      let json: { job?: Job; error?: string } = {};
+      if (text) {
+        try {
+          json = JSON.parse(text) as { job?: Job; error?: string };
+        } catch {
+          throw new Error("Invalid response from server.");
+        }
+      }
       if (!res.ok) throw new Error(json.error ?? "Failed to load job");
       setJob(json.job as Job);
     } catch (err) {
