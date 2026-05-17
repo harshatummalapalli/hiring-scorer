@@ -1,4 +1,5 @@
 import { applyLinkPath, generateApplicationToken } from "@/lib/jobs/token";
+import { computeJobDescriptionHash } from "@/lib/role-brief/jd-cache";
 import { dedupeRoleBriefAnalysis } from "@/lib/role-brief/dedupe-skills";
 import {
   parseAutoScoreMode,
@@ -51,6 +52,9 @@ export type RoleBrief = {
   id: string;
   title: string;
   job_description: string | null;
+  job_description_hash: string | null;
+  analysis_version: number;
+  last_analysed_at: string | null;
   deal_breakers: string[];
   core_signals: CoreSignal[];
   preferred_signals: string[];
@@ -196,21 +200,34 @@ export function jobInsertDefaults() {
   };
 }
 
+export type RoleBriefAnalysisMeta = {
+  job_description_hash?: string | null;
+  analysis_version?: number;
+  last_analysed_at?: string | null;
+};
+
 export function roleBriefToSavePayload(
   title: string,
   jobDescription: string,
   analysis: RoleBriefAnalysis,
   scoringPrompt?: Partial<RoleBriefScoringPrompt> | null,
-  options?: { isNew?: boolean },
+  options?: { isNew?: boolean; analysisMeta?: RoleBriefAnalysisMeta },
 ) {
   const deduped = dedupeRoleBriefAnalysis(analysis);
   const weights = weightsFromAnalysis({ ...deduped, suggested_weights: analysis.suggested_weights });
 
   const promptText = scoringPrompt?.scoring_prompt?.trim() || null;
 
+  const jd = jobDescription.trim();
+
   return {
     title: title.trim(),
-    job_description: jobDescription.trim(),
+    job_description: jd,
+    job_description_hash:
+      options?.analysisMeta?.job_description_hash ??
+      computeJobDescriptionHash(jd),
+    analysis_version: options?.analysisMeta?.analysis_version ?? 1,
+    last_analysed_at: options?.analysisMeta?.last_analysed_at ?? null,
     deal_breakers: deduped.deal_breakers,
     core_signals: deduped.core_signals,
     preferred_signals: deduped.preferred_signals,
@@ -321,6 +338,13 @@ export function parseRoleBriefRow(row: Record<string, unknown>): RoleBrief {
           .filter(Boolean)
           .map(String)
           .join("\n\n") || null,
+    job_description_hash:
+      row.job_description_hash != null
+        ? String(row.job_description_hash)
+        : null,
+    analysis_version: clampWeight(row.analysis_version, 1),
+    last_analysed_at:
+      row.last_analysed_at != null ? String(row.last_analysed_at) : null,
     deal_breakers,
     core_signals,
     preferred_signals,

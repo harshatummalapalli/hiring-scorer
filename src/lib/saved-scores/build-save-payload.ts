@@ -21,6 +21,9 @@ function minimalRoleBrief(
   return {
     ...partial,
     job_description: null,
+    job_description_hash: null,
+    analysis_version: 1,
+    last_analysed_at: null,
     deal_breakers: [],
     core_signals: [],
     preferred_signals: [],

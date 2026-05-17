@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { analyseResumeSignals } from "@/lib/intelligence/beyond-keywords";
-import {
-  scoreCandidate,
-  type CandidateScoringSignals,
-} from "@/lib/ai/gpt-mini-scorer";
+import { scoreCandidate } from "@/lib/ai/gpt-mini-scorer";
+import type { BeyondKeywordSignals } from "@/lib/intelligence/beyond-keywords";
+import { filenameToDisplayName } from "@/lib/scoring/recruiter-card";
 import { stripPII } from "@/lib/resume/strip-pii";
 import { buildScoringRunPayloadFromResult } from "@/lib/scoring/build-scoring-run-payload";
 import { insertScoringRun } from "@/lib/supabase/server";
@@ -17,7 +16,7 @@ type ScoreRequestBody = {
   candidateFilename?: string;
 };
 
-function signalsFromResumeText(resumeText: string): CandidateScoringSignals {
+function signalsFromResumeText(resumeText: string): BeyondKeywordSignals {
   const rq = analyseResumeSignals(resumeText);
   return {
     ...rq,
@@ -58,15 +57,18 @@ export async function POST(request: Request) {
       body.candidateFilename?.trim() || "unknown-candidate.pdf";
 
     const { stripped } = stripPII(body.resumeText.trim());
-    const scoringText = stripped.trim() || body.resumeText.trim();
+    const scoringText = stripped.trim();
+    if (!scoringText) {
+      return NextResponse.json(
+        { error: "Resume text is empty after PII stripping." },
+        { status: 400 },
+      );
+    }
     const signals = signalsFromResumeText(scoringText);
 
-    const result = await scoreCandidate(
-      scoringText,
-      body.roleBrief,
-      signals,
-      { candidateFilename },
-    );
+    const result = await scoreCandidate(scoringText, body.roleBrief, signals);
+    result.recruiter_card.candidate_header.display_name =
+      filenameToDisplayName(candidateFilename);
 
     const scoringRun = buildScoringRunPayloadFromResult(
       candidateFilename,

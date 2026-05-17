@@ -14,7 +14,9 @@ import {
   buildLegacyBriefPayload,
   isMissingJobArchitectureColumnError,
   isMissingScoringPromptColumnError,
+  isMissingJdAnalysisMetaColumnError,
   isMissingV2ColumnError,
+  stripJdAnalysisMetaColumns,
   stripJobArchitectureColumns,
   stripScoringPromptColumns,
 } from "@/lib/role-brief/insert-brief-payload";
@@ -26,6 +28,7 @@ import { createSupabaseClient, getSupabaseConfigError } from "@/lib/supabase/cli
 import type {
   RoleBrief,
   RoleBriefAnalysis,
+  RoleBriefAnalysisMeta,
   RoleBriefScoringPrompt,
 } from "@/types/role-brief";
 import { parseRoleBriefRow } from "@/types/role-brief";
@@ -35,6 +38,7 @@ async function upsertRoleBrief(
   jobDescription: string,
   analysis: RoleBriefAnalysis,
   scoringPrompt: RoleBriefScoringPrompt,
+  analysisMeta: RoleBriefAnalysisMeta,
   editingId: string | null,
 ): Promise<RoleBrief> {
   const supabase = createSupabaseClient();
@@ -67,6 +71,7 @@ async function upsertRoleBrief(
     analysis,
     scoringPrompt,
     !editingId,
+    analysisMeta,
   );
   if (!editingId) {
     const userId = await getAuthenticatedUserId(supabase);
@@ -84,11 +89,22 @@ async function upsertRoleBrief(
         if (!isMissingScoringPromptColumnError(jobMsg)) throw jobErr;
       }
     }
+    if (isMissingJdAnalysisMetaColumnError(msg)) {
+      try {
+        return await attempt(stripJdAnalysisMetaColumns(full));
+      } catch (metaErr) {
+        const metaMsg = getErrorMessage(metaErr, "");
+        if (!isMissingScoringPromptColumnError(metaMsg)) throw metaErr;
+      }
+    }
     if (isMissingScoringPromptColumnError(msg)) {
       try {
         return await attempt(stripScoringPromptColumns(full));
       } catch (retryErr) {
         const retryMsg = getErrorMessage(retryErr, "");
+        if (isMissingJdAnalysisMetaColumnError(retryMsg)) {
+          return await attempt(stripJdAnalysisMetaColumns(full));
+        }
         if (isMissingV2ColumnError(retryMsg)) {
           return await attempt(
             buildLegacyBriefPayload(title, jobDescription, analysis),
@@ -120,6 +136,10 @@ export function RoleBriefManager() {
   const [editTitle, setEditTitle] = useState("");
   const [editScoringPrompt, setEditScoringPrompt] =
     useState<RoleBriefScoringPrompt | null>(null);
+  const [editAnalysisMeta, setEditAnalysisMeta] =
+    useState<RoleBriefAnalysisMeta | null>(null);
+  const [editAnalysedJobDescription, setEditAnalysedJobDescription] =
+    useState("");
 
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -169,6 +189,8 @@ export function RoleBriefManager() {
     setEditAnalysis(null);
     setEditTitle("");
     setEditScoringPrompt(null);
+    setEditAnalysisMeta(null);
+    setEditAnalysedJobDescription("");
     setCreatorKey((k) => k + 1);
   };
 
@@ -177,6 +199,7 @@ export function RoleBriefManager() {
     jobDescription: string;
     analysis: RoleBriefAnalysis;
     scoringPrompt: RoleBriefScoringPrompt;
+    analysisMeta: RoleBriefAnalysisMeta;
   }) => {
     setIsSaving(true);
     setError(null);
@@ -188,6 +211,7 @@ export function RoleBriefManager() {
         data.jobDescription,
         data.analysis,
         data.scoringPrompt,
+        data.analysisMeta,
         editingId,
       );
       setSuccess(`Saved “${saved.title}”.`);
@@ -211,6 +235,8 @@ export function RoleBriefManager() {
     setEditAnalysis(state.analysis);
     setEditTitle(state.title);
     setEditScoringPrompt(state.scoringPrompt);
+    setEditAnalysisMeta(state.analysisMeta);
+    setEditAnalysedJobDescription(state.analysedJobDescription);
     setCreatorKey((k) => k + 1);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -277,6 +303,8 @@ export function RoleBriefManager() {
         initialAnalysis={editAnalysis}
         initialTitle={editTitle}
         initialScoringPrompt={editScoringPrompt}
+        initialAnalysisMeta={editAnalysisMeta}
+        initialAnalysedJobDescription={editAnalysedJobDescription}
         editingId={editingId}
         onSave={handleSave}
         isSaving={isSaving}

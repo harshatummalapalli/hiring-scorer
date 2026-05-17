@@ -5,9 +5,11 @@ import { Loader2, Sparkles } from "lucide-react";
 import { AnalysisCards } from "@/components/role-briefs/analysis-cards";
 import { karta } from "@/lib/brand/karta";
 import { getErrorMessage } from "@/lib/errors";
+import type { JdSessionCache } from "@/lib/role-brief/resolve-jd-analysis";
 import type {
   RoleBrief,
   RoleBriefAnalysis,
+  RoleBriefAnalysisMeta,
   RoleBriefScoringPrompt,
 } from "@/types/role-brief";
 import {
@@ -21,12 +23,15 @@ type RoleBriefCreatorProps = {
   initialAnalysis?: RoleBriefAnalysis | null;
   initialTitle?: string;
   initialScoringPrompt?: Partial<RoleBriefScoringPrompt> | null;
+  initialAnalysisMeta?: RoleBriefAnalysisMeta | null;
+  initialAnalysedJobDescription?: string;
   editingId?: string | null;
   onSave: (data: {
     title: string;
     jobDescription: string;
     analysis: RoleBriefAnalysis;
     scoringPrompt: RoleBriefScoringPrompt;
+    analysisMeta: RoleBriefAnalysisMeta;
   }) => Promise<void>;
   isSaving: boolean;
 };
@@ -42,6 +47,8 @@ export function RoleBriefCreator({
   initialAnalysis = null,
   initialTitle = "",
   initialScoringPrompt = null,
+  initialAnalysisMeta = null,
+  initialAnalysedJobDescription = "",
   editingId = null,
   onSave,
   isSaving,
@@ -62,6 +69,15 @@ export function RoleBriefCreator({
   const [analysing, setAnalysing] = useState(false);
   const [regeneratingPrompt, setRegeneratingPrompt] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [analysisMeta, setAnalysisMeta] = useState<RoleBriefAnalysisMeta>(() => ({
+    job_description_hash: initialAnalysisMeta?.job_description_hash ?? null,
+    analysis_version: initialAnalysisMeta?.analysis_version ?? 1,
+    last_analysed_at: initialAnalysisMeta?.last_analysed_at ?? null,
+  }));
+  const [analysedJobDescription, setAnalysedJobDescription] = useState(
+    initialAnalysedJobDescription || initialJobDescription,
+  );
 
   const scoringPromptReady = Boolean(scoringPrompt.scoring_prompt?.trim());
 
@@ -73,12 +89,36 @@ export function RoleBriefCreator({
 
     setAnalysing(true);
     setError(null);
+    setInfoMessage(null);
 
     try {
+      const sessionCache: JdSessionCache | null =
+        analysis && analysedJobDescription.trim()
+          ? {
+              job_description: analysedJobDescription.trim(),
+              analysis,
+              deal_breakers: analysis.deal_breakers,
+              core_signals: analysis.core_signals,
+              preferred_signals: analysis.preferred_signals,
+              semantic_clusters: analysis.semantic_clusters,
+              scoring_prompt: scoringPrompt.scoring_prompt,
+              scoring_prompt_generated_at:
+                scoringPrompt.scoring_prompt_generated_at,
+              scoring_prompt_version: scoringPrompt.scoring_prompt_version,
+              analysis_version: analysisMeta.analysis_version ?? 1,
+              last_analysed_at: analysisMeta.last_analysed_at ?? null,
+              job_description_hash: analysisMeta.job_description_hash ?? null,
+            }
+          : null;
+
       const res = await fetch("/api/analyse-role", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobDescription: jobDescription.trim() }),
+        body: JSON.stringify({
+          jobDescription: jobDescription.trim(),
+          roleBriefId: editingId ?? undefined,
+          sessionCache,
+        }),
       });
       const data = (await res.json()) as {
         error?: string;
@@ -87,6 +127,10 @@ export function RoleBriefCreator({
         scoring_prompt?: string;
         scoring_prompt_generated_at?: string;
         scoring_prompt_version?: number;
+        fromCache?: boolean;
+        job_description_hash?: string;
+        analysis_version?: number;
+        last_analysed_at?: string | null;
       };
       if (!res.ok) throw new Error(data.error ?? "Read JD failed");
 
@@ -98,6 +142,18 @@ export function RoleBriefCreator({
         scoring_prompt_generated_at: data.scoring_prompt_generated_at ?? null,
         scoring_prompt_version: data.scoring_prompt_version ?? 1,
       });
+      setAnalysisMeta({
+        job_description_hash: data.job_description_hash ?? null,
+        analysis_version: data.analysis_version ?? 1,
+        last_analysed_at: data.last_analysed_at ?? null,
+      });
+      setAnalysedJobDescription(jobDescription.trim());
+
+      if (data.fromCache) {
+        setInfoMessage(
+          "Analysis unchanged — using existing JD breakdown.",
+        );
+      }
     } catch (err) {
       setError(getErrorMessage(err, "Failed to read job description"));
     } finally {
@@ -189,6 +245,12 @@ export function RoleBriefCreator({
       jobDescription: jobDescription.trim(),
       analysis,
       scoringPrompt,
+      analysisMeta: {
+        ...analysisMeta,
+        job_description_hash:
+          analysisMeta.job_description_hash ??
+          null,
+      },
     });
   };
 
@@ -226,6 +288,14 @@ export function RoleBriefCreator({
           )}
         </div>
 
+        {infoMessage && (
+          <p
+            className="mt-4 rounded-md border border-[#0D9488]/30 bg-teal-50 px-3 py-2 text-sm text-[#0F766E]"
+            role="status"
+          >
+            {infoMessage}
+          </p>
+        )}
         {error && (
           <p className="mt-4 text-sm text-red-600" role="alert">
             {error}
@@ -277,5 +347,11 @@ export function roleBriefToCreatorState(brief: RoleBrief) {
       scoring_prompt_generated_at: brief.scoring_prompt_generated_at,
       scoring_prompt_version: brief.scoring_prompt_version,
     },
+    analysisMeta: {
+      job_description_hash: brief.job_description_hash,
+      analysis_version: brief.analysis_version,
+      last_analysed_at: brief.last_analysed_at,
+    },
+    analysedJobDescription: brief.job_description ?? "",
   };
 }

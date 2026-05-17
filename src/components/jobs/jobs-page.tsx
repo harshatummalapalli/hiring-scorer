@@ -10,8 +10,10 @@ import {
   buildFullBriefPayload,
   buildLegacyBriefPayload,
   isMissingJobArchitectureColumnError,
+  isMissingJdAnalysisMetaColumnError,
   isMissingScoringPromptColumnError,
   isMissingV2ColumnError,
+  stripJdAnalysisMetaColumns,
   stripJobArchitectureColumns,
   stripScoringPromptColumns,
 } from "@/lib/role-brief/insert-brief-payload";
@@ -22,7 +24,11 @@ import {
 import { createSupabaseClient } from "@/lib/supabase/client";
 import type { JobListItem } from "@/types/job";
 import { JOB_STATUS_LABELS } from "@/types/job";
-import type { RoleBriefAnalysis, RoleBriefScoringPrompt } from "@/types/role-brief";
+import type {
+  RoleBriefAnalysis,
+  RoleBriefAnalysisMeta,
+  RoleBriefScoringPrompt,
+} from "@/types/role-brief";
 import { parseRoleBriefRow } from "@/types/role-brief";
 import { useRouter } from "next/navigation";
 
@@ -69,6 +75,7 @@ export function JobsPage() {
     jobDescription: string;
     analysis: RoleBriefAnalysis;
     scoringPrompt: RoleBriefScoringPrompt;
+    analysisMeta: RoleBriefAnalysisMeta;
   }) => {
     setIsSaving(true);
     setError(null);
@@ -82,6 +89,7 @@ export function JobsPage() {
           data.analysis,
           data.scoringPrompt,
           true,
+          data.analysisMeta,
         ),
         userId,
       );
@@ -95,6 +103,11 @@ export function JobsPage() {
         }
         if (result.error && isMissingScoringPromptColumnError(msg)) {
           row = stripScoringPromptColumns(row);
+          result = await supabase.from("role_briefs").insert(row).select().single();
+          msg = result.error?.message ?? "";
+        }
+        if (result.error && isMissingJdAnalysisMetaColumnError(msg)) {
+          row = stripJdAnalysisMetaColumns(row);
           result = await supabase.from("role_briefs").insert(row).select().single();
         }
         if (result.error && isMissingV2ColumnError(result.error.message)) {

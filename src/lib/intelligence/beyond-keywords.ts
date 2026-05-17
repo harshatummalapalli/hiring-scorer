@@ -33,6 +33,15 @@ export type ResumeQualitySignals = {
   keyword_stuffing: KeywordStuffingResult;
 };
 
+/** Pre-calculated resume signals passed into GPT-4o mini scoring. */
+export type BeyondKeywordSignals = ResumeQualitySignals & {
+  skills_verified: { skill: string; evidence: string }[];
+  skills_listed_only: string[];
+  ownership_ratio_percent: number;
+  quantification_ratio_percent: number;
+  profile_depth: "Deep" | "Moderate" | "Surface";
+};
+
 const OWNERSHIP_VERB_PATTERN =
   /\b(?:built|designed|led|architected|created|launched|established|drove|implemented|developed|managed|owned|spearheaded|delivered|optimized|scaled|migrated|automated|reduced|increased|improved|achieved|grew|transformed)\b/i;
 

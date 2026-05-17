@@ -4,6 +4,7 @@ import {
   scoreCandidate,
 } from "@/lib/ai/gpt-mini-scorer";
 import { createActivity, prependActivity } from "@/lib/candidates/activity";
+import { filenameToDisplayName } from "@/lib/scoring/recruiter-card";
 import { stripPII } from "@/lib/resume/strip-pii";
 import { insertSavedScoreWithFallback } from "@/lib/saved-scores/insert-with-fallback";
 import { buildSavedScoreInsertPayload } from "@/lib/saved-scores/build-save-payload";
@@ -52,13 +53,30 @@ export async function POST(request: Request, { params }: Params) {
       candidate.resume_filename ?? `${candidate.display_name}.pdf`;
 
     const { stripped } = stripPII(candidate.resume_text);
-    const scoringText = stripped.trim() || candidate.resume_text.trim();
+    const scoringText = stripped.trim();
+    if (!scoringText) {
+      return NextResponse.json(
+        { error: "Resume text is empty after PII stripping." },
+        { status: 400 },
+      );
+    }
     const signals = buildScoringSignalsFromProfile(candidate.signal_profile);
 
-    const result = await scoreCandidate(scoringText, roleBrief, signals, {
-      candidateFilename: filename,
-      signalProfile: candidate.signal_profile,
-    });
+    const result = await scoreCandidate(scoringText, roleBrief, signals);
+    result.recruiter_card.candidate_header.display_name =
+      candidate.display_name ||
+      filenameToDisplayName(filename);
+    const profile = candidate.signal_profile;
+    if (profile) {
+      result.recruiter_card.candidate_header.most_recent_title =
+        profile.most_recent_title || result.recruiter_card.candidate_header.most_recent_title;
+      result.recruiter_card.candidate_header.total_years_experience =
+        profile.total_years_experience ||
+        result.recruiter_card.candidate_header.total_years_experience;
+      result.recruiter_card.candidate_header.career_pattern =
+        profile.career_pattern ||
+        result.recruiter_card.candidate_header.career_pattern;
+    }
 
     const savePayload = {
       ...buildSavedScoreInsertPayload(filename, roleBrief, result, "", ""),

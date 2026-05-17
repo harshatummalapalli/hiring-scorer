@@ -1,4 +1,4 @@
-import type { RoleBriefAnalysis } from "@/types/role-brief";
+import type { RoleBriefAnalysis, RoleBriefAnalysisMeta } from "@/types/role-brief";
 import { roleBriefToSavePayload } from "@/types/role-brief";
 
 const V2_KEYS = [
@@ -28,6 +28,12 @@ const JOB_ARCHITECTURE_KEYS = [
   "status",
 ] as const;
 
+const JD_ANALYSIS_META_KEYS = [
+  "job_description_hash",
+  "analysis_version",
+  "last_analysed_at",
+] as const;
+
 export function stripJobArchitectureColumns(
   payload: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -47,19 +53,39 @@ export function isMissingJobArchitectureColumnError(message: string): boolean {
   );
 }
 
+export function stripJdAnalysisMetaColumns(
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  const row = { ...payload };
+  for (const key of JD_ANALYSIS_META_KEYS) {
+    delete row[key];
+  }
+  return row;
+}
+
+export function isMissingJdAnalysisMetaColumnError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("schema cache") ||
+    lower.includes("could not find") ||
+    JD_ANALYSIS_META_KEYS.some((k) => lower.includes(k))
+  );
+}
+
 export function buildFullBriefPayload(
   title: string,
   jobDescription: string,
   analysis: RoleBriefAnalysis,
   scoringPrompt?: Parameters<typeof roleBriefToSavePayload>[3],
   isNew = false,
+  analysisMeta?: RoleBriefAnalysisMeta,
 ): Record<string, unknown> {
   return roleBriefToSavePayload(
     title,
     jobDescription,
     analysis,
     scoringPrompt,
-    { isNew },
+    { isNew, analysisMeta },
   );
 }
 
