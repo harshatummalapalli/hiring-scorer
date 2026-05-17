@@ -3,54 +3,110 @@ import type { CandidateScoreResult } from "@/types/score";
 import type { CandidateSignalProfile } from "@/types/candidate";
 
 const INFERRED_PATTERN =
-  /^(.+?)\s+inferred from equivalent technology\s*\((.+?)\)\s*(?:[—-].*)?$/i;
+  /^(.+?)\s+inferred from equivalent technology\s*(?:\(([^)]+)\)|via\s+(.+?))(?:\s*[—-].*)?$/i;
 
-function limitWords(text: string, maxWords: number): string {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  if (words.length <= maxWords) return words.join(" ");
-  return words.slice(0, maxWords).join(" ");
-}
+const LEADING_FILLER =
+  /^(?:excellent|strong|proven|solid|deep|good|relevant|hands-on|extensive|significant|demonstrated|clear)\s+/i;
 
-function shortenEquivalent(term: string): string {
-  return term
-    .replace(/\barchitectures?\b/gi, "arch")
-    .replace(/\btechnologies?\b/gi, "tech")
-    .trim();
-}
-
-/** Short pipeline insight: direct = skill only; semantic = "Skill via equivalent" (≤5 words). */
-export function shortenInsightPhrase(raw: string): string {
+/** Max four words for pipeline insight chips (first noun phrase). */
+export function shortenInsightToNounPhrase(raw: string): string {
   const text = raw.trim();
   if (!text) return "";
 
   const inferred = INFERRED_PATTERN.exec(text);
   if (inferred) {
-    const skill = inferred[1].trim();
-    const equiv = shortenEquivalent(inferred[2].trim());
-    return limitWords(`${skill} via ${equiv}`, 5);
+    const skill = inferred[1]
+      .trim()
+      .replace(/\s+Technologies?$/i, "")
+      .split(/\s+/)
+      .slice(0, 2)
+      .join(" ");
+    const equiv = (inferred[2] ?? inferred[3] ?? "").trim();
+    return limitWords(`${skill} via ${equiv}`, 4);
   }
 
-  const inlineInfer = /inferred from equivalent technology\s*\(([^)]+)\)/i.exec(
-    text,
-  );
-  if (inlineInfer) {
-    const skill = text.split(/\s+inferred\b/i)[0]?.trim() ?? text;
+  const viaShort = /^(.+?)\s+via\s+(.+)$/i.exec(text);
+  if (viaShort && viaShort[1].split(/\s+/).length <= 3) {
     return limitWords(
-      `${skill} via ${shortenEquivalent(inlineInfer[1])}`,
-      5,
+      `${viaShort[1].trim()} via ${viaShort[2].trim()}`,
+      4,
     );
   }
 
-  const viaSplit = /^(.+?)\s+via\s+(.+)$/i.exec(text);
-  if (viaSplit) {
-    return limitWords(
-      `${viaSplit[1].trim()} via ${shortenEquivalent(viaSplit[2].trim())}`,
-      5,
-    );
+  const withObject = /\bwith\s+(.+?)(?:\.|,|;|$)/i.exec(text);
+  if (withObject) {
+    const chunk = withObject[1]
+      .replace(/\s+solutions?$/i, "")
+      .replace(/\s+experience$/i, " experience")
+      .trim();
+    const phrase = takeNounPhrase(chunk, 4);
+    if (phrase) return phrase;
   }
 
-  const stripped = text.replace(/\s*[—-]\s*not named.*$/i, "").trim();
-  return limitWords(stripped, 5);
+  const stripped = text
+    .replace(/\s*[—-]\s*not named.*$/i, "")
+    .replace(LEADING_FILLER, "")
+    .trim();
+  return takeNounPhrase(stripped, 4);
+}
+
+function takeNounPhrase(text: string, maxWords: number): string {
+  const filler = new Set([
+    "excellent",
+    "strong",
+    "proven",
+    "solid",
+    "deep",
+    "good",
+    "relevant",
+    "hands-on",
+    "extensive",
+    "significant",
+    "demonstrated",
+    "clear",
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "of",
+    "with",
+    "from",
+    "their",
+    "this",
+    "that",
+    "has",
+    "have",
+    "had",
+    "is",
+    "are",
+    "was",
+    "were",
+    "experience",
+    "background",
+    "skills",
+    "skill",
+  ]);
+
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  const kept: string[] = [];
+  for (const w of words) {
+    if (kept.length >= maxWords) break;
+    if (filler.has(w.toLowerCase()) && kept.length === 0) continue;
+    kept.push(w);
+  }
+  return kept.join(" ");
+}
+
+function limitWords(text: string, maxWords: number): string {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return words.join(" ");
+  return words.slice(0, maxWords).join(" ");
 }
 
 function phraseFromSkillsIntelligence(
@@ -64,7 +120,7 @@ function phraseFromSkillsIntelligence(
   for (const m of intel.matches) {
     if (phrases.length >= 2) break;
     if (m.match_type === "direct") {
-      const phrase = limitWords(m.skill.trim(), 5);
+      const phrase = shortenInsightToNounPhrase(m.skill.trim());
       if (phrase && !phrases.includes(phrase)) phrases.push(phrase);
     }
   }
@@ -72,10 +128,8 @@ function phraseFromSkillsIntelligence(
   for (const m of intel.matches) {
     if (phrases.length >= 2) break;
     if (m.match_type === "semantic" && m.matched_term?.trim()) {
-      const phrase = limitWords(
-        `${m.skill.trim()} via ${shortenEquivalent(m.matched_term.trim())}`,
-        5,
-      );
+      const raw = `${m.skill.trim()} inferred from equivalent technology (${m.matched_term.trim()})`;
+      const phrase = shortenInsightToNounPhrase(raw);
       if (phrase && !phrases.includes(phrase)) phrases.push(phrase);
     }
   }
@@ -96,7 +150,7 @@ export function insightsFromScoreResult(
   const signals = [...fromSkills];
 
   for (const item of result.recruiter_card?.what_stands_out ?? []) {
-    const phrase = shortenInsightPhrase(item.signal ?? "");
+    const phrase = shortenInsightToNounPhrase(item.signal ?? "");
     if (phrase && !signals.includes(phrase)) signals.push(phrase);
     if (signals.length >= 2) break;
   }
@@ -105,20 +159,22 @@ export function insightsFromScoreResult(
     for (const flag of result.green_flags ?? []) {
       const raw = typeof flag === "string" ? flag : flag.text?.trim();
       if (!raw) continue;
-      const phrase = shortenInsightPhrase(raw);
+      const phrase = shortenInsightToNounPhrase(raw);
       if (phrase && !signals.includes(phrase)) signals.push(phrase);
       if (signals.length >= 2) break;
     }
   }
 
-  return { signals: signals.slice(0, 2) };
+  return {
+    signals: signals.slice(0, 2).map((s) => shortenInsightToNounPhrase(s)),
+  };
 }
 
 export function insightsFromProfile(
   profile: CandidateSignalProfile,
 ): PipelineInsights {
   const signals = profile.positive_signals
-    .map((s) => shortenInsightPhrase(s.signal))
+    .map((s) => shortenInsightToNounPhrase(s.signal))
     .filter(Boolean)
     .slice(0, 2);
   return { signals };
@@ -126,9 +182,9 @@ export function insightsFromProfile(
 
 export function formatInsightsText(insights: PipelineInsights): string {
   return (insights.signals ?? [])
-    .map((s) => shortenInsightPhrase(s))
-    .filter(Boolean)
     .slice(0, 2)
+    .map((s) => shortenInsightToNounPhrase(s))
+    .filter(Boolean)
     .join(" · ");
 }
 

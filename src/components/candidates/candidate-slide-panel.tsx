@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Loader2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Download, Loader2, X } from "lucide-react";
 import type { CandidateDetail } from "@/types/candidate";
 import type { RoleBrief } from "@/types/role-brief";
 import type { FitVerdict } from "@/types/score";
+import { buildRoleFitSummary } from "@/lib/scoring/role-fit-summary";
 import { scoreToVerdict } from "@/lib/scoring/recruiter-card";
 import type { CandidateScoreResult } from "@/types/score";
 import {
@@ -17,6 +18,7 @@ import {
 } from "@/lib/candidates/signal-labels";
 import { karta } from "@/lib/brand/karta";
 import { KartaMatchBreakdown } from "@/components/match/karta-match-breakdown";
+import { downloadKartaAssessmentPdf } from "@/lib/reports/karta-assessment-pdf";
 import { SignalBar, VerdictBadge } from "./profile-shared";
 
 function formatDate(iso: string): string {
@@ -29,17 +31,6 @@ function formatDate(iso: string): string {
   } catch {
     return iso;
   }
-}
-
-function roleFitSummary(result: CandidateScoreResult, roleTitle: string): string {
-  const verdict = scoreToVerdict(result.overall_score);
-  if (verdict === "STRONG FIT" || verdict === "POSSIBLE FIT") {
-    return `This candidate shows a solid match for ${roleTitle} based on skills, experience, and career signals from their resume.`;
-  }
-  if (verdict === "WEAK FIT") {
-    return `This candidate has some relevant background for ${roleTitle}, but gaps remain against key requirements.`;
-  }
-  return `This candidate does not align well with ${roleTitle} based on the requirements for this role.`;
 }
 
 type CandidateSlidePanelProps = {
@@ -59,6 +50,7 @@ export function CandidateSlidePanel({
   const [noteText, setNoteText] = useState("");
   const [noteBusy, setNoteBusy] = useState(false);
   const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!candidateId) {
@@ -125,6 +117,29 @@ export function CandidateSlidePanel({
     }
   };
 
+  const handleDownloadReport = async () => {
+    const signalProfile = candidate?.signal_profile;
+    if (!candidate || !activeRoleBrief || !activeResult || !signalProfile) {
+      return;
+    }
+    setPdfBusy(true);
+    try {
+      downloadKartaAssessmentPdf({
+        candidateName: candidate.display_name,
+        roleBrief: activeRoleBrief,
+        assessedAt: activeFit?.created_at ?? new Date().toISOString(),
+        result: activeResult,
+        profile: signalProfile,
+      });
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to generate PDF report",
+      );
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
   if (!candidateId) return null;
 
   const profile = candidate?.signal_profile;
@@ -143,23 +158,44 @@ export function CandidateSlidePanel({
         onClick={onClose}
       />
       <aside
-        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col border-l border-[#F1F5F9] bg-white shadow-xl"
+        className="panel-slide-in fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-[#F1F5F9] bg-white shadow-xl md:w-[85%] min-[1200px]:w-[70%]"
         role="dialog"
         aria-modal
         aria-label="Candidate insights"
       >
-        <div className="flex items-center justify-between border-b border-[#F1F5F9] px-4 py-3">
-          <h2 className="truncate pr-2 text-base font-semibold text-[#1E293B]">
+        <div className="flex items-center justify-between gap-3 border-b border-[#F1F5F9] px-4 py-3">
+          <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-[#1E293B]">
             {candidate?.display_name ?? "Candidate"}
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md p-1.5 text-[#64748B] hover:bg-slate-100"
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              disabled={
+                pdfBusy ||
+                loading ||
+                !activeResult ||
+                !activeRoleBrief ||
+                !candidate
+              }
+              onClick={() => void handleDownloadReport()}
+              className={`inline-flex items-center gap-1.5 ${karta.btnOutlineTeal} px-2.5 py-1.5 text-xs`}
+            >
+              {pdfBusy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+              Download Report
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md p-1.5 text-[#64748B] hover:bg-slate-100"
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
@@ -229,11 +265,7 @@ export function CandidateSlidePanel({
                       />
                     </div>
                     <div className="mt-3 flex justify-end">
-                      <VerdictBadge
-                        verdict={verdict}
-                        score={activeResult.overall_score}
-                        compact
-                      />
+                      <VerdictBadge verdict={verdict} />
                     </div>
                   </section>
 
@@ -282,7 +314,7 @@ export function CandidateSlidePanel({
                   )}
 
                   <p className="text-sm italic text-[#64748B]">
-                    {roleFitSummary(activeResult, activeRoleBrief.title)}
+                    {buildRoleFitSummary(activeResult, activeRoleBrief)}
                   </p>
 
                   {card && card.what_stands_out.length > 0 && (
@@ -376,7 +408,7 @@ export function CandidateSlidePanel({
                         <VerdictBadge
                           verdict={fit.verdict as FitVerdict}
                           score={fit.overall_score}
-                          compact
+                          showScore
                         />
                       </li>
                     ))}

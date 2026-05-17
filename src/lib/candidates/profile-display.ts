@@ -1,4 +1,5 @@
 import type { CandidateSignalProfile, ExperienceEntry } from "@/types/candidate";
+import { isBadDisplayName } from "@/lib/candidates/resolve-display-name";
 
 const REDACTED_TOKEN =
   /\bREDACTED\b|\[(?:REDACTED\s*)?(?:EMAIL|PHONE|NAME|URL)\]/i;
@@ -153,9 +154,14 @@ export function getDisplayJobTitle(profile: CandidateSignalProfile): string {
 export function getCandidateHeaderName(profile: CandidateSignalProfile): string {
   const first = profile.first_name?.trim();
   const last = profile.last_name?.trim();
-  if (first && last) return `${first} ${last}`;
-  if (first) return first;
-  return profile.display_name?.trim() || "Candidate";
+  if (first && last) {
+    const full = `${first} ${last}`;
+    if (!isBadDisplayName(full)) return full;
+  }
+  if (first && !isBadDisplayName(first)) return first;
+  const display = profile.display_name?.trim();
+  if (display && !isBadDisplayName(display)) return display;
+  return "Candidate";
 }
 
 export function formatCandidateHeadline(profile: CandidateSignalProfile): string {

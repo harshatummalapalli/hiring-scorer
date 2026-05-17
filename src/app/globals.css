@@ -29,6 +29,19 @@ body {
   line-height: 1.5;
 }
 
+@keyframes panel-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.panel-slide-in {
+  animation: panel-slide-in 0.28s ease-out;
+}
+
 input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   height: 16px;

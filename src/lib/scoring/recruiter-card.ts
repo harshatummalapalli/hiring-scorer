@@ -37,7 +37,7 @@ export function filenameToDisplayName(filename: string): string {
   );
   base = base.replace(/\b20\d{2}\b/g, "");
   base = base.replace(
-    /\b(?:resume|cv|curriculum vitae|final|new|updated|revised|v\d+)\b/gi,
+    /\b(?:resume|cv|curriculum vitae|profile|final|new|updated|revised|v\d+)\b/gi,
     "",
   );
   base = base.replace(/\b(?:mle|ml|be|btech|b\.tech)\b/gi, "");

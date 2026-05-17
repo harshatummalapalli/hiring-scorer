@@ -337,7 +337,7 @@ function RoleSection({
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     <th className="px-4 py-3">Name</th>
-                    <th className="min-w-[200px] px-4 py-3">Email</th>
+                    <th className="min-w-[180px] px-4 py-3">Email</th>
                     <th className="px-4 py-3">Phone</th>
                     <th className="px-4 py-3">Location</th>
                     <th className="max-w-[12rem] px-4 py-3">Insights</th>
@@ -397,10 +397,15 @@ function PipelineTableRow({
           {row.candidate_name}
         </Link>
       </td>
-      <td className="min-w-[200px] max-w-[280px] px-4 py-3 text-slate-600">
+      <td className="min-w-[180px] px-4 py-3 text-slate-600">
         {row.email?.trim() ? (
-          <span className="block truncate" title={row.email}>
-            {row.email}
+          <span
+            className="block max-w-[220px] truncate"
+            title={row.email}
+          >
+            {row.email.length > 22
+              ? `${row.email.slice(0, 22)}…`
+              : row.email}
           </span>
         ) : (
           "—"
@@ -408,13 +413,20 @@ function PipelineTableRow({
       </td>
       <td className="px-4 py-3 text-slate-600">{row.phone ?? "—"}</td>
       <td className="px-4 py-3 text-slate-600">{row.location ?? "—"}</td>
-      <td className="max-w-[12rem] px-4 py-3 text-slate-600">
-        <span className="line-clamp-2 text-xs leading-snug">
+      <td className="max-w-[14rem] px-4 py-3 text-slate-600">
+        <span
+          className="block truncate text-xs leading-snug whitespace-nowrap"
+          title={formatInsightsText(row.insights) || undefined}
+        >
           {formatInsightsText(row.insights) || "—"}
         </span>
       </td>
       <td className="px-4 py-3">
-        <VerdictBadge verdict={verdict} score={row.fit_score} />
+        <VerdictBadge
+          verdict={verdict}
+          score={row.fit_score}
+          showScore
+        />
       </td>
       <td className="px-4 py-2">
         <EditableCell

@@ -5,7 +5,7 @@ const COMPANY_WORD =
   /^(?:microsoft|google|amazon|meta|apple|netflix|flipkart|swiggy|zomato|razorpay|phonepe|paytm|freshworks|infosys|tcs|wipro|cognizant|hcl|accenture|capgemini|deloitte|ibm|oracle|sap|adobe|salesforce|uber|airbnb|stripe|linkedin|naukri|hirist|apna|shine)$/i;
 
 const BAD_NAME_PATTERNS =
-  /^(?:candidate|mid-level engineer|not stated|unknown)$/i;
+  /^(?:candidate|profile|mid-level engineer|not stated|unknown)$/i;
 
 /** Job-title tokens sometimes glued to filenames or header names (stripped after 2+ name words). */
 const TRAILING_TITLE_WORD =

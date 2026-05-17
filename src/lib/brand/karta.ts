@@ -6,25 +6,31 @@ export const KARTA = {
 } as const;
 
 /** Recruiter-facing verdict labels (internal FitVerdict strings unchanged). */
+/** Shared verdict pill: 4px 12px padding, 12px/600, 20px radius — background only varies. */
+export const VERDICT_BADGE_BASE =
+  "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-[20px] px-3 py-1 text-[12px] font-semibold leading-none text-white";
+
+export const VERDICT_BADGE_UNMATCHED = `${VERDICT_BADGE_BASE} bg-slate-200 !text-slate-600`;
+
 export const VERDICT_DISPLAY: Record<
   FitVerdict,
   { label: string; badgeClass: string }
 > = {
   "STRONG FIT": {
     label: "Strong Match",
-    badgeClass: "bg-[#059669] text-white",
+    badgeClass: "bg-[#059669]",
   },
   "POSSIBLE FIT": {
     label: "Potential Match",
-    badgeClass: "bg-[#D97706] text-white",
+    badgeClass: "bg-[#D97706]",
   },
   "WEAK FIT": {
     label: "Low Match",
-    badgeClass: "bg-[#64748B] text-white",
+    badgeClass: "bg-[#64748B]",
   },
   "NOT SUITABLE": {
     label: "No Match",
-    badgeClass: "bg-[#E11D48] text-white",
+    badgeClass: "bg-[#E11D48]",
   },
 };
 
@@ -37,11 +43,10 @@ export function verdictLabel(verdict: string | null | undefined): string {
 
 export function verdictBadgeClass(verdict: string | null | undefined): string {
   if (!verdict) {
-    return "bg-slate-200 text-slate-600";
+    return "bg-slate-200";
   }
   return (
-    VERDICT_DISPLAY[verdict as FitVerdict]?.badgeClass ??
-    "bg-slate-200 text-slate-600"
+    VERDICT_DISPLAY[verdict as FitVerdict]?.badgeClass ?? "bg-slate-200"
   );
 }
 
@@ -66,8 +71,7 @@ export const karta = {
     "rounded-md border border-slate-300 bg-white px-3 py-2 text-[15px] text-[#334155] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#0D9488]/30",
   barTrack: "h-2 rounded-md bg-[#E2E8F0] overflow-hidden",
   barFill: "h-full rounded-md bg-[#0D9488]",
-  badge:
-    "inline-flex rounded-full px-2.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.03em]",
+  badge: VERDICT_BADGE_BASE,
 } as const;
 
 export const VERDICT_SORT_ORDER: Record<FitVerdict, number> = {

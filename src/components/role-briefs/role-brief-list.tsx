@@ -3,10 +3,12 @@
 import { Check, Pencil, Star, Trash2 } from "lucide-react";
 import type { RoleBrief } from "@/types/role-brief";
 import { karta } from "@/lib/brand/karta";
+import { TalentPoolRecommendations } from "@/components/role-briefs/talent-pool-recommendations";
 
 type RoleBriefListProps = {
   briefs: RoleBrief[];
   activeBriefId: string | null;
+  recommendationsRefreshToken: number;
   onSetActive: (brief: RoleBrief) => void;
   onEdit: (brief: RoleBrief) => void;
   onDelete: (id: string) => void;
@@ -16,6 +18,7 @@ type RoleBriefListProps = {
 export function RoleBriefList({
   briefs,
   activeBriefId,
+  recommendationsRefreshToken,
   onSetActive,
   onEdit,
   onDelete,
@@ -102,6 +105,18 @@ export function RoleBriefList({
           </li>
         );
       })}
+      {activeBriefId && (() => {
+        const activeBrief = briefs.find((b) => b.id === activeBriefId);
+        if (!activeBrief) return null;
+        return (
+          <li key={`recs-${activeBrief.id}`} className="list-none">
+            <TalentPoolRecommendations
+              roleBrief={activeBrief}
+              refreshToken={recommendationsRefreshToken}
+            />
+          </li>
+        );
+      })()}
     </ul>
   );
 }

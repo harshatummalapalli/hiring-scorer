@@ -1,6 +1,12 @@
 import type { FitVerdict } from "@/types/score";
 import type { ReactNode } from "react";
-import { VERDICT_DISPLAY, verdictBadgeClass, verdictLabel, karta } from "@/lib/brand/karta";
+import {
+  VERDICT_BADGE_BASE,
+  VERDICT_BADGE_UNMATCHED,
+  verdictBadgeClass,
+  verdictLabel,
+  karta,
+} from "@/lib/brand/karta";
 
 export function ProfileSection({
   children,
@@ -21,38 +27,28 @@ export function ProfileSectionHeading({ children }: { children: ReactNode }) {
 export function VerdictBadge({
   verdict,
   score,
-  compact,
+  showScore,
 }: {
   verdict: string | null | undefined;
   score?: number | null;
+  /** @deprecated Size is unified; only controls whether the numeric match is shown. */
   compact?: boolean;
+  /** Show match score after the label (pipeline table). */
+  showScore?: boolean;
 }) {
   if (!verdict) {
     return (
-      <span className={`${karta.badge} bg-slate-200 text-slate-600`}>
-        Not matched yet
-      </span>
+      <span className={VERDICT_BADGE_UNMATCHED}>Not matched yet</span>
     );
   }
+
   return (
-    <span className={`${karta.badge} ${verdictBadgeClass(verdict)}`}>
+    <span className={`${VERDICT_BADGE_BASE} ${verdictBadgeClass(verdict)}`}>
       {verdictLabel(verdict)}
-      {score != null && !compact ? ` · ${score}` : null}
-      {score != null && compact ? ` ${score}` : null}
+      {score != null && showScore ? ` ${score}` : null}
     </span>
   );
 }
-
-/** @deprecated use VerdictBadge */
-export const VERDICT_BADGE: Record<
-  FitVerdict,
-  { text: string; bg: string; ring: string }
-> = {
-  "STRONG FIT": { text: "text-white", bg: "bg-[#059669]", ring: "ring-transparent" },
-  "POSSIBLE FIT": { text: "text-white", bg: "bg-[#D97706]", ring: "ring-transparent" },
-  "WEAK FIT": { text: "text-white", bg: "bg-[#64748B]", ring: "ring-transparent" },
-  "NOT SUITABLE": { text: "text-white", bg: "bg-[#E11D48]", ring: "ring-transparent" },
-};
 
 export function SignalBar({
   label,

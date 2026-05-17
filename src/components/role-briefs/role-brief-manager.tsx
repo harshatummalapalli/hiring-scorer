@@ -80,6 +80,8 @@ export function RoleBriefManager() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [recommendationsRefreshToken, setRecommendationsRefreshToken] =
+    useState(0);
 
   const configError = getSupabaseConfigError();
 
@@ -140,6 +142,10 @@ export function RoleBriefManager() {
         editingId,
       );
       setSuccess(`Saved “${saved.title}”.`);
+      if (!editingId) {
+        setActiveBrief(saved);
+        setRecommendationsRefreshToken((t) => t + 1);
+      }
       resetCreator();
       await fetchBriefs();
     } catch (err) {
@@ -242,7 +248,11 @@ export function RoleBriefManager() {
           <RoleBriefList
             briefs={briefs}
             activeBriefId={activeBriefId}
-            onSetActive={setActiveBrief}
+            recommendationsRefreshToken={recommendationsRefreshToken}
+            onSetActive={(brief) => {
+              setActiveBrief(brief);
+              setRecommendationsRefreshToken((t) => t + 1);
+            }}
             onEdit={handleEdit}
             onDelete={handleDelete}
             deletingId={deletingId}
