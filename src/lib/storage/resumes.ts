@@ -75,10 +75,25 @@ export function assertResumeFileAllowed(
   return mime;
 }
 
+/**
+ * Supabase Storage object names must be S3-safe (no `[` `]` `#` `%` etc.).
+ * Keeps letters, numbers, dot, hyphen, underscore; normalizes the extension.
+ */
 export function sanitizeResumeFilename(name: string): string {
-  const base = name.replace(/[/\\]/g, "_").replace(/\.\./g, "_").trim();
-  const trimmed = base.slice(0, 200) || "resume.pdf";
-  return trimmed;
+  const base = name.replace(/[/\\]/g, "_").replace(/\.\./g, ".").trim();
+  const lastDot = base.lastIndexOf(".");
+  const rawExt = lastDot > 0 ? base.slice(lastDot + 1).toLowerCase() : "";
+  const stem = (lastDot > 0 ? base.slice(0, lastDot) : base).trim();
+
+  const safeStem =
+    stem
+      .replace(/[^a-zA-Z0-9._-]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 180) || "resume";
+
+  const allowedExt = new Set(["pdf", "docx", "txt"]);
+  const ext = allowedExt.has(rawExt) ? rawExt : "pdf";
+  return `${safeStem}.${ext}`;
 }
 
 /** Object path inside bucket: {userId}/{jobId}/{candidateId}/{filename} */

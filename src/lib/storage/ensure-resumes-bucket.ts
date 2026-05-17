@@ -43,6 +43,12 @@ export async function ensureResumesBucketExists(): Promise<void> {
 
 export function formatResumeStorageError(message: string): string {
   const m = message.toLowerCase();
+  if (m.includes("invalid key") || m.includes("invalid object")) {
+    return (
+      "The resume filename contained characters that storage does not allow. " +
+      "The file was renamed automatically on retry — please upload again."
+    );
+  }
   if (m.includes("bucket not found") || m.includes("does not exist")) {
     return (
       "The resumes storage bucket is missing. In Supabase SQL Editor, run " +
