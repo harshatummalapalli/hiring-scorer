@@ -26,6 +26,8 @@ type PostBody = {
   resumeText: string;
   resumeFilename?: string;
   displayName?: string;
+  jobId?: string;
+  source?: string;
 };
 
 function coerceResumeText(value: unknown): string {
@@ -71,12 +73,23 @@ export async function POST(request: Request) {
 
     const profile = { ...signal_profile, display_name };
 
+    const jobId = body.jobId?.trim() || null;
+    const source = body.source?.trim() || (jobId ? "uploaded" : "uploaded");
+
     const { id } = await insertCandidate({
       display_name,
       resume_filename: resumeFilename,
       resume_text: resumeText,
       signal_profile: profile,
       activity,
+      ...(jobId
+        ? {
+            job_id: jobId,
+            source,
+            scoring_status: "unscored",
+            applied_at: new Date().toISOString(),
+          }
+        : {}),
     });
 
     return NextResponse.json({

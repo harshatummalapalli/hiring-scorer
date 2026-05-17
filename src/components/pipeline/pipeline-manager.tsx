@@ -391,7 +391,7 @@ function PipelineTableRow({
     <tr className="border-b border-slate-100 last:border-0">
       <td className="px-4 py-3 font-medium text-slate-900">
         <Link
-          href={`/candidates?open=${encodeURIComponent(row.candidate_id)}`}
+          href={`/talent-pool?open=${encodeURIComponent(row.candidate_id)}`}
           className="hover:underline"
         >
           {row.candidate_name}
@@ -602,8 +602,8 @@ export function PipelineManager() {
       ) : sections.length === 0 ? (
         <p className={`${karta.card} border-dashed px-6 py-12 text-center text-[#64748B]`}>
           Shortlist candidates from the{" "}
-          <Link href="/candidates" className="font-medium text-[#0D9488] underline">
-            Candidates
+          <Link href="/talent-pool" className="font-medium text-[#0D9488] underline">
+            Talent Pool
           </Link>{" "}
           page to build your pipeline.
         </p>

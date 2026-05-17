@@ -9,7 +9,7 @@ import type {
 import type {
   DevilsAdvocateResult,
   SignalExtractorResult,
-} from "@/lib/ai/model-runners";
+} from "@/lib/ai/legacy-model-types";
 import { normalizeInterviewQuestions } from "@/lib/scoring/interview-questions";
 
 const COMPANY_TYPES: CompanyType[] = [

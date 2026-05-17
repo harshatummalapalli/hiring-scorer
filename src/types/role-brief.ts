@@ -1,4 +1,11 @@
+import { applyLinkPath, generateApplicationToken } from "@/lib/jobs/token";
 import { dedupeRoleBriefAnalysis } from "@/lib/role-brief/dedupe-skills";
+import {
+  parseAutoScoreMode,
+  parseJobStatus,
+  type AutoScoreMode,
+  type JobStatus,
+} from "@/types/job";
 
 export type TitleBand = "Entry" | "Mid" | "Senior" | "Staff" | "Principal";
 
@@ -15,6 +22,14 @@ export type CoreSignal = {
   equivalents: string[];
 };
 
+export type RoleBriefSuggestedWeights = {
+  weight_skills: number;
+  weight_trajectory: number;
+  weight_domain: number;
+  weight_seniority: number;
+  weight_tenure: number;
+};
+
 export type RoleBriefAnalysis = {
   deal_breakers: string[];
   core_signals: CoreSignal[];
@@ -23,6 +38,13 @@ export type RoleBriefAnalysis = {
   equivalent_titles: string[];
   title_band: TitleBand;
   semantic_clusters: Record<string, string[]>;
+  suggested_weights?: RoleBriefSuggestedWeights;
+};
+
+export type RoleBriefScoringPrompt = {
+  scoring_prompt: string | null;
+  scoring_prompt_generated_at: string | null;
+  scoring_prompt_version: number;
 };
 
 export type RoleBrief = {
@@ -41,6 +63,16 @@ export type RoleBrief = {
   weight_domain: number;
   weight_seniority: number;
   weight_tenure: number;
+  scoring_prompt: string | null;
+  scoring_prompt_generated_at: string | null;
+  scoring_prompt_version: number;
+  application_token: string | null;
+  apply_link: string | null;
+  company_name: string | null;
+  application_active: boolean;
+  application_count: number;
+  auto_score_mode: AutoScoreMode;
+  status: JobStatus;
   created_at: string;
 };
 
@@ -125,12 +157,55 @@ export function analysisFromRoleBrief(brief: RoleBrief): RoleBriefAnalysis {
   };
 }
 
+function clampWeight(n: unknown, fallback: number): number {
+  const v = Number(n);
+  if (Number.isNaN(v)) return fallback;
+  return Math.max(1, Math.min(10, Math.round(v)));
+}
+
+function weightsFromAnalysis(
+  analysis: RoleBriefAnalysis,
+): RoleBriefSuggestedWeights {
+  const w = analysis.suggested_weights;
+  return {
+    weight_skills: clampWeight(w?.weight_skills, DEFAULT_SCORING_WEIGHTS.weight_skills),
+    weight_trajectory: clampWeight(
+      w?.weight_trajectory,
+      DEFAULT_SCORING_WEIGHTS.weight_trajectory,
+    ),
+    weight_domain: clampWeight(w?.weight_domain, DEFAULT_SCORING_WEIGHTS.weight_domain),
+    weight_seniority: clampWeight(
+      w?.weight_seniority,
+      DEFAULT_SCORING_WEIGHTS.weight_seniority,
+    ),
+    weight_tenure: clampWeight(w?.weight_tenure, DEFAULT_SCORING_WEIGHTS.weight_tenure),
+  };
+}
+
+export function jobInsertDefaults() {
+  const token = generateApplicationToken();
+  return {
+    application_token: token,
+    apply_link: applyLinkPath(token),
+    company_name: null,
+    application_active: true,
+    application_count: 0,
+    auto_score_mode: "needs_scoring" as AutoScoreMode,
+    status: "active" as JobStatus,
+  };
+}
+
 export function roleBriefToSavePayload(
   title: string,
   jobDescription: string,
   analysis: RoleBriefAnalysis,
+  scoringPrompt?: Partial<RoleBriefScoringPrompt> | null,
+  options?: { isNew?: boolean },
 ) {
   const deduped = dedupeRoleBriefAnalysis(analysis);
+  const weights = weightsFromAnalysis({ ...deduped, suggested_weights: analysis.suggested_weights });
+
+  const promptText = scoringPrompt?.scoring_prompt?.trim() || null;
 
   return {
     title: title.trim(),
@@ -147,7 +222,15 @@ export function roleBriefToSavePayload(
     required_skills: null,
     nice_to_have_skills: null,
     experience_years: null,
-    ...DEFAULT_SCORING_WEIGHTS,
+    ...weights,
+    scoring_prompt: promptText,
+    scoring_prompt_generated_at: promptText
+      ? (scoringPrompt?.scoring_prompt_generated_at ?? new Date().toISOString())
+      : null,
+    scoring_prompt_version: promptText
+      ? (scoringPrompt?.scoring_prompt_version ?? 1)
+      : 1,
+    ...(options?.isNew ? jobInsertDefaults() : {}),
   };
 }
 
@@ -249,6 +332,23 @@ export function parseRoleBriefRow(row: Record<string, unknown>): RoleBrief {
     weight_domain: clamp(row.weight_domain, 5),
     weight_seniority: clamp(row.weight_seniority, 5),
     weight_tenure: clamp(row.weight_tenure, 5),
+    scoring_prompt:
+      row.scoring_prompt != null && String(row.scoring_prompt).trim()
+        ? String(row.scoring_prompt)
+        : null,
+    scoring_prompt_generated_at:
+      row.scoring_prompt_generated_at != null
+        ? String(row.scoring_prompt_generated_at)
+        : null,
+    scoring_prompt_version: clampWeight(row.scoring_prompt_version, 1),
+    application_token:
+      row.application_token != null ? String(row.application_token) : null,
+    apply_link: row.apply_link != null ? String(row.apply_link) : null,
+    company_name: row.company_name != null ? String(row.company_name) : null,
+    application_active: row.application_active !== false,
+    application_count: Math.max(0, Number(row.application_count ?? 0) || 0),
+    auto_score_mode: parseAutoScoreMode(row.auto_score_mode),
+    status: parseJobStatus(row.status),
     created_at: String(row.created_at ?? new Date().toISOString()),
   };
 }

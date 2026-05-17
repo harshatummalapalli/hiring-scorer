@@ -115,7 +115,7 @@ export function TalentPoolRecommendations({
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <Link
-                      href={`/candidates?open=${encodeURIComponent(rec.candidateId)}`}
+                      href={`/talent-pool?open=${encodeURIComponent(rec.candidateId)}`}
                       className="font-medium text-[#1E293B] hover:text-[#0D9488] hover:underline"
                     >
                       {rec.candidateName}

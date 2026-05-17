@@ -8,7 +8,7 @@ import type {
   DevilsAdvocateResult,
   SignalExtractorResult,
   StructuredScorerResult,
-} from "./model-runners";
+} from "./legacy-model-types";
 
 export type DimensionAgreement = "unanimous" | "majority" | "divergent";
 

@@ -2,10 +2,11 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getApiKey } from "@/lib/ai/api-keys";
 import { parseJsonFromModel } from "@/lib/ai/parse-json";
 import { dedupeRoleBriefAnalysis } from "@/lib/role-brief/dedupe-skills";
+import { generateRoleScoringPrompt } from "@/lib/role-brief/generate-scoring-prompt";
 import type { RoleBriefAnalysis, TitleBand } from "@/types/role-brief";
 import { TITLE_BANDS } from "@/types/role-brief";
 
-const ANALYSE_JD_SYSTEM = `You are an expert recruiter with 18 years of enterprise technology hiring experience. Analyse this job description and return a JSON object with these exact fields. deal_breakers as an array of strings — the absolute must-have requirements where absence disqualifies a candidate. core_signals as an array of objects each with skill name and equivalents array — the important skills that drive the score heavily. preferred_signals as an array of strings — nice to have items that boost score but absence does not penalise. cannot_assess as an array of strings — soft skills or qualities that cannot be evaluated from a resume alone. equivalent_titles as an array of strings — all job titles that should be considered equivalent to the target role. title_band as a string — one of Entry Mid Senior Staff Principal. semantic_clusters as an object where each key is a required skill and value is an array of technologies that imply proficiency in that skill. Return JSON only, no explanation.`;
+const ANALYSE_JD_SYSTEM = `You are an expert recruiter with 18 years of enterprise technology hiring experience. Analyse this job description and return a JSON object with these exact fields. deal_breakers as an array of strings — the absolute must-have requirements where absence disqualifies a candidate. core_signals as an array of objects each with skill name and equivalents array — the important skills that drive the score heavily. preferred_signals as an array of strings — nice to have items that boost score but absence does not penalise. cannot_assess as an array of strings — soft skills or qualities that cannot be evaluated from a resume alone. equivalent_titles as an array of strings — all job titles that should be considered equivalent to the target role. title_band as a string — one of Entry Mid Senior Staff Principal. semantic_clusters as an object where each key is a required skill and value is an array of technologies that imply proficiency in that skill. suggested_weights as an object with integer fields weight_skills weight_trajectory weight_domain weight_seniority weight_tenure each from 1 to 10 reflecting how much the JD emphasises each dimension — if the JD heavily emphasises technical skills set weight_skills high; if it emphasises leadership set weight_trajectory and weight_seniority high; balance all five to sum roughly 25–40. Return JSON only, no explanation.`;
 
 function parseStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -18,6 +19,26 @@ function parseTitleBand(value: unknown): TitleBand {
     (b) => b.toLowerCase() === v.toLowerCase(),
   );
   return match ?? "Mid";
+}
+
+function clampWeight(n: unknown, fallback: number): number {
+  const v = Number(n);
+  if (Number.isNaN(v)) return fallback;
+  return Math.max(1, Math.min(10, Math.round(v)));
+}
+
+function parseSuggestedWeights(
+  value: unknown,
+): RoleBriefAnalysis["suggested_weights"] | undefined {
+  if (typeof value !== "object" || value == null) return undefined;
+  const o = value as Record<string, unknown>;
+  return {
+    weight_skills: clampWeight(o.weight_skills, 5),
+    weight_trajectory: clampWeight(o.weight_trajectory, 5),
+    weight_domain: clampWeight(o.weight_domain, 5),
+    weight_seniority: clampWeight(o.weight_seniority, 5),
+    weight_tenure: clampWeight(o.weight_tenure, 5),
+  };
 }
 
 export function parseRoleBriefAnalysis(raw: unknown): RoleBriefAnalysis {
@@ -60,6 +81,7 @@ export function parseRoleBriefAnalysis(raw: unknown): RoleBriefAnalysis {
     equivalent_titles: parseStringArray(o.equivalent_titles),
     title_band: parseTitleBand(o.title_band),
     semantic_clusters,
+    suggested_weights: parseSuggestedWeights(o.suggested_weights),
   });
 }
 
@@ -87,4 +109,33 @@ export async function analyseJobDescription(
 
   const parsed = parseJsonFromModel(textBlock.text);
   return parseRoleBriefAnalysis(parsed);
+}
+
+export type JobDescriptionAnalysisResult = {
+  analysis: RoleBriefAnalysis;
+  scoring_prompt: string;
+  scoring_prompt_generated_at: string;
+  scoring_prompt_version: number;
+};
+
+/**
+ * Full JD analyse flow: existing structured extraction, then custom GPT-4o mini scoring prompt.
+ * First call unchanged; second call runs immediately after.
+ */
+export async function analyseJobDescriptionWithScoringPrompt(
+  jobDescription: string,
+  scoringPromptVersion = 1,
+): Promise<JobDescriptionAnalysisResult> {
+  const analysis = await analyseJobDescription(jobDescription);
+  const scoring_prompt = await generateRoleScoringPrompt(
+    analysis,
+    jobDescription,
+  );
+
+  return {
+    analysis,
+    scoring_prompt,
+    scoring_prompt_generated_at: new Date().toISOString(),
+    scoring_prompt_version: scoringPromptVersion,
+  };
 }

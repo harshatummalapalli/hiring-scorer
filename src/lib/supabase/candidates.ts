@@ -1,4 +1,8 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  parseCandidateSource,
+  parseScoringStatus,
+} from "@/types/job";
 import type {
   CandidateActivity,
   CandidateDetail,
@@ -46,6 +50,17 @@ function rowToCandidate(row: Record<string, unknown>): CandidateRow {
     activity: Array.isArray(row.activity)
       ? (row.activity as CandidateActivity[])
       : [],
+    job_id: row.job_id != null ? String(row.job_id) : null,
+    source: parseCandidateSource(row.source),
+    application_email:
+      row.application_email != null ? String(row.application_email) : null,
+    application_phone:
+      row.application_phone != null ? String(row.application_phone) : null,
+    application_location:
+      row.application_location != null ? String(row.application_location) : null,
+    applied_at: row.applied_at != null ? String(row.applied_at) : null,
+    scoring_status: parseScoringStatus(row.scoring_status),
+    linkedin_url: row.linkedin_url != null ? String(row.linkedin_url) : null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
   };
@@ -71,6 +86,24 @@ async function backfillResolvedDisplayNames(
   });
   if (updates.length === 0) return;
   await Promise.allSettled(updates);
+}
+
+export async function listCandidatesByJob(jobId: string): Promise<CandidateRow[]> {
+  const supabase = getServerSupabase();
+  const { data, error } = await supabase
+    .from("candidates")
+    .select("*")
+    .eq("job_id", jobId)
+    .order("applied_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    if (error.message?.toLowerCase().includes("does not exist")) return [];
+    if (error.message?.toLowerCase().includes("job_id")) return [];
+    throw new Error(error.message);
+  }
+  const rawRows = (data ?? []) as Record<string, unknown>[];
+  return rawRows.map((r) => rowToCandidate(r));
 }
 
 export async function listCandidates(): Promise<CandidateRow[]> {
@@ -281,6 +314,14 @@ export async function insertCandidate(row: {
   resume_text: string;
   signal_profile: CandidateSignalProfile;
   activity: CandidateActivity[];
+  job_id?: string | null;
+  source?: string;
+  scoring_status?: string;
+  applied_at?: string | null;
+  application_email?: string | null;
+  application_phone?: string | null;
+  application_location?: string | null;
+  linkedin_url?: string | null;
 }): Promise<{ id: string }> {
   const supabase = getServerSupabase();
   const { data, error } = await supabase
@@ -291,6 +332,20 @@ export async function insertCandidate(row: {
       resume_text: row.resume_text,
       signal_profile: row.signal_profile,
       activity: row.activity,
+      ...(row.job_id ? { job_id: row.job_id } : {}),
+      ...(row.source ? { source: row.source } : {}),
+      ...(row.scoring_status ? { scoring_status: row.scoring_status } : {}),
+      ...(row.applied_at ? { applied_at: row.applied_at } : {}),
+      ...(row.application_email
+        ? { application_email: row.application_email }
+        : {}),
+      ...(row.application_phone
+        ? { application_phone: row.application_phone }
+        : {}),
+      ...(row.application_location
+        ? { application_location: row.application_location }
+        : {}),
+      ...(row.linkedin_url ? { linkedin_url: row.linkedin_url } : {}),
     })
     .select("id")
     .single();

@@ -143,7 +143,7 @@ export function collectRequiredSkills(roleBrief: RoleBrief): RequiredSkillSpec[]
     .sort((a, b) => a.skill.localeCompare(b.skill));
 }
 
-function matchSingleSkill(
+export function matchSingleSkill(
   skill: string,
   equivalents: string[],
   resumeText: string,

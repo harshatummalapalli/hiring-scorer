@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
-import { runConsensusScore } from "@/lib/ai/consensus-engine";
+import {
+  buildScoringSignalsFromProfile,
+  scoreCandidate,
+} from "@/lib/ai/gpt-mini-scorer";
 import { createActivity, prependActivity } from "@/lib/candidates/activity";
+import { stripPII } from "@/lib/resume/strip-pii";
 import { insertSavedScoreWithFallback } from "@/lib/saved-scores/insert-with-fallback";
 import { buildSavedScoreInsertPayload } from "@/lib/saved-scores/build-save-payload";
+import { scoringStatusFromOverall } from "@/lib/jobs/scoring-status";
 import { getCandidateById, updateCandidate } from "@/lib/supabase/candidates";
 import { createClient } from "@supabase/supabase-js";
 import type { RoleBrief } from "@/types/role-brief";
@@ -51,12 +56,14 @@ export async function POST(request: Request, { params }: Params) {
     const filename =
       candidate.resume_filename ?? `${candidate.display_name}.pdf`;
 
-    const result = await runConsensusScore(
-      roleBrief,
-      candidate.resume_text,
-      filename,
-      candidate.signal_profile,
-    );
+    const { stripped } = stripPII(candidate.resume_text);
+    const scoringText = stripped.trim() || candidate.resume_text.trim();
+    const signals = buildScoringSignalsFromProfile(candidate.signal_profile);
+
+    const result = await scoreCandidate(scoringText, roleBrief, signals, {
+      candidateFilename: filename,
+      signalProfile: candidate.signal_profile,
+    });
 
     const savePayload = {
       ...buildSavedScoreInsertPayload(filename, roleBrief, result, "", ""),
@@ -75,14 +82,20 @@ export async function POST(request: Request, { params }: Params) {
         { role_brief_id: roleBrief.id, score: result.overall_score },
       ),
     );
-    await updateCandidate(id, { activity });
+    await updateCandidate(id, {
+      activity,
+      scoring_status: scoringStatusFromOverall(result.overall_score),
+      job_id: candidate.job_id ?? body.roleBriefId,
+    });
 
     return NextResponse.json({ result, savedScoreId });
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to score candidate";
     const status =
-      message.includes("API key") || message.includes("401") ? 401 : 500;
+      message.includes("OPENAI_API_KEY") || message.includes("401")
+        ? 401
+        : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }

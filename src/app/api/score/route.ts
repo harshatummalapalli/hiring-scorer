@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { runConsensusScore } from "@/lib/ai/consensus-engine";
+import { analyseResumeSignals } from "@/lib/intelligence/beyond-keywords";
+import {
+  scoreCandidate,
+  type CandidateScoringSignals,
+} from "@/lib/ai/gpt-mini-scorer";
+import { stripPII } from "@/lib/resume/strip-pii";
 import { buildScoringRunPayloadFromResult } from "@/lib/scoring/build-scoring-run-payload";
 import { insertScoringRun } from "@/lib/supabase/server";
 import type { RoleBrief } from "@/types/role-brief";
@@ -11,6 +16,18 @@ type ScoreRequestBody = {
   roleBrief: RoleBrief;
   candidateFilename?: string;
 };
+
+function signalsFromResumeText(resumeText: string): CandidateScoringSignals {
+  const rq = analyseResumeSignals(resumeText);
+  return {
+    ...rq,
+    skills_verified: [],
+    skills_listed_only: [],
+    ownership_ratio_percent: rq.ownership.ratio_percent,
+    quantification_ratio_percent: rq.quantification.ratio_percent,
+    profile_depth: rq.keyword_stuffing.flagged ? "Surface" : "Moderate",
+  };
+}
 
 export async function POST(request: Request) {
   try {
@@ -37,18 +54,18 @@ export async function POST(request: Request) {
       );
     }
 
-    console.log("[score] scoring request", {
-      role: body.roleBrief.title,
-      textLength: body.resumeText.trim().length,
-    });
-
     const candidateFilename =
       body.candidateFilename?.trim() || "unknown-candidate.pdf";
 
-    const result = await runConsensusScore(
+    const { stripped } = stripPII(body.resumeText.trim());
+    const scoringText = stripped.trim() || body.resumeText.trim();
+    const signals = signalsFromResumeText(scoringText);
+
+    const result = await scoreCandidate(
+      scoringText,
       body.roleBrief,
-      body.resumeText.trim(),
-      candidateFilename,
+      signals,
+      { candidateFilename },
     );
 
     const scoringRun = buildScoringRunPayloadFromResult(
@@ -65,11 +82,7 @@ export async function POST(request: Request) {
     const message =
       err instanceof Error ? err.message : "Failed to score candidate";
     const status =
-      message.includes("Invalid API key") ||
-      message.includes("401") ||
-      message.includes("ANTHROPIC_API_KEY") ||
-      message.includes("OPENAI_API_KEY") ||
-      message.includes("GOOGLE_API_KEY")
+      message.includes("OPENAI_API_KEY") || message.includes("401")
         ? 401
         : message.includes("Supabase")
           ? 503

@@ -12,16 +12,25 @@ import { getErrorMessage } from "@/lib/errors";
 import {
   buildFullBriefPayload,
   buildLegacyBriefPayload,
+  isMissingJobArchitectureColumnError,
+  isMissingScoringPromptColumnError,
   isMissingV2ColumnError,
+  stripJobArchitectureColumns,
+  stripScoringPromptColumns,
 } from "@/lib/role-brief/insert-brief-payload";
 import { createSupabaseClient, getSupabaseConfigError } from "@/lib/supabase/client";
-import type { RoleBrief, RoleBriefAnalysis } from "@/types/role-brief";
+import type {
+  RoleBrief,
+  RoleBriefAnalysis,
+  RoleBriefScoringPrompt,
+} from "@/types/role-brief";
 import { parseRoleBriefRow } from "@/types/role-brief";
 
 async function upsertRoleBrief(
   title: string,
   jobDescription: string,
   analysis: RoleBriefAnalysis,
+  scoringPrompt: RoleBriefScoringPrompt,
   editingId: string | null,
 ): Promise<RoleBrief> {
   const supabase = createSupabaseClient();
@@ -48,11 +57,38 @@ async function upsertRoleBrief(
     return parseRoleBriefRow(data as Record<string, unknown>);
   };
 
-  const full = buildFullBriefPayload(title, jobDescription, analysis);
+  const full = buildFullBriefPayload(
+    title,
+    jobDescription,
+    analysis,
+    scoringPrompt,
+    !editingId,
+  );
   try {
     return await attempt(full);
   } catch (err) {
     const msg = getErrorMessage(err, "");
+    if (isMissingJobArchitectureColumnError(msg)) {
+      try {
+        return await attempt(stripJobArchitectureColumns(full));
+      } catch (jobErr) {
+        const jobMsg = getErrorMessage(jobErr, "");
+        if (!isMissingScoringPromptColumnError(jobMsg)) throw jobErr;
+      }
+    }
+    if (isMissingScoringPromptColumnError(msg)) {
+      try {
+        return await attempt(stripScoringPromptColumns(full));
+      } catch (retryErr) {
+        const retryMsg = getErrorMessage(retryErr, "");
+        if (isMissingV2ColumnError(retryMsg)) {
+          return await attempt(
+            buildLegacyBriefPayload(title, jobDescription, analysis),
+          );
+        }
+        throw retryErr;
+      }
+    }
     if (isMissingV2ColumnError(msg)) {
       return await attempt(
         buildLegacyBriefPayload(title, jobDescription, analysis),
@@ -74,6 +110,8 @@ export function RoleBriefManager() {
     null,
   );
   const [editTitle, setEditTitle] = useState("");
+  const [editScoringPrompt, setEditScoringPrompt] =
+    useState<RoleBriefScoringPrompt | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -122,6 +160,7 @@ export function RoleBriefManager() {
     setEditJobDescription("");
     setEditAnalysis(null);
     setEditTitle("");
+    setEditScoringPrompt(null);
     setCreatorKey((k) => k + 1);
   };
 
@@ -129,6 +168,7 @@ export function RoleBriefManager() {
     title: string;
     jobDescription: string;
     analysis: RoleBriefAnalysis;
+    scoringPrompt: RoleBriefScoringPrompt;
   }) => {
     setIsSaving(true);
     setError(null);
@@ -139,6 +179,7 @@ export function RoleBriefManager() {
         data.title,
         data.jobDescription,
         data.analysis,
+        data.scoringPrompt,
         editingId,
       );
       setSuccess(`Saved “${saved.title}”.`);
@@ -161,6 +202,7 @@ export function RoleBriefManager() {
     setEditJobDescription(state.jobDescription);
     setEditAnalysis(state.analysis);
     setEditTitle(state.title);
+    setEditScoringPrompt(state.scoringPrompt);
     setCreatorKey((k) => k + 1);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -226,6 +268,7 @@ export function RoleBriefManager() {
         initialJobDescription={editJobDescription}
         initialAnalysis={editAnalysis}
         initialTitle={editTitle}
+        initialScoringPrompt={editScoringPrompt}
         editingId={editingId}
         onSave={handleSave}
         isSaving={isSaving}

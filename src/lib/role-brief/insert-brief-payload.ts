@@ -12,12 +12,74 @@ const V2_KEYS = [
   "semantic_clusters",
 ] as const;
 
+const SCORING_PROMPT_KEYS = [
+  "scoring_prompt",
+  "scoring_prompt_generated_at",
+  "scoring_prompt_version",
+] as const;
+
+const JOB_ARCHITECTURE_KEYS = [
+  "application_token",
+  "apply_link",
+  "company_name",
+  "application_active",
+  "application_count",
+  "auto_score_mode",
+  "status",
+] as const;
+
+export function stripJobArchitectureColumns(
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  const row = { ...payload };
+  for (const key of JOB_ARCHITECTURE_KEYS) {
+    delete row[key];
+  }
+  return row;
+}
+
+export function isMissingJobArchitectureColumnError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("schema cache") ||
+    lower.includes("could not find") ||
+    JOB_ARCHITECTURE_KEYS.some((k) => lower.includes(k))
+  );
+}
+
 export function buildFullBriefPayload(
   title: string,
   jobDescription: string,
   analysis: RoleBriefAnalysis,
+  scoringPrompt?: Parameters<typeof roleBriefToSavePayload>[3],
+  isNew = false,
 ): Record<string, unknown> {
-  return roleBriefToSavePayload(title, jobDescription, analysis);
+  return roleBriefToSavePayload(
+    title,
+    jobDescription,
+    analysis,
+    scoringPrompt,
+    { isNew },
+  );
+}
+
+export function stripScoringPromptColumns(
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  const row = { ...payload };
+  for (const key of SCORING_PROMPT_KEYS) {
+    delete row[key];
+  }
+  return row;
+}
+
+export function isMissingScoringPromptColumnError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("schema cache") ||
+    lower.includes("could not find") ||
+    SCORING_PROMPT_KEYS.some((k) => lower.includes(k))
+  );
 }
 
 export function buildLegacyBriefPayload(

@@ -6,5 +6,5 @@ type PageProps = {
 
 export default async function LegacyCandidateDetailPage({ params }: PageProps) {
   const { id } = await params;
-  redirect(`/candidates?open=${encodeURIComponent(id)}`);
+  redirect(`/talent-pool?open=${encodeURIComponent(id)}`);
 }

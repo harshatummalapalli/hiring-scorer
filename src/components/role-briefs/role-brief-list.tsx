@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, Pencil, Star, Trash2 } from "lucide-react";
+import { PromptStatusBadge } from "@/components/role-briefs/prompt-status-badge";
 import type { RoleBrief } from "@/types/role-brief";
 import { karta } from "@/lib/brand/karta";
 import { TalentPoolRecommendations } from "@/components/role-briefs/talent-pool-recommendations";
@@ -55,6 +56,9 @@ export function RoleBriefList({
                   <h3 className="truncate font-semibold text-[#1E293B]">
                     {brief.title}
                   </h3>
+                  <PromptStatusBadge
+                    ready={Boolean(brief.scoring_prompt?.trim())}
+                  />
                   {isActive && (
                     <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#0D9488] px-2.5 py-0.5 text-xs font-semibold text-white">
                       <Check className="h-3 w-3" aria-hidden />

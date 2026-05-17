@@ -1,7 +1,7 @@
 import type { RoleBrief } from "@/types/role-brief";
 import type { CandidateScoreResult, ModelRawResponses } from "@/types/score";
 
-export type ScoringArchitecture = "3-call" | "9-call";
+export type ScoringArchitecture = "1-call" | "3-call" | "9-call";
 
 export type ScoringDebugLogEntry = {
   id: string;

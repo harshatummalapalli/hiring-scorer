@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { GripVertical, Plus, X } from "lucide-react";
+import { GripVertical, Loader2, Plus, RefreshCw, X } from "lucide-react";
+import { PromptStatusBadge } from "@/components/role-briefs/prompt-status-badge";
+import { karta } from "@/lib/brand/karta";
 import type {
   CoreSignal,
   RoleBriefAnalysis,
@@ -9,11 +11,17 @@ import type {
 } from "@/types/role-brief";
 import { STRING_CATEGORIES, TITLE_BANDS } from "@/types/role-brief";
 
+type AnalysisTab = "overview" | "requirements";
+
 type AnalysisCardsProps = {
   analysis: RoleBriefAnalysis;
   onChange: (next: RoleBriefAnalysis) => void;
   extractedTitle: string;
   onTitleChange: (title: string) => void;
+  scoringPromptReady: boolean;
+  scoringPromptVersion: number;
+  onRegeneratePrompt: () => void | Promise<void>;
+  regeneratingPrompt?: boolean;
 };
 
 type DragItem = {
@@ -27,7 +35,12 @@ export function AnalysisCards({
   onChange,
   extractedTitle,
   onTitleChange,
+  scoringPromptReady,
+  scoringPromptVersion,
+  onRegeneratePrompt,
+  regeneratingPrompt = false,
 }: AnalysisCardsProps) {
+  const [tab, setTab] = useState<AnalysisTab>("overview");
   const [dragItem, setDragItem] = useState<DragItem | null>(null);
   const [addDraft, setAddDraft] = useState<Record<string, string>>({});
 
@@ -104,22 +117,100 @@ export function AnalysisCards({
   };
 
   return (
-    <div className="space-y-8">
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Extracted role title
-        </h3>
-        <input
-          type="text"
-          value={extractedTitle}
-          onChange={(e) => onTitleChange(e.target.value)}
-          className="mt-3 w-full rounded-xl border border-slate-200 px-4 py-3 text-lg font-semibold text-slate-900 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
-        />
-        <p className="mt-2 text-xs text-slate-500">
-          Auto-detected from the job description — edit if needed.
-        </p>
-      </section>
+    <div className="space-y-6">
+      <div className="flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
+        {(
+          [
+            ["overview", "Job Overview"],
+            ["requirements", "Requirements"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition ${
+              tab === id
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
+      {tab === "overview" && (
+        <section className={`${karta.card} p-6 sm:p-8`}>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-lg font-semibold text-[#1E293B]">
+                  {extractedTitle || "Job role"}
+                </h3>
+                <PromptStatusBadge ready={scoringPromptReady} />
+              </div>
+              <p className="mt-2 text-sm text-[#64748B]">
+                Custom GPT-4o mini scoring prompt for this role
+                {scoringPromptReady ? ` · version ${scoringPromptVersion}` : ""}.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void onRegeneratePrompt()}
+              disabled={regeneratingPrompt}
+              className={`inline-flex shrink-0 items-center gap-2 ${karta.btnOutlineTeal}`}
+            >
+              {regeneratingPrompt ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Regenerate Prompt
+            </button>
+          </div>
+
+          <label className="mt-6 block">
+            <span className={karta.sectionHeading}>Role title</span>
+            <input
+              type="text"
+              value={extractedTitle}
+              onChange={(e) => onTitleChange(e.target.value)}
+              className={`mt-2 w-full ${karta.input} text-lg font-semibold`}
+            />
+          </label>
+
+          <dl className="mt-6 grid gap-3 text-sm sm:grid-cols-3">
+            <div className="rounded-md bg-[#F8FAFC] px-3 py-2">
+              <dt className="text-xs font-medium uppercase text-[#64748B]">
+                Must-haves
+              </dt>
+              <dd className="mt-1 font-semibold text-[#1E293B]">
+                {analysis.deal_breakers.length}
+              </dd>
+            </div>
+            <div className="rounded-md bg-[#F8FAFC] px-3 py-2">
+              <dt className="text-xs font-medium uppercase text-[#64748B]">
+                Key requirements
+              </dt>
+              <dd className="mt-1 font-semibold text-[#1E293B]">
+                {analysis.core_signals.length}
+              </dd>
+            </div>
+            <div className="rounded-md bg-[#F8FAFC] px-3 py-2">
+              <dt className="text-xs font-medium uppercase text-[#64748B]">
+                Title band
+              </dt>
+              <dd className="mt-1 font-semibold text-[#1E293B]">
+                {analysis.title_band}
+              </dd>
+            </div>
+          </dl>
+        </section>
+      )}
+
+      {tab === "requirements" && (
+        <div className="space-y-8">
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h3 className="text-sm font-semibold text-slate-900">Seniority band</h3>
         <p className="mt-1 text-xs text-slate-500">
@@ -180,6 +271,8 @@ export function AnalysisCards({
         clusters={analysis.semantic_clusters}
         onChange={(semantic_clusters) => patch({ semantic_clusters })}
       />
+        </div>
+      )}
     </div>
   );
 }

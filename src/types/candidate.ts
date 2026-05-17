@@ -1,3 +1,7 @@
+import type {
+  CandidateScoringStatus,
+  CandidateSource,
+} from "@/types/job";
 import type { CompanyType, FitVerdict, ResumeQualitySignals } from "@/types/score";
 import type { CandidateScoreResult } from "@/types/score";
 
@@ -104,6 +108,14 @@ export type CandidateRow = {
   stage: CandidateStage;
   tag: string | null;
   activity: CandidateActivity[];
+  job_id: string | null;
+  source: CandidateSource;
+  application_email: string | null;
+  application_phone: string | null;
+  application_location: string | null;
+  applied_at: string | null;
+  scoring_status: CandidateScoringStatus;
+  linkedin_url: string | null;
   created_at: string;
   updated_at: string;
 };

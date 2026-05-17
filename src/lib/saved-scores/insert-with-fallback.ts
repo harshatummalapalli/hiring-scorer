@@ -1,6 +1,7 @@
 import { insertSavedScore } from "@/lib/supabase/server";
 
 const SNAPSHOT_KEYS = ["score_snapshot", "role_brief_snapshot"] as const;
+const OPTIONAL_SCORE_KEYS = ["scoring_prompt_version"] as const;
 
 export function stripSnapshotColumns(
   payload: Record<string, unknown>,
@@ -10,6 +11,21 @@ export function stripSnapshotColumns(
     delete row[key];
   }
   return row;
+}
+
+function stripOptionalScoreColumns(
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  const row = { ...payload };
+  for (const key of OPTIONAL_SCORE_KEYS) {
+    delete row[key];
+  }
+  return row;
+}
+
+function isMissingOptionalScoreColumnError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return OPTIONAL_SCORE_KEYS.some((k) => lower.includes(k));
 }
 
 function errorMessage(err: unknown): string {
@@ -41,10 +57,11 @@ export async function insertSavedScoreWithFallback(
 ): Promise<{ id: string }> {
   let row: Record<string, unknown> = { ...payload };
   let strippedSnapshots = false;
+  let strippedOptional = false;
   let clearedRoleBriefId = false;
   let lastError: unknown;
 
-  for (let attempt = 0; attempt < 6; attempt++) {
+  for (let attempt = 0; attempt < 8; attempt++) {
     try {
       return await insertSavedScore(row);
     } catch (err) {
@@ -58,6 +75,16 @@ export async function insertSavedScoreWithFallback(
       ) {
         row = stripSnapshotColumns(row);
         strippedSnapshots = true;
+        continue;
+      }
+
+      if (
+        !strippedOptional &&
+        isMissingOptionalScoreColumnError(msg) &&
+        row.scoring_prompt_version != null
+      ) {
+        row = stripOptionalScoreColumns(row);
+        strippedOptional = true;
         continue;
       }
 

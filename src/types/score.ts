@@ -129,6 +129,8 @@ export type {
 
 export type CandidateScoreResult = {
   overall_score: number;
+  /** Shown in UI when must-have deal breakers were missing and score was capped down. */
+  deal_breaker_warning?: string | null;
   /** True when overall used provisional scores for one or more dimensions. */
   overall_provisional: boolean;
   confidence_level: "high" | "medium" | "low" | "review";

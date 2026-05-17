@@ -2,9 +2,18 @@ import { NextResponse } from "next/server";
 import { addCandidateToPipeline } from "@/lib/pipeline/add-to-pipeline";
 import { getPipelineBoard } from "@/lib/supabase/pipeline";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const roleId = searchParams.get("role_brief_id")?.trim();
     const board = await getPipelineBoard();
+    if (roleId) {
+      const section = board.sections.find((s) => s.role_brief_id === roleId);
+      return NextResponse.json({
+        ...board,
+        sections: section ? [section] : [],
+      });
+    }
     return NextResponse.json(board);
   } catch (err) {
     const message =

@@ -13,8 +13,8 @@ const DIMENSION_KEYS: DimensionKey[] = [
 import { AGREEMENT_THRESHOLD } from "@/lib/ai/agreement-threshold";
 import type { ScoringArchitecture } from "@/types/scoring-debug";
 
-export const SCORING_ARCHITECTURE: ScoringArchitecture = "3-call";
-export const MODEL_CALL_COUNT = 3;
+export const SCORING_ARCHITECTURE: ScoringArchitecture = "1-call";
+export const MODEL_CALL_COUNT = 1;
 
 export function buildScoringConfigurationSummary(roleBrief: RoleBrief): string {
   const totalWeight = DIMENSION_KEYS.reduce(
@@ -31,15 +31,12 @@ export function buildScoringConfigurationSummary(roleBrief: RoleBrief): string {
   );
 
   return [
-    `Architecture: ${SCORING_ARCHITECTURE} parallel (${MODEL_CALL_COUNT} model API calls)`,
-    `• ${MODEL_ROLE_LABELS.gpt4o}`,
-    `• ${MODEL_ROLE_LABELS.claude}`,
-    `• ${MODEL_ROLE_LABELS.gemini}`,
+    `Architecture: ${SCORING_ARCHITECTURE} (GPT-4o mini, temperature 0)`,
     `Role brief: ${roleBrief.title}${roleBrief.title_band ? ` · ${roleBrief.title_band}` : ""}`,
     `Brief ID: ${roleBrief.id}`,
     `Dimension weights (total ${totalWeight}): skills=${roleBrief.weight_skills}, trajectory=${roleBrief.weight_trajectory}, domain=${roleBrief.weight_domain}, seniority=${roleBrief.weight_seniority}, tenure=${roleBrief.weight_tenure}`,
-    `Consensus rule: spread ≤${AGREEMENT_THRESHOLD} → unanimous; two within ${AGREEMENT_THRESHOLD} → majority; else divergent (provisional avg)`,
-    `Overall score: round(Σ dimension_score × weight / Σ weights)`,
+    `Quote rule: scores above 60 require verifiable resume quote (first 20 chars)`,
+    `Overall score: round(Σ dimension_score × weight / Σ weights); verdict from recalculated score`,
   ].join("\n");
 }
 

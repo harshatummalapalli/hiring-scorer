@@ -78,12 +78,15 @@ export function KartaMatchBreakdown({
             }[key];
             return (
               <div key={key}>
-                <div className="mb-1 flex justify-between text-[13px]">
-                  <span className="font-medium text-[#334155]">
+                <div className="mb-1 flex items-baseline justify-between gap-2 text-[13px]">
+                  <span className="min-w-0 font-medium text-[#334155]">
                     {DIMENSION_LABELS[key]}
+                    <span className="ml-1.5 font-normal text-[#64748B]">
+                      (weight {weight}/10)
+                    </span>
                   </span>
-                  <span className="font-semibold text-[#1E293B]">
-                    {Math.round(score)} · w{weight}
+                  <span className="shrink-0 font-semibold text-[#1E293B]">
+                    {Math.round(score)}
                   </span>
                 </div>
                 <div className={karta.barTrack}>

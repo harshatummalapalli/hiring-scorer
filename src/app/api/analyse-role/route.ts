@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { analyseJobDescription } from "@/lib/role-brief/analyse-jd";
+import { analyseJobDescriptionWithScoringPrompt } from "@/lib/role-brief/analyse-jd";
 import { deriveTitleFromAnalysis } from "@/types/role-brief";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export async function POST(request: Request) {
   try {
@@ -15,10 +15,22 @@ export async function POST(request: Request) {
       );
     }
 
-    const analysis = await analyseJobDescription(body.jobDescription);
-    const title = deriveTitleFromAnalysis(analysis, body.jobDescription);
+    const result = await analyseJobDescriptionWithScoringPrompt(
+      body.jobDescription,
+      1,
+    );
+    const title = deriveTitleFromAnalysis(
+      result.analysis,
+      body.jobDescription,
+    );
 
-    return NextResponse.json({ analysis, title });
+    return NextResponse.json({
+      analysis: result.analysis,
+      title,
+      scoring_prompt: result.scoring_prompt,
+      scoring_prompt_generated_at: result.scoring_prompt_generated_at,
+      scoring_prompt_version: result.scoring_prompt_version,
+    });
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to analyse job description";

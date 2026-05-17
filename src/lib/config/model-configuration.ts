@@ -13,11 +13,10 @@ export type ModelConfiguration = {
   assignment: RoleAssignment;
 };
 
-/** Permanent production configuration — do not change without product sign-off. */
+/** Production match scoring: GPT-4o mini only. */
 export const FIXED_MODEL_CONFIGURATION: ModelConfiguration = {
-  id: "gemini-extractor_claude-advocate_gpt-scorer",
-  label:
-    "Gemini Flash=Signal Extractor · Claude=Devil's Advocate · GPT-4o=Structured Scorer",
+  id: "gpt4o-mini-scorer",
+  label: "GPT-4o mini (candidate match)",
   assignment: {
     gemini: "signal_extractor",
     claude: "devils_advocate",
