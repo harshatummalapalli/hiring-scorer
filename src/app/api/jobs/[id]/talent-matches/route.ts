@@ -5,15 +5,9 @@ import {
 } from "@/lib/recommendations/local-recommendation";
 import { getJobById } from "@/lib/supabase/jobs";
 import { listCandidates } from "@/lib/supabase/candidates";
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 
 type Params = { params: Promise<{ id: string }> };
-
-function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-  return createClient(url, key);
-}
 
 export async function GET(_request: Request, { params }: Params) {
   try {
@@ -26,7 +20,7 @@ export async function GET(_request: Request, { params }: Params) {
     const allCandidates = await listCandidates();
     const pool = allCandidates.filter((c) => c.job_id !== jobId);
 
-    const supabase = getSupabase();
+    const supabase = await createSupabaseServerClient();
     const { data: scoreRows } = await supabase
       .from("saved_scores")
       .select("candidate_id, role_brief_id, role_brief_title, overall_score, created_at")

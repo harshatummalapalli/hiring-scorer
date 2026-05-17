@@ -1,4 +1,10 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  getAuthenticatedUserId,
+  withCreatedBy,
+} from "@/lib/supabase/created-by";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import {
   parseCandidateSource,
   parseScoringStatus,
@@ -19,15 +25,8 @@ import { getCandidateHeaderName } from "@/lib/candidates/profile-display";
 import { scoreToVerdict } from "@/lib/scoring/recruiter-card";
 import type { CandidateScoreResult } from "@/types/score";
 
-function getServerSupabase(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-  if (!url.startsWith("https://") || !key.trim()) {
-    throw new Error(
-      "Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local.",
-    );
-  }
-  return createClient(url, key);
+async function getServerSupabase(): Promise<SupabaseClient> {
+  return createSupabaseServerClient();
 }
 
 function rowToCandidate(row: Record<string, unknown>): CandidateRow {
@@ -70,7 +69,7 @@ async function backfillResolvedDisplayNames(
   rawRows: Record<string, unknown>[],
   candidates: CandidateRow[],
 ): Promise<void> {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const updates = candidates.flatMap((candidate, i) => {
     const rawName = String(rawRows[i]?.display_name ?? "").trim();
     if (!rawName || rawName === candidate.display_name) return [];
@@ -89,7 +88,7 @@ async function backfillResolvedDisplayNames(
 }
 
 export async function listCandidatesByJob(jobId: string): Promise<CandidateRow[]> {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const { data, error } = await supabase
     .from("candidates")
     .select("*")
@@ -107,7 +106,7 @@ export async function listCandidatesByJob(jobId: string): Promise<CandidateRow[]
 }
 
 export async function listCandidates(): Promise<CandidateRow[]> {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const { data, error } = await supabase
     .from("candidates")
     .select("*")
@@ -180,7 +179,7 @@ export async function listCandidatesWithSummaries(): Promise<
   const rows = await listCandidates();
   if (rows.length === 0) return [];
 
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const { data: scoreRows, error } = await supabase
     .from("saved_scores")
     .select(
@@ -221,7 +220,7 @@ export async function listCandidatesWithSummaries(): Promise<
 }
 
 export async function getCandidateById(id: string): Promise<CandidateDetail | null> {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const { data, error } = await supabase
     .from("candidates")
     .select("*")
@@ -323,30 +322,72 @@ export async function insertCandidate(row: {
   application_location?: string | null;
   linkedin_url?: string | null;
 }): Promise<{ id: string }> {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
+  const userId = await getAuthenticatedUserId(supabase);
   const { data, error } = await supabase
     .from("candidates")
-    .insert({
-      display_name: row.display_name,
-      resume_filename: row.resume_filename,
-      resume_text: row.resume_text,
-      signal_profile: row.signal_profile,
-      activity: row.activity,
-      ...(row.job_id ? { job_id: row.job_id } : {}),
-      ...(row.source ? { source: row.source } : {}),
-      ...(row.scoring_status ? { scoring_status: row.scoring_status } : {}),
-      ...(row.applied_at ? { applied_at: row.applied_at } : {}),
-      ...(row.application_email
-        ? { application_email: row.application_email }
-        : {}),
-      ...(row.application_phone
-        ? { application_phone: row.application_phone }
-        : {}),
-      ...(row.application_location
-        ? { application_location: row.application_location }
-        : {}),
-      ...(row.linkedin_url ? { linkedin_url: row.linkedin_url } : {}),
-    })
+    .insert(
+      withCreatedBy(
+        {
+          display_name: row.display_name,
+          resume_filename: row.resume_filename,
+          resume_text: row.resume_text,
+          signal_profile: row.signal_profile,
+          activity: row.activity,
+          ...(row.job_id ? { job_id: row.job_id } : {}),
+          ...(row.source ? { source: row.source } : {}),
+          ...(row.scoring_status ? { scoring_status: row.scoring_status } : {}),
+          ...(row.applied_at ? { applied_at: row.applied_at } : {}),
+          ...(row.application_email
+            ? { application_email: row.application_email }
+            : {}),
+          ...(row.application_phone
+            ? { application_phone: row.application_phone }
+            : {}),
+          ...(row.application_location
+            ? { application_location: row.application_location }
+            : {}),
+          ...(row.linkedin_url ? { linkedin_url: row.linkedin_url } : {}),
+        },
+        userId,
+      ),
+    )
+    .select("id")
+    .single();
+
+  if (error) throw new Error(error.message);
+  if (!data?.id) throw new Error("Insert succeeded but no id returned.");
+  return { id: data.id as string };
+}
+
+/** Public application form: attribute candidate to the job owner's account. */
+export async function insertApplicationCandidate(
+  row: Parameters<typeof insertCandidate>[0],
+  ownerUserId: string,
+): Promise<{ id: string }> {
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("candidates")
+    .insert(
+      withCreatedBy(
+        {
+          display_name: row.display_name,
+          resume_filename: row.resume_filename,
+          resume_text: row.resume_text,
+          signal_profile: row.signal_profile,
+          activity: row.activity,
+          job_id: row.job_id ?? null,
+          source: row.source ?? "application",
+          scoring_status: row.scoring_status ?? "unscored",
+          applied_at: row.applied_at ?? new Date().toISOString(),
+          application_email: row.application_email ?? null,
+          application_phone: row.application_phone ?? null,
+          application_location: row.application_location ?? null,
+          linkedin_url: row.linkedin_url ?? null,
+        },
+        ownerUserId,
+      ),
+    )
     .select("id")
     .single();
 
@@ -359,7 +400,7 @@ export async function updateCandidate(
   id: string,
   patch: Record<string, unknown>,
 ): Promise<void> {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const { error } = await supabase
     .from("candidates")
     .update({ ...patch, updated_at: new Date().toISOString() })
@@ -371,10 +412,11 @@ export async function insertCandidateNote(
   candidateId: string,
   body: string,
 ): Promise<CandidateNote> {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
+  const userId = await getAuthenticatedUserId(supabase);
   const { data, error } = await supabase
     .from("candidate_notes")
-    .insert({ candidate_id: candidateId, body })
+    .insert(withCreatedBy({ candidate_id: candidateId, body }, userId))
     .select("*")
     .single();
 

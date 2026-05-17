@@ -9,16 +9,10 @@ import {
   insightsFromScoreResult,
 } from "@/lib/pipeline/insights-from-score";
 import { scoreToVerdict } from "@/lib/scoring/recruiter-card";
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import type { CandidateScoreResult } from "@/types/score";
 import type { PipelineCandidateRow } from "@/types/pipeline";
 import { getCandidateHeaderName } from "@/lib/candidates/profile-display";
-
-function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-  return createClient(url, key);
-}
 
 async function loadScoreForRole(
   candidateId: string,
@@ -28,7 +22,7 @@ async function loadScoreForRole(
   verdict: string;
   score_snapshot: CandidateScoreResult | null;
 } | null> {
-  const supabase = getSupabase();
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("saved_scores")
     .select("overall_score, score_snapshot")
@@ -55,7 +49,7 @@ async function loadLatestScoreAnyRole(
   verdict: string;
   score_snapshot: CandidateScoreResult | null;
 } | null> {
-  const supabase = getSupabase();
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("saved_scores")
     .select("overall_score, score_snapshot")

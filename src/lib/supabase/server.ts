@@ -1,22 +1,20 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { getAuthenticatedUserId, withCreatedBy } from "@/lib/supabase/created-by";
+import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 
-function getServerSupabase(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-
-  if (!url.startsWith("https://") || !key.trim()) {
-    throw new Error(
-      "Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local.",
-    );
-  }
-
-  return createClient(url, key);
+async function getAuthedSupabase(): Promise<{
+  supabase: SupabaseClient;
+  userId: string;
+}> {
+  const supabase = await createSupabaseServerClient();
+  const userId = await getAuthenticatedUserId(supabase);
+  return { supabase, userId };
 }
 
 export async function insertScoringRun(
   row: Record<string, unknown>,
 ): Promise<{ id: string }> {
-  const supabase = getServerSupabase();
+  const { supabase } = await getAuthedSupabase();
   const { data, error } = await supabase
     .from("scoring_runs")
     .insert(row)
@@ -31,10 +29,10 @@ export async function insertScoringRun(
 export async function insertSavedScore(
   row: Record<string, unknown>,
 ): Promise<{ id: string }> {
-  const supabase = getServerSupabase();
+  const { supabase, userId } = await getAuthedSupabase();
   const { data, error } = await supabase
     .from("saved_scores")
-    .insert(row)
+    .insert(withCreatedBy(row, userId))
     .select("id")
     .single();
 
@@ -44,7 +42,7 @@ export async function insertSavedScore(
 }
 
 export async function listScoringRuns(): Promise<Record<string, unknown>[]> {
-  const supabase = getServerSupabase();
+  const { supabase } = await getAuthedSupabase();
   const { data, error } = await supabase
     .from("scoring_runs")
     .select("*")
@@ -57,9 +55,7 @@ export async function listScoringRuns(): Promise<Record<string, unknown>[]> {
 export async function upsertScoringRunByScenario(
   row: Record<string, unknown>,
 ): Promise<{ id: string; inserted: boolean }> {
-  const supabase = getServerSupabase();
-  const candidate = String(row.candidate_filename).toLowerCase();
-  const scenario = String(row.scenario_label).toLowerCase();
+  const { supabase } = await getAuthedSupabase();
 
   const { data: existing } = await supabase
     .from("scoring_runs")
@@ -77,8 +73,6 @@ export async function upsertScoringRunByScenario(
     return { id: existing.id as string, inserted: false };
   }
 
-  void candidate;
-  void scenario;
   const { id } = await insertScoringRun(row);
   return { id, inserted: true };
 }

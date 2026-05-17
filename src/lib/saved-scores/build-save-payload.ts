@@ -44,6 +44,7 @@ function minimalRoleBrief(
     application_count: 0,
     auto_score_mode: "needs_scoring",
     status: "active",
+    created_by: null,
     created_at: partial.created_at ?? "",
   };
 }

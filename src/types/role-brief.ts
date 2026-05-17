@@ -73,6 +73,7 @@ export type RoleBrief = {
   application_count: number;
   auto_score_mode: AutoScoreMode;
   status: JobStatus;
+  created_by: string | null;
   created_at: string;
 };
 
@@ -349,6 +350,7 @@ export function parseRoleBriefRow(row: Record<string, unknown>): RoleBrief {
     application_count: Math.max(0, Number(row.application_count ?? 0) || 0),
     auto_score_mode: parseAutoScoreMode(row.auto_score_mode),
     status: parseJobStatus(row.status),
+    created_by: row.created_by != null ? String(row.created_by) : null,
     created_at: String(row.created_at ?? new Date().toISOString()),
   };
 }

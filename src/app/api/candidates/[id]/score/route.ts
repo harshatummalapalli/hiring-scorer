@@ -9,18 +9,12 @@ import { insertSavedScoreWithFallback } from "@/lib/saved-scores/insert-with-fal
 import { buildSavedScoreInsertPayload } from "@/lib/saved-scores/build-save-payload";
 import { scoringStatusFromOverall } from "@/lib/jobs/scoring-status";
 import { getCandidateById, updateCandidate } from "@/lib/supabase/candidates";
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import type { RoleBrief } from "@/types/role-brief";
 
 export const maxDuration = 120;
 
 type Params = { params: Promise<{ id: string }> };
-
-function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-  return createClient(url, key);
-}
 
 export async function POST(request: Request, { params }: Params) {
   try {
@@ -38,7 +32,7 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: "Candidate not found." }, { status: 404 });
     }
 
-    const supabase = getSupabase();
+    const supabase = await createSupabaseServerClient();
     const { data: briefRow, error: briefError } = await supabase
       .from("role_briefs")
       .select("*")

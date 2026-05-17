@@ -1,19 +1,15 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { computeJobListStats, daysSince } from "@/lib/jobs/stats";
+import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import { parseRoleBriefRow } from "@/types/role-brief";
 import type { Job, JobListItem } from "@/types/job";
 
-function getServerSupabase(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-  if (!url.startsWith("https://") || !key.trim()) {
-    throw new Error("Supabase is not configured.");
-  }
-  return createClient(url, key);
+async function getServerSupabase(): Promise<SupabaseClient> {
+  return createSupabaseServerClient();
 }
 
 export async function listJobsWithStats(): Promise<JobListItem[]> {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const [jobsRes, applicantsRes, scoresRes] = await Promise.all([
     supabase.from("role_briefs").select("*").order("created_at", { ascending: false }),
     supabase.from("candidates").select("job_id, scoring_status"),
@@ -46,7 +42,7 @@ export async function listJobsWithStats(): Promise<JobListItem[]> {
 }
 
 export async function getJobById(id: string): Promise<Job | null> {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const { data, error } = await supabase
     .from("role_briefs")
     .select("*")
@@ -62,7 +58,7 @@ export async function updateJob(
   id: string,
   patch: Record<string, unknown>,
 ): Promise<Job> {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const { data, error } = await supabase
     .from("role_briefs")
     .update(patch)

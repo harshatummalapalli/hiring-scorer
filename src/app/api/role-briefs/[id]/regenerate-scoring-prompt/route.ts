@@ -2,22 +2,16 @@ import { NextResponse } from "next/server";
 import { generateRoleScoringPrompt } from "@/lib/role-brief/generate-scoring-prompt";
 import { analysisFromRoleBrief } from "@/types/role-brief";
 import { parseRoleBriefRow } from "@/types/role-brief";
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 
 export const maxDuration = 120;
 
 type Params = { params: Promise<{ id: string }> };
 
-function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-  return createClient(url, key);
-}
-
 export async function POST(_request: Request, { params }: Params) {
   try {
     const { id } = await params;
-    const supabase = getSupabase();
+    const supabase = await createSupabaseServerClient();
 
     const { data: row, error: fetchError } = await supabase
       .from("role_briefs")

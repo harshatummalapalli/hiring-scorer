@@ -15,6 +15,10 @@ import {
   stripJobArchitectureColumns,
   stripScoringPromptColumns,
 } from "@/lib/role-brief/insert-brief-payload";
+import {
+  getAuthenticatedUserId,
+  withCreatedBy,
+} from "@/lib/supabase/created-by";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import type { JobListItem } from "@/types/job";
 import { JOB_STATUS_LABELS } from "@/types/job";
@@ -70,12 +74,16 @@ export function JobsPage() {
     setError(null);
     try {
       const supabase = createSupabaseClient();
-      let row = buildFullBriefPayload(
-        data.title,
-        data.jobDescription,
-        data.analysis,
-        data.scoringPrompt,
-        true,
+      const userId = await getAuthenticatedUserId(supabase);
+      let row: Record<string, unknown> = withCreatedBy(
+        buildFullBriefPayload(
+          data.title,
+          data.jobDescription,
+          data.analysis,
+          data.scoringPrompt,
+          true,
+        ),
+        userId,
       );
       let result = await supabase.from("role_briefs").insert(row).select().single();
       if (result.error) {

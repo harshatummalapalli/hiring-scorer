@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { listCandidatesByJob } from "@/lib/supabase/candidates";
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import type { CandidateListItem, CandidateScoreSummary } from "@/types/candidate";
 import { scoreToVerdict } from "@/lib/scoring/recruiter-card";
 
@@ -8,18 +8,12 @@ export const maxDuration = 60;
 
 type Params = { params: Promise<{ id: string }> };
 
-function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-  return createClient(url, key);
-}
-
 export async function GET(_request: Request, { params }: Params) {
   try {
     const { id: jobId } = await params;
     const rows = await listCandidatesByJob(jobId);
 
-    const supabase = getSupabase();
+    const supabase = await createSupabaseServerClient();
     const { data: scoreRows } = await supabase
       .from("saved_scores")
       .select(

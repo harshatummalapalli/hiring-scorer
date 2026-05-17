@@ -18,6 +18,10 @@ import {
   stripJobArchitectureColumns,
   stripScoringPromptColumns,
 } from "@/lib/role-brief/insert-brief-payload";
+import {
+  getAuthenticatedUserId,
+  withCreatedBy,
+} from "@/lib/supabase/created-by";
 import { createSupabaseClient, getSupabaseConfigError } from "@/lib/supabase/client";
 import type {
   RoleBrief,
@@ -57,13 +61,17 @@ async function upsertRoleBrief(
     return parseRoleBriefRow(data as Record<string, unknown>);
   };
 
-  const full = buildFullBriefPayload(
+  let full: Record<string, unknown> = buildFullBriefPayload(
     title,
     jobDescription,
     analysis,
     scoringPrompt,
     !editingId,
   );
+  if (!editingId) {
+    const userId = await getAuthenticatedUserId(supabase);
+    full = withCreatedBy(full, userId);
+  }
   try {
     return await attempt(full);
   } catch (err) {

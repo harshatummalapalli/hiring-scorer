@@ -1,4 +1,9 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  getAuthenticatedUserId,
+  withCreatedBy,
+} from "@/lib/supabase/created-by";
+import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import { parseRoleBriefRow } from "@/types/role-brief";
 import type { RoleBrief } from "@/types/role-brief";
 import type {
@@ -11,13 +16,8 @@ import type { FitVerdict } from "@/types/score";
 import { VERDICT_SORT_ORDER } from "@/lib/brand/karta";
 import { scoreToVerdict } from "@/lib/scoring/recruiter-card";
 
-function getServerSupabase(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-  if (!url.startsWith("https://") || !key.trim()) {
-    throw new Error("Supabase is not configured.");
-  }
-  return createClient(url, key);
+async function getServerSupabase(): Promise<SupabaseClient> {
+  return createSupabaseServerClient();
 }
 
 function parseInsights(raw: unknown): PipelineInsights {
@@ -57,7 +57,7 @@ function rowToPipelineCandidate(
 }
 
 export async function listPipelineCandidates(): Promise<PipelineCandidateRow[]> {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const { data, error } = await supabase
     .from("pipeline_candidates")
     .select("*")
@@ -73,7 +73,7 @@ export async function listPipelineCandidates(): Promise<PipelineCandidateRow[]> 
 }
 
 export async function listRoleBriefs(): Promise<RoleBrief[]> {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const { data, error } = await supabase
     .from("role_briefs")
     .select("*")
@@ -99,7 +99,7 @@ function sortPipelineCandidates(
 }
 
 async function countScreenedCandidates(): Promise<number> {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const { data, error } = await supabase.from("candidates").select("activity");
   if (error) return 0;
   let count = 0;
@@ -152,7 +152,7 @@ export async function getPipelineEntry(
   roleBriefId: string,
   candidateId: string,
 ): Promise<PipelineCandidateRow | null> {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const { data, error } = await supabase
     .from("pipeline_candidates")
     .select("*")
@@ -180,24 +180,30 @@ export async function insertPipelineCandidate(row: {
   expected_salary?: string | null;
   recruiter_notes?: string | null;
 }): Promise<PipelineCandidateRow> {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
+  const userId = await getAuthenticatedUserId(supabase);
   const { data, error } = await supabase
     .from("pipeline_candidates")
-    .insert({
-      role_brief_id: row.role_brief_id,
-      candidate_id: row.candidate_id,
-      candidate_name: row.candidate_name,
-      email: row.email,
-      phone: row.phone,
-      location: row.location,
-      fit_score: row.fit_score,
-      fit_verdict: row.fit_verdict,
-      insights: row.insights,
-      relocation: row.relocation ?? null,
-      present_salary: row.present_salary ?? null,
-      expected_salary: row.expected_salary ?? null,
-      recruiter_notes: row.recruiter_notes ?? null,
-    })
+    .insert(
+      withCreatedBy(
+        {
+          role_brief_id: row.role_brief_id,
+          candidate_id: row.candidate_id,
+          candidate_name: row.candidate_name,
+          email: row.email,
+          phone: row.phone,
+          location: row.location,
+          fit_score: row.fit_score,
+          fit_verdict: row.fit_verdict,
+          insights: row.insights,
+          relocation: row.relocation ?? null,
+          present_salary: row.present_salary ?? null,
+          expected_salary: row.expected_salary ?? null,
+          recruiter_notes: row.recruiter_notes ?? null,
+        },
+        userId,
+      ),
+    )
     .select("*")
     .single();
 
@@ -217,7 +223,7 @@ export async function updatePipelineCandidate(
     >
   >,
 ): Promise<PipelineCandidateRow> {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const { data, error } = await supabase
     .from("pipeline_candidates")
     .update(patch)
@@ -232,7 +238,7 @@ export async function updatePipelineCandidate(
 export async function listScoredCandidatesForRole(
   roleBriefId: string,
 ): Promise<ScoredCandidateOption[]> {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const [scoresRes, pipelineRes, candidatesRes] = await Promise.all([
     supabase
       .from("saved_scores")
@@ -290,7 +296,7 @@ export async function listScoredCandidatesForRole(
 export async function listTalentPoolScoredCandidates(
   targetRoleBriefId: string,
 ): Promise<ScoredCandidateOption[]> {
-  const supabase = getServerSupabase();
+  const supabase = await getServerSupabase();
   const [scoresRes, pipelineRes, candidatesRes] = await Promise.all([
     supabase
       .from("saved_scores")

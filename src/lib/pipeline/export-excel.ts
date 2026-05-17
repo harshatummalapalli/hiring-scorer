@@ -3,7 +3,7 @@ import { formatInsightsText } from "@/lib/pipeline/insights-from-score";
 import { topWatchPoint } from "@/lib/pipeline/insights-from-score";
 import type { PipelineRoleSection } from "@/types/pipeline";
 import type { CandidateScoreResult, FitVerdict } from "@/types/score";
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 const VERDICT_FILL: Record<FitVerdict, string> = {
   "STRONG FIT": "C6EFCE",
@@ -24,11 +24,12 @@ async function loadWatchPoints(
   const map = new Map<string, string>();
   if (candidateIds.length === 0) return map;
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-  if (!url || !key) return map;
-
-  const supabase = createClient(url, key);
+  let supabase;
+  try {
+    supabase = createSupabaseBrowserClient();
+  } catch {
+    return map;
+  }
   const { data } = await supabase
     .from("saved_scores")
     .select("candidate_id, score_snapshot")
