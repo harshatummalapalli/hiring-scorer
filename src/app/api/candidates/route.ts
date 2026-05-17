@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
+import { storeUploadedResumeForCandidate } from "@/lib/candidates/store-uploaded-resume";
 import { buildSignalProfile } from "@/lib/candidates/build-signal-profile";
 import { getCandidateHeaderName } from "@/lib/candidates/profile-display";
-import { normalizeResumeText } from "@/lib/resume/normalize-resume-text";
 import { createActivity } from "@/lib/candidates/activity";
+import { normalizeResumeText } from "@/lib/resume/normalize-resume-text";
+import { getAuthenticatedUserId } from "@/lib/supabase/created-by";
 import {
   insertCandidate,
   listCandidatesWithSummaries,
 } from "@/lib/supabase/candidates";
+import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
+import { limitErrorResponse } from "@/lib/workspace/limits";
 
 export const maxDuration = 60;
 
@@ -43,9 +47,37 @@ function coerceResumeText(value: unknown): string {
   return "";
 }
 
+function isMultipart(request: Request): boolean {
+  const ct = request.headers.get("content-type") ?? "";
+  return ct.includes("multipart/form-data");
+}
+
+async function parsePostInput(request: Request): Promise<{
+  body: PostBody;
+  resumeFile: File | null;
+}> {
+  if (isMultipart(request)) {
+    const form = await request.formData();
+    const resumeFile = form.get("resumeFile");
+    return {
+      body: {
+        resumeText: coerceResumeText(form.get("resumeText")),
+        resumeFilename: String(form.get("resumeFilename") ?? "").trim() || undefined,
+        displayName: String(form.get("displayName") ?? "").trim() || undefined,
+        jobId: String(form.get("jobId") ?? "").trim() || undefined,
+        source: String(form.get("source") ?? "").trim() || undefined,
+      },
+      resumeFile: resumeFile instanceof File && resumeFile.size > 0 ? resumeFile : null,
+    };
+  }
+
+  const json = (await request.json()) as PostBody;
+  return { body: json, resumeFile: null };
+}
+
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as PostBody;
+    const { body, resumeFile } = await parsePostInput(request);
     const resumeText = normalizeResumeText(coerceResumeText(body.resumeText));
     if (!resumeText) {
       return NextResponse.json(
@@ -61,7 +93,9 @@ export async function POST(request: Request) {
     }
 
     const resumeFilename =
-      body.resumeFilename?.trim() || "candidate-resume.pdf";
+      body.resumeFilename?.trim() ||
+      resumeFile?.name?.trim() ||
+      "candidate-resume.pdf";
 
     const signal_profile = buildSignalProfile(resumeText, resumeFilename);
     const display_name =
@@ -92,6 +126,26 @@ export async function POST(request: Request) {
         : {}),
     });
 
+    if (resumeFile) {
+      const supabase = await createSupabaseServerClient();
+      const userId = await getAuthenticatedUserId(supabase);
+      try {
+        await storeUploadedResumeForCandidate(userId, id, jobId, resumeFile);
+      } catch (storageErr) {
+        const message =
+          storageErr instanceof Error
+            ? storageErr.message
+            : "Failed to store resume file";
+        return NextResponse.json(
+          {
+            error: `Candidate created but resume file could not be stored: ${message}`,
+            id,
+          },
+          { status: 500 },
+        );
+      }
+    }
+
     return NextResponse.json({
       id,
       display_name,
@@ -99,6 +153,10 @@ export async function POST(request: Request) {
       extractionSource: "code",
     });
   } catch (err) {
+    const limited = limitErrorResponse(err);
+    if (limited) {
+      return NextResponse.json(limited.body, { status: limited.status });
+    }
     const message =
       err instanceof Error ? err.message : "Failed to create candidate";
     const status = message.includes("does not exist")

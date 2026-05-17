@@ -7,6 +7,7 @@ export type AdminOverview = {
   candidatesScoredToday: number;
   apiCallsToday: number;
   estimatedApiCostTodayUsd: number;
+  totalResumeStorageBytes: number;
 };
 
 export type AdminWorkspaceRow = {
@@ -18,6 +19,8 @@ export type AdminWorkspaceRow = {
   lastActiveAt: string | null;
   jobsCount: number;
   candidatesCount: number;
+  maxJobs: number;
+  maxCandidates: number;
   scoresCount: number;
   totalApiCostUsd: number;
 };
@@ -105,6 +108,7 @@ export async function fetchAdminOverview(): Promise<AdminOverview> {
     scoresTodayRes,
     activityTodayRes,
     costTodayRes,
+    resumeSizesRes,
   ] = await Promise.all([
     admin.from("workspace_settings").select("user_id", { count: "exact", head: true }),
     admin
@@ -123,6 +127,7 @@ export async function fetchAdminOverview(): Promise<AdminOverview> {
       .from("saved_scores")
       .select("scoring_cost_usd")
       .gte("created_at", todayStart),
+    admin.from("candidates").select("resume_file_size"),
   ]);
 
   const activeUserIds = new Set(
@@ -135,12 +140,21 @@ export async function fetchAdminOverview(): Promise<AdminOverview> {
     if (Number.isFinite(n)) costToday += n;
   }
 
+  let totalResumeStorageBytes = 0;
+  if (!resumeSizesRes.error) {
+    for (const row of resumeSizesRes.data ?? []) {
+      const n = Number(row.resume_file_size);
+      if (Number.isFinite(n) && n > 0) totalResumeStorageBytes += n;
+    }
+  }
+
   return {
     totalWorkspaces: workspacesRes.count ?? 0,
     activeWorkspaces7d: activeUserIds.size,
     candidatesScoredToday: scoresTodayRes.count ?? 0,
     apiCallsToday: activityTodayRes.count ?? 0,
     estimatedApiCostTodayUsd: Math.round(costToday * 1_000_000) / 1_000_000,
+    totalResumeStorageBytes,
   };
 }
 
@@ -152,7 +166,9 @@ export async function fetchAdminWorkspaces(
 
   const { data: workspaces, error } = await admin
     .from("workspace_settings")
-    .select("user_id, settings, created_at")
+    .select(
+      "user_id, settings, created_at, max_jobs, max_candidates, current_job_count, current_candidate_count",
+    )
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(error.message);
@@ -225,6 +241,18 @@ export async function fetchAdminWorkspaces(
       if (!haystack.includes(q)) continue;
     }
 
+    const row = w as Record<string, unknown>;
+    const maxJobs = Number(row.max_jobs ?? 3) || 3;
+    const maxCandidates = Number(row.max_candidates ?? 1200) || 1200;
+    const counterJobs = Number(row.current_job_count);
+    const counterCandidates = Number(row.current_candidate_count);
+    const jobsCount = Number.isFinite(counterJobs)
+      ? counterJobs
+      : (jobsByUser.get(userId) ?? 0);
+    const candidatesCount = Number.isFinite(counterCandidates)
+      ? counterCandidates
+      : (candidatesByUser.get(userId) ?? 0);
+
     result.push({
       userId,
       ownerName,
@@ -232,8 +260,10 @@ export async function fetchAdminWorkspaces(
       companyName,
       createdAt: w.created_at as string,
       lastActiveAt: lastActiveByUser.get(userId) ?? null,
-      jobsCount: jobsByUser.get(userId) ?? 0,
-      candidatesCount: candidatesByUser.get(userId) ?? 0,
+      jobsCount,
+      candidatesCount,
+      maxJobs,
+      maxCandidates,
       scoresCount: scoresByUser.get(userId) ?? 0,
       totalApiCostUsd:
         Math.round((costByUser.get(userId) ?? 0) * 1_000_000) / 1_000_000,

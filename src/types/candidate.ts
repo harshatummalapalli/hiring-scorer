@@ -103,6 +103,12 @@ export type CandidateRow = {
   id: string;
   display_name: string;
   resume_filename: string | null;
+  resume_file_path: string | null;
+  resume_file_name: string | null;
+  resume_file_size: number | null;
+  resume_file_type: string | null;
+  resume_stored_at: string | null;
+  resume_delete_after: string | null;
   resume_text: string;
   signal_profile: CandidateSignalProfile;
   stage: CandidateStage;

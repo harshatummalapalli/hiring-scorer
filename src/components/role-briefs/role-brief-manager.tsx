@@ -7,6 +7,7 @@ import {
   roleBriefToCreatorState,
 } from "@/components/role-briefs/role-brief-creator";
 import { RoleBriefList } from "@/components/role-briefs/role-brief-list";
+import { JobLimitModal } from "@/components/workspace/job-limit-modal";
 import { useActiveRoleBrief } from "@/contexts/active-role-brief-context";
 import { getErrorMessage } from "@/lib/errors";
 import {
@@ -148,6 +149,7 @@ export function RoleBriefManager() {
   const [success, setSuccess] = useState<string | null>(null);
   const [recommendationsRefreshToken, setRecommendationsRefreshToken] =
     useState(0);
+  const [showJobLimitModal, setShowJobLimitModal] = useState(false);
 
   const configError = getSupabaseConfigError();
 
@@ -206,14 +208,32 @@ export function RoleBriefManager() {
     setSuccess(null);
 
     try {
-      const saved = await upsertRoleBrief(
-        data.title,
-        data.jobDescription,
-        data.analysis,
-        data.scoringPrompt,
-        data.analysisMeta,
-        editingId,
-      );
+      let saved: RoleBrief;
+      if (!editingId) {
+        const res = await fetch("/api/jobs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          if (json.code === "JOB_LIMIT_REACHED") {
+            setShowJobLimitModal(true);
+            return;
+          }
+          throw new Error(json.error ?? "Failed to save role brief");
+        }
+        saved = json.job as RoleBrief;
+      } else {
+        saved = await upsertRoleBrief(
+          data.title,
+          data.jobDescription,
+          data.analysis,
+          data.scoringPrompt,
+          data.analysisMeta,
+          editingId,
+        );
+      }
       setSuccess(`Saved “${saved.title}”.`);
       if (!editingId) {
         setActiveBrief(saved);
@@ -248,13 +268,9 @@ export function RoleBriefManager() {
     setError(null);
 
     try {
-      const supabase = createSupabaseClient();
-      const { error: deleteError } = await supabase
-        .from("role_briefs")
-        .delete()
-        .eq("id", id);
-
-      if (deleteError) throw deleteError;
+      const res = await fetch(`/api/jobs/${id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to delete job role");
 
       if (activeBriefId === id) setActiveBrief(null);
       if (editingId === id) resetCreator();
@@ -338,6 +354,11 @@ export function RoleBriefManager() {
           />
         )}
       </section>
+
+      <JobLimitModal
+        open={showJobLimitModal}
+        onClose={() => setShowJobLimitModal(false)}
+      />
     </div>
   );
 }

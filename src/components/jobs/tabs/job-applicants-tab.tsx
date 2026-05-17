@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, Loader2, Upload } from "lucide-react";
 import { VerdictBadge } from "@/components/candidates/profile-shared";
 import { getScoreForRole } from "@/lib/candidates/active-role-score";
 import { karta } from "@/lib/brand/karta";
+import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
 import type { CandidateListItem } from "@/types/candidate";
 import { sourceBadgeLabel } from "@/types/job";
@@ -101,15 +102,12 @@ export function JobApplicantsTab({ jobId, jobTitle }: JobApplicantsTabProps) {
     try {
       for (const file of Array.from(files)) {
         const resumeText = await parseResumeFile(file);
-        const res = await fetch("/api/candidates", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            resumeText,
-            resumeFilename: file.name,
-            jobId,
-            source: "uploaded",
-          }),
+        const res = await submitCandidateWithResume({
+          resumeText,
+          resumeFilename: file.name,
+          resumeFile: file,
+          jobId,
+          source: "uploaded",
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? "Upload failed");

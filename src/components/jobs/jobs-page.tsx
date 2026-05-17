@@ -4,24 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2, Plus } from "lucide-react";
 import { RoleBriefCreator } from "@/components/role-briefs/role-brief-creator";
+import { JobLimitModal } from "@/components/workspace/job-limit-modal";
 import { karta } from "@/lib/brand/karta";
 import { getErrorMessage } from "@/lib/errors";
-import {
-  buildFullBriefPayload,
-  buildLegacyBriefPayload,
-  isMissingJobArchitectureColumnError,
-  isMissingJdAnalysisMetaColumnError,
-  isMissingScoringPromptColumnError,
-  isMissingV2ColumnError,
-  stripJdAnalysisMetaColumns,
-  stripJobArchitectureColumns,
-  stripScoringPromptColumns,
-} from "@/lib/role-brief/insert-brief-payload";
-import {
-  getAuthenticatedUserId,
-  withCreatedBy,
-} from "@/lib/supabase/created-by";
-import { createSupabaseClient } from "@/lib/supabase/client";
 import type { JobListItem } from "@/types/job";
 import { JOB_STATUS_LABELS } from "@/types/job";
 import type {
@@ -29,7 +14,6 @@ import type {
   RoleBriefAnalysisMeta,
   RoleBriefScoringPrompt,
 } from "@/types/role-brief";
-import { parseRoleBriefRow } from "@/types/role-brief";
 import { useRouter } from "next/navigation";
 
 function statusBadgeClass(status: string): string {
@@ -43,13 +27,30 @@ function statusBadgeClass(status: string): string {
   }
 }
 
+type WorkspaceUsage = {
+  jobs: { current: number; max: number };
+  candidates: { current: number; max: number };
+};
+
 export function JobsPage() {
   const router = useRouter();
   const [jobs, setJobs] = useState<JobListItem[]>([]);
+  const [usage, setUsage] = useState<WorkspaceUsage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showPost, setShowPost] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [showJobLimitModal, setShowJobLimitModal] = useState(false);
+
+  const loadUsage = useCallback(async () => {
+    try {
+      const res = await fetch("/api/workspace/usage");
+      const json = await res.json();
+      if (res.ok) setUsage(json as WorkspaceUsage);
+    } catch {
+      /* usage indicator is optional */
+    }
+  }, []);
 
   const loadJobs = useCallback(async () => {
     setLoading(true);
@@ -59,12 +60,13 @@ export function JobsPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to load jobs");
       setJobs(json.jobs as JobListItem[]);
+      void loadUsage();
     } catch (err) {
       setError(getErrorMessage(err, "Failed to load jobs"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadUsage]);
 
   useEffect(() => {
     void loadJobs();
@@ -80,48 +82,23 @@ export function JobsPage() {
     setIsSaving(true);
     setError(null);
     try {
-      const supabase = createSupabaseClient();
-      const userId = await getAuthenticatedUserId(supabase);
-      let row: Record<string, unknown> = withCreatedBy(
-        buildFullBriefPayload(
-          data.title,
-          data.jobDescription,
-          data.analysis,
-          data.scoringPrompt,
-          true,
-          data.analysisMeta,
-        ),
-        userId,
-      );
-      let result = await supabase.from("role_briefs").insert(row).select().single();
-      if (result.error) {
-        let msg = result.error.message;
-        if (isMissingJobArchitectureColumnError(msg)) {
-          row = stripJobArchitectureColumns(row);
-          result = await supabase.from("role_briefs").insert(row).select().single();
-          msg = result.error?.message ?? "";
+      const res = await fetch("/api/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        if (json.code === "JOB_LIMIT_REACHED") {
+          setShowPost(false);
+          setShowJobLimitModal(true);
+          return;
         }
-        if (result.error && isMissingScoringPromptColumnError(msg)) {
-          row = stripScoringPromptColumns(row);
-          result = await supabase.from("role_briefs").insert(row).select().single();
-          msg = result.error?.message ?? "";
-        }
-        if (result.error && isMissingJdAnalysisMetaColumnError(msg)) {
-          row = stripJdAnalysisMetaColumns(row);
-          result = await supabase.from("role_briefs").insert(row).select().single();
-        }
-        if (result.error && isMissingV2ColumnError(result.error.message)) {
-          result = await supabase
-            .from("role_briefs")
-            .insert(buildLegacyBriefPayload(data.title, data.jobDescription, data.analysis))
-            .select()
-            .single();
-        }
+        throw new Error(json.error ?? "Failed to save job");
       }
-      if (result.error) throw result.error;
-      const saved = parseRoleBriefRow(result.data as Record<string, unknown>);
       setShowPost(false);
-      router.push(`/jobs/${saved.id}`);
+      void loadUsage();
+      router.push(`/jobs/${json.job.id}`);
     } catch (err) {
       setError(getErrorMessage(err, "Failed to save job"));
     } finally {
@@ -134,6 +111,12 @@ export function JobsPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-[#1E293B]">Jobs</h1>
+          {usage && (
+            <p className="mt-1 text-xs text-[#94A3B8]">
+              {usage.jobs.current} of {usage.jobs.max} jobs ·{" "}
+              {usage.candidates.current} of {usage.candidates.max} candidates
+            </p>
+          )}
           <p className="mt-1 text-sm text-[#64748B]">
             Manage open roles, applicants, and shortlists in one place.
           </p>
@@ -243,6 +226,11 @@ export function JobsPage() {
           </div>
         </div>
       )}
+
+      <JobLimitModal
+        open={showJobLimitModal}
+        onClose={() => setShowJobLimitModal(false)}
+      />
     </div>
   );
 }

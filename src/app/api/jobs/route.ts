@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
+import { createJobForUser } from "@/lib/supabase/jobs-mutate";
 import { listJobsWithStats } from "@/lib/supabase/jobs";
+import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
+import { limitErrorResponse } from "@/lib/workspace/limits";
+import type {
+  RoleBriefAnalysis,
+  RoleBriefAnalysisMeta,
+  RoleBriefScoringPrompt,
+} from "@/types/role-brief";
 
 export async function GET() {
   try {
@@ -14,5 +22,47 @@ export async function GET() {
       { error: message, ...(hint ? { hint } : {}) },
       { status: message.includes("Supabase") ? 503 : 500 },
     );
+  }
+}
+
+type PostBody = {
+  title?: string;
+  jobDescription?: string;
+  analysis?: RoleBriefAnalysis;
+  scoringPrompt?: RoleBriefScoringPrompt;
+  analysisMeta?: RoleBriefAnalysisMeta;
+};
+
+export async function POST(request: Request) {
+  try {
+    const body = (await request.json()) as PostBody;
+    if (!body.title?.trim() || !body.analysis) {
+      return NextResponse.json(
+        { error: "title and analysis are required." },
+        { status: 400 },
+      );
+    }
+
+    const supabase = await createSupabaseServerClient();
+    const job = await createJobForUser(supabase, {
+      title: body.title.trim(),
+      jobDescription: body.jobDescription?.trim() ?? "",
+      analysis: body.analysis,
+      scoringPrompt: body.scoringPrompt ?? {
+        scoring_prompt: null,
+        scoring_prompt_generated_at: null,
+        scoring_prompt_version: 1,
+      },
+      analysisMeta: body.analysisMeta,
+    });
+
+    return NextResponse.json({ job });
+  } catch (err) {
+    const limited = limitErrorResponse(err);
+    if (limited) {
+      return NextResponse.json(limited.body, { status: limited.status });
+    }
+    const message = err instanceof Error ? err.message : "Failed to create job";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

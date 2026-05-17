@@ -115,5 +115,6 @@ export function buildSavedScoreInsertPayload(
     role_brief_snapshot,
     scoring_prompt_version: roleBrief.scoring_prompt_version ?? 1,
     scoring_cost_usd: estimatedScoreCostUsd(),
+    model_used: "gpt-4o-mini",
   };
 }

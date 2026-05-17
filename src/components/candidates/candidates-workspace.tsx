@@ -17,6 +17,7 @@ import {
   isScoredForRole,
 } from "@/lib/candidates/active-role-score";
 import { getErrorMessage } from "@/lib/errors";
+import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import type {
@@ -240,13 +241,10 @@ export function CandidatesWorkspace() {
     try {
       for (const file of Array.from(files)) {
         const resumeText = await parseResumeFile(file);
-        const res = await fetch("/api/candidates", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            resumeText,
-            resumeFilename: file.name,
-          }),
+        const res = await submitCandidateWithResume({
+          resumeText,
+          resumeFilename: file.name,
+          resumeFile: file,
         });
         const json = await res.json();
         if (!res.ok) {

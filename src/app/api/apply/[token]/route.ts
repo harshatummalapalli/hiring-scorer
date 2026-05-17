@@ -5,6 +5,7 @@ import { createActivity } from "@/lib/candidates/activity";
 import { normalizeResumeText } from "@/lib/resume/normalize-resume-text";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { insertApplicationCandidate } from "@/lib/supabase/candidates";
+import { limitErrorResponse } from "@/lib/workspace/limits";
 import { parseRoleBriefRow } from "@/types/role-brief";
 
 export const maxDuration = 60;
@@ -122,6 +123,10 @@ export async function POST(request: Request, { params }: Params) {
 
     return NextResponse.json({ id, display_name });
   } catch (err) {
+    const limited = limitErrorResponse(err);
+    if (limited) {
+      return NextResponse.json(limited.body, { status: limited.status });
+    }
     const message =
       err instanceof Error ? err.message : "Failed to submit application";
     return NextResponse.json({ error: message }, { status: 500 });

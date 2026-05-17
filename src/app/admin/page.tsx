@@ -10,6 +10,10 @@
  *   );
  *
  * Run supabase/admin-platform.sql first if profiles / activity_log do not exist.
+ *
+ * Cost dashboard env (see src/lib/admin/required-env.ts):
+ *   OPENAI_ADMIN_KEY — OpenAI admin key with usage read access
+ *   ANTHROPIC_ADMIN_KEY — Anthropic API key (same as ANTHROPIC_API_KEY)
  */
 
 import { AdminDashboard } from "@/components/admin/admin-dashboard";

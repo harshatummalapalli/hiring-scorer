@@ -4,7 +4,17 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Search } from "lucide-react";
 import type { AdminOverview, AdminWorkspaceRow } from "@/lib/admin/queries";
+import { AdminCostDashboard } from "@/components/admin/admin-cost-dashboard";
 import { karta } from "@/lib/brand/karta";
+
+function formatStorageBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
 
 function formatUsd(n: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -13,6 +23,18 @@ function formatUsd(n: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 4,
   }).format(n);
+}
+
+function usageClass(current: number, max: number): string {
+  if (max <= 0) return "text-[#64748B]";
+  const ratio = current / max;
+  if (ratio >= 1) return "font-medium text-red-600";
+  if (ratio >= 0.85) return "font-medium text-amber-700";
+  return "text-[#64748B]";
+}
+
+function formatUsage(current: number, max: number): string {
+  return `${current} / ${max}`;
 }
 
 function formatDate(iso: string | null): string {
@@ -112,7 +134,7 @@ export function AdminDashboard() {
       <section>
         <h2 className={karta.pageTitle}>Platform overview</h2>
         {overview && (
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <MetricCard label="Total workspaces" value={overview.totalWorkspaces} />
             <MetricCard
               label="Active (7 days)"
@@ -130,9 +152,15 @@ export function AdminDashboard() {
               label="Est. API cost today"
               value={formatUsd(overview.estimatedApiCostTodayUsd)}
             />
+            <MetricCard
+              label="Resume storage (total)"
+              value={formatStorageBytes(overview.totalResumeStorageBytes)}
+            />
           </div>
         )}
       </section>
+
+      <AdminCostDashboard />
 
       <section>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -157,8 +185,8 @@ export function AdminDashboard() {
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Created</th>
                 <th className="px-4 py-3">Last active</th>
-                <th className="px-4 py-3 text-right">Jobs</th>
-                <th className="px-4 py-3 text-right">Candidates</th>
+                <th className="px-4 py-3 text-right">Jobs (used / max)</th>
+                <th className="px-4 py-3 text-right">Candidates (used / max)</th>
                 <th className="px-4 py-3 text-right">Scores</th>
                 <th className="px-4 py-3 text-right">Est. cost</th>
                 <th className="px-4 py-3" />
@@ -194,11 +222,15 @@ export function AdminDashboard() {
                     <td className="px-4 py-3 text-[#64748B]">
                       {formatDate(w.lastActiveAt)}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {w.jobsCount}
+                    <td
+                      className={`px-4 py-3 text-right tabular-nums ${usageClass(w.jobsCount, w.maxJobs)}`}
+                    >
+                      {formatUsage(w.jobsCount, w.maxJobs)}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {w.candidatesCount}
+                    <td
+                      className={`px-4 py-3 text-right tabular-nums ${usageClass(w.candidatesCount, w.maxCandidates)}`}
+                    >
+                      {formatUsage(w.candidatesCount, w.maxCandidates)}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums">
                       {w.scoresCount}

@@ -23,6 +23,13 @@ import type {
 import { normalizeSignalProfile } from "@/lib/candidates/build-signal-profile";
 import { getCandidateHeaderName } from "@/lib/candidates/profile-display";
 import { scoreToVerdict } from "@/lib/scoring/recruiter-card";
+import {
+  assertCanCreateCandidate,
+  decrementCandidateCount,
+  getWorkspaceUsage,
+  incrementCandidateCount,
+  incrementCandidateCountAdmin,
+} from "@/lib/workspace/limits";
 import type { CandidateScoreResult } from "@/types/score";
 
 async function getServerSupabase(): Promise<SupabaseClient> {
@@ -60,9 +67,49 @@ function rowToCandidate(row: Record<string, unknown>): CandidateRow {
     applied_at: row.applied_at != null ? String(row.applied_at) : null,
     scoring_status: parseScoringStatus(row.scoring_status),
     linkedin_url: row.linkedin_url != null ? String(row.linkedin_url) : null,
+    resume_file_path:
+      row.resume_file_path != null ? String(row.resume_file_path) : null,
+    resume_file_name:
+      row.resume_file_name != null ? String(row.resume_file_name) : null,
+    resume_file_size:
+      row.resume_file_size != null ? Number(row.resume_file_size) : null,
+    resume_file_type:
+      row.resume_file_type != null ? String(row.resume_file_type) : null,
+    resume_stored_at:
+      row.resume_stored_at != null ? String(row.resume_stored_at) : null,
+    resume_delete_after:
+      row.resume_delete_after != null ? String(row.resume_delete_after) : null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
   };
+}
+
+export async function updateCandidateResumeStorage(
+  candidateId: string,
+  meta: {
+    resume_file_path: string;
+    resume_file_name: string;
+    resume_file_size: number;
+    resume_file_type: string;
+    resume_stored_at: string;
+    resume_delete_after: string;
+  },
+): Promise<void> {
+  const supabase = await getServerSupabase();
+  const { error } = await supabase
+    .from("candidates")
+    .update({
+      ...meta,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", candidateId);
+
+  if (error) {
+    if (error.message?.toLowerCase().includes("resume_file_path")) {
+      return;
+    }
+    throw new Error(error.message);
+  }
 }
 
 async function backfillResolvedDisplayNames(
@@ -324,6 +371,9 @@ export async function insertCandidate(row: {
 }): Promise<{ id: string }> {
   const supabase = await getServerSupabase();
   const userId = await getAuthenticatedUserId(supabase);
+  const usage = await getWorkspaceUsage(supabase, userId);
+  assertCanCreateCandidate(usage);
+
   const { data, error } = await supabase
     .from("candidates")
     .insert(
@@ -357,6 +407,7 @@ export async function insertCandidate(row: {
 
   if (error) throw new Error(error.message);
   if (!data?.id) throw new Error("Insert succeeded but no id returned.");
+  await incrementCandidateCount(supabase, userId, 1);
   return { id: data.id as string };
 }
 
@@ -366,6 +417,9 @@ export async function insertApplicationCandidate(
   ownerUserId: string,
 ): Promise<{ id: string }> {
   const supabase = createSupabaseAdminClient();
+  const usage = await getWorkspaceUsage(supabase, ownerUserId);
+  assertCanCreateCandidate(usage);
+
   const { data, error } = await supabase
     .from("candidates")
     .insert(
@@ -393,7 +447,35 @@ export async function insertApplicationCandidate(
 
   if (error) throw new Error(error.message);
   if (!data?.id) throw new Error("Insert succeeded but no id returned.");
+  await incrementCandidateCountAdmin(ownerUserId, 1);
   return { id: data.id as string };
+}
+
+export async function deleteCandidateForUser(
+  supabase: SupabaseClient,
+  candidateId: string,
+): Promise<void> {
+  const userId = await getAuthenticatedUserId(supabase);
+
+  const { data, error } = await supabase
+    .from("candidates")
+    .select("id, created_by")
+    .eq("id", candidateId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Candidate not found.");
+  if (String(data.created_by) !== userId) {
+    throw new Error("Not authorized to delete this candidate.");
+  }
+
+  const { error: deleteError } = await supabase
+    .from("candidates")
+    .delete()
+    .eq("id", candidateId);
+
+  if (deleteError) throw new Error(deleteError.message);
+  await decrementCandidateCount(supabase, userId, 1);
 }
 
 export async function updateCandidate(

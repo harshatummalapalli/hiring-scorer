@@ -9,6 +9,7 @@ import {
   filterCandidates,
   sortCandidates,
 } from "@/lib/candidates/list-filters";
+import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
 import type {
   CandidateExperienceFilter,
@@ -92,14 +93,11 @@ export function TalentPoolWorkspace() {
     try {
       for (const file of Array.from(files)) {
         const resumeText = await parseResumeFile(file);
-        const res = await fetch("/api/candidates", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            resumeText,
-            resumeFilename: file.name,
-            source: "uploaded",
-          }),
+        const res = await submitCandidateWithResume({
+          resumeText,
+          resumeFilename: file.name,
+          resumeFile: file,
+          source: "uploaded",
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? "Upload failed");

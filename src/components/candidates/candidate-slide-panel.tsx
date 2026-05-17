@@ -51,6 +51,7 @@ export function CandidateSlidePanel({
   const [noteBusy, setNoteBusy] = useState(false);
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [cvDownloadBusy, setCvDownloadBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!candidateId) {
@@ -114,6 +115,24 @@ export function CandidateSlidePanel({
       setError(err instanceof Error ? err.message : "Failed to add note");
     } finally {
       setNoteBusy(false);
+    }
+  };
+
+  const handleDownloadOriginalCv = async () => {
+    if (!candidateId || !candidate?.resume_file_path) return;
+    setCvDownloadBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/candidates/${candidateId}/resume-url`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to get download link");
+      window.open(json.url as string, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to download original CV",
+      );
+    } finally {
+      setCvDownloadBusy(false);
     }
   };
 
@@ -212,6 +231,27 @@ export function CandidateSlidePanel({
                   {error}
                 </p>
               )}
+
+              <div>
+                <p className="text-lg font-semibold text-[#1E293B]">
+                  {candidate.display_name}
+                </p>
+                {candidate.resume_file_path ? (
+                  <button
+                    type="button"
+                    disabled={cvDownloadBusy}
+                    onClick={() => void handleDownloadOriginalCv()}
+                    className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-[#0D9488] hover:text-[#0B8276] disabled:opacity-50"
+                  >
+                    {cvDownloadBusy ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" />
+                    )}
+                    Download Original CV
+                  </button>
+                ) : null}
+              </div>
 
               {activeResult && activeRoleBrief ? (
                 <>
