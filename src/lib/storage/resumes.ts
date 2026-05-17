@@ -1,20 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { ensureResumesBucketExists, formatResumeStorageError } from "@/lib/storage/ensure-resumes-bucket";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 /**
  * Supabase Storage bucket: `resumes`
  *
- * Create in Supabase Dashboard → Storage → New bucket (not via SQL migrations):
- * - Name: resumes
- * - Public: OFF (private)
- * - File size limit: 10 MB
- * - Allowed MIME types:
- *   - application/pdf
- *   - application/vnd.openxmlformats-officedocument.wordprocessingml.document
- *   - text/plain
+ * One-time setup: run supabase/setup-resumes-storage.sql in the Supabase SQL Editor.
+ * That creates the private `resumes` bucket (10 MB, PDF/DOCX/TXT) and storage RLS policies.
+ * Alternatively create the bucket in Dashboard → Storage, then run resume-storage-policies.sql.
  *
- * Then run supabase/resume-storage-policies.sql so authenticated users can upload
- * under `{user_id}/...` using their session (no service role required for recruiter uploads).
+ * If SUPABASE_SERVICE_ROLE_KEY is set, the app will try to create the bucket on first upload.
  *
  * Service role (`SUPABASE_SERVICE_ROLE_KEY`) is still needed for public job applications
  * and super-admin routes that bypass RLS.
@@ -111,13 +106,15 @@ export async function uploadResumeToStorage(
   fileBytes: ArrayBuffer,
   contentType: string,
 ): Promise<void> {
+  await ensureResumesBucketExists();
+
   const { error } = await supabase.storage
     .from(RESUMES_BUCKET)
     .upload(storagePath, fileBytes, {
       contentType,
       upsert: true,
     });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(formatResumeStorageError(error.message));
 }
 
 /** Upload on behalf of a workspace owner (public apply); requires service role. */

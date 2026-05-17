@@ -1,5 +1,23 @@
--- Storage RLS only (bucket must already exist).
--- Prefer supabase/setup-resumes-storage.sql — it creates the bucket and these policies in one step.
+-- Full setup for resume file storage (run once in Supabase SQL Editor).
+-- Creates the private `resumes` bucket and RLS policies for recruiter uploads.
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'resumes',
+  'resumes',
+  false,
+  10485760,
+  array[
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'text/plain'
+  ]::text[]
+)
+on conflict (id) do update
+set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 
 -- INSERT: own folder only
 drop policy if exists "resumes_insert_own_folder" on storage.objects;
