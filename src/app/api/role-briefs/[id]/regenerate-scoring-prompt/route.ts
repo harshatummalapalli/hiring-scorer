@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { generateRoleScoringPrompt } from "@/lib/role-brief/generate-scoring-prompt";
 import { analysisFromRoleBrief } from "@/types/role-brief";
 import { parseRoleBriefRow } from "@/types/role-brief";
+import { logWorkspaceActivity } from "@/lib/activity/log";
+import { getAuthenticatedUserId } from "@/lib/supabase/created-by";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 
 export const maxDuration = 120;
@@ -65,6 +67,13 @@ export async function POST(_request: Request, { params }: Params) {
     }
 
     const saved = parseRoleBriefRow(updated as Record<string, unknown>);
+
+    const userId = await getAuthenticatedUserId(supabase);
+    await logWorkspaceActivity(userId, {
+      action: "regenerate_scoring_prompt",
+      resourceType: "role_brief",
+      resourceId: id,
+    });
 
     return NextResponse.json({
       role_brief: saved,

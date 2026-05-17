@@ -6,7 +6,7 @@ import { isPublicPath } from "@/lib/auth/public-routes";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const bare = isPublicPath(pathname);
+  const bare = isPublicPath(pathname) || pathname.startsWith("/admin");
 
   if (bare) {
     return <>{children}</>;

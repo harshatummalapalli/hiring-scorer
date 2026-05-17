@@ -9,6 +9,7 @@ import { insertSavedScoreWithFallback } from "@/lib/saved-scores/insert-with-fal
 import { buildSavedScoreInsertPayload } from "@/lib/saved-scores/build-save-payload";
 import { scoringStatusFromOverall } from "@/lib/jobs/scoring-status";
 import { getCandidateById, updateCandidate } from "@/lib/supabase/candidates";
+import { logWorkspaceActivityIfAuthed } from "@/lib/activity/log";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import type { RoleBrief } from "@/types/role-brief";
 
@@ -80,6 +81,16 @@ export async function POST(request: Request, { params }: Params) {
       activity,
       scoring_status: scoringStatusFromOverall(result.overall_score),
       job_id: candidate.job_id ?? body.roleBriefId,
+    });
+
+    await logWorkspaceActivityIfAuthed({
+      action: "score_candidate",
+      resourceType: "candidate",
+      resourceId: id,
+      metadata: {
+        role_brief_id: roleBrief.id,
+        saved_score_id: savedScoreId,
+      },
     });
 
     return NextResponse.json({ result, savedScoreId });

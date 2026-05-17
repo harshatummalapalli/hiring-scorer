@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logWorkspaceActivityIfAuthed } from "@/lib/activity/log";
 import { insertSavedScoreWithFallback } from "@/lib/saved-scores/insert-with-fallback";
 import { sanitizeSavedScorePayload } from "@/lib/saved-scores/sanitize-save-payload";
 
@@ -18,6 +19,11 @@ export async function POST(request: Request) {
     }
 
     const { id } = await insertSavedScoreWithFallback(payload);
+    await logWorkspaceActivityIfAuthed({
+      action: "save_score",
+      resourceType: "saved_score",
+      resourceId: id,
+    });
     return NextResponse.json({ id });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to save score";

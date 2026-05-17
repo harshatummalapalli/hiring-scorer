@@ -1,3 +1,4 @@
+import { estimatedScoreCostUsd } from "@/lib/scoring/cost";
 import { ensureIntegerOverallScore } from "@/lib/saved-scores/normalize-score";
 import type { CandidateScoreResult } from "@/types/score";
 import { DEFAULT_SCORING_WEIGHTS, type RoleBrief } from "@/types/role-brief";
@@ -110,5 +111,6 @@ export function buildSavedScoreInsertPayload(
     score_snapshot: { ...result, overall_score },
     role_brief_snapshot,
     scoring_prompt_version: roleBrief.scoring_prompt_version ?? 1,
+    scoring_cost_usd: estimatedScoreCostUsd(),
   };
 }

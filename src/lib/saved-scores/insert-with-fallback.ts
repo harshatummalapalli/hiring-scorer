@@ -1,7 +1,10 @@
 import { insertSavedScore } from "@/lib/supabase/server";
 
 const SNAPSHOT_KEYS = ["score_snapshot", "role_brief_snapshot"] as const;
-const OPTIONAL_SCORE_KEYS = ["scoring_prompt_version"] as const;
+const OPTIONAL_SCORE_KEYS = [
+  "scoring_prompt_version",
+  "scoring_cost_usd",
+] as const;
 
 export function stripSnapshotColumns(
   payload: Record<string, unknown>,

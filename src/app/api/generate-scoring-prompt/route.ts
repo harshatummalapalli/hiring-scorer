@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logWorkspaceActivityIfAuthed } from "@/lib/activity/log";
 import { generateRoleScoringPrompt } from "@/lib/role-brief/generate-scoring-prompt";
 import type { RoleBriefAnalysis } from "@/types/role-brief";
 
@@ -24,6 +25,8 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+
+    await logWorkspaceActivityIfAuthed({ action: "generate_scoring_prompt" });
 
     const nextVersion = Math.max(1, Number(body.scoring_prompt_version ?? 0) + 1);
     const scoring_prompt = await generateRoleScoringPrompt(

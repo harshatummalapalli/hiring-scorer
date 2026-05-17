@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logWorkspaceActivityIfAuthed } from "@/lib/activity/log";
 import { analyseJobDescriptionWithScoringPrompt } from "@/lib/role-brief/analyse-jd";
 import { deriveTitleFromAnalysis } from "@/types/role-brief";
 
@@ -14,6 +15,8 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+
+    await logWorkspaceActivityIfAuthed({ action: "analyse_role" });
 
     const result = await analyseJobDescriptionWithScoringPrompt(
       body.jobDescription,
