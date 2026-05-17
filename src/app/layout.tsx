@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { AppHeader } from "@/components/app-header";
+import { AppShell } from "@/components/app-shell";
 import { Providers } from "@/components/providers";
 import { KARTA } from "@/lib/brand/karta";
 import "./globals.css";
@@ -33,8 +33,7 @@ export default function RootLayout({
     >
       <body className="flex min-h-full flex-col bg-[#F8FAFC] font-sans text-[#334155]">
         <Providers>
-          <AppHeader />
-          <main className="flex-1">{children}</main>
+          <AppShell>{children}</AppShell>
         </Providers>
       </body>
     </html>

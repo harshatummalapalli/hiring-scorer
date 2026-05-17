@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { karta } from "@/lib/brand/karta";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
@@ -10,12 +11,12 @@ type ApplyPageProps = {
 };
 
 export default function ApplyPage({ params }: ApplyPageProps) {
+  const router = useRouter();
   const [token, setToken] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [companyName, setCompanyName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -57,7 +58,7 @@ export default function ApplyPage({ params }: ApplyPageProps) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Submission failed");
-      setDone(true);
+      router.push(`/apply/${encodeURIComponent(token)}/success`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Submission failed");
     } finally {
@@ -69,18 +70,6 @@ export default function ApplyPage({ params }: ApplyPageProps) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-      </div>
-    );
-  }
-
-  if (done) {
-    return (
-      <div className="mx-auto max-w-lg px-4 py-16 text-center">
-        <h1 className="text-2xl font-semibold text-[#1E293B]">Application received</h1>
-        <p className="mt-3 text-sm text-[#64748B]">
-          Thank you for applying to {jobTitle}. The hiring team will review your
-          resume shortly.
-        </p>
       </div>
     );
   }

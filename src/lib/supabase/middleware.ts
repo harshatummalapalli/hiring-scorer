@@ -1,14 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isAuthEntryPath, isPublicPath } from "@/lib/auth/public-routes";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
-
-const PUBLIC_PATH_PREFIXES = ["/login", "/apply", "/api/apply", "/auth"];
-
-function isPublicPath(pathname: string): boolean {
-  return PUBLIC_PATH_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
-}
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -35,17 +28,24 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
-  if (!user && !isPublicPath(pathname)) {
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = "/login";
-    loginUrl.searchParams.set("next", pathname);
-    return NextResponse.redirect(loginUrl);
+
+  if (pathname === "/login") {
+    const signInUrl = request.nextUrl.clone();
+    signInUrl.pathname = "/auth/signin";
+    signInUrl.search = request.nextUrl.search;
+    return NextResponse.redirect(signInUrl);
   }
 
-  if (user && pathname === "/login") {
-    const next = request.nextUrl.searchParams.get("next") || "/jobs";
+  if (!user && !isPublicPath(pathname)) {
+    const signInUrl = request.nextUrl.clone();
+    signInUrl.pathname = "/auth/signin";
+    signInUrl.searchParams.set("next", pathname);
+    return NextResponse.redirect(signInUrl);
+  }
+
+  if (user && isAuthEntryPath(pathname)) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = next;
+    redirectUrl.pathname = "/jobs";
     redirectUrl.search = "";
     return NextResponse.redirect(redirectUrl);
   }

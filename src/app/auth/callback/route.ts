@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
+import { ensureWorkspaceSettingsForUser } from "@/lib/workspace/settings";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -8,11 +9,18 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createSupabaseServerClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error && data.user) {
+      try {
+        await ensureWorkspaceSettingsForUser(supabase, data.user);
+      } catch {
+        // Workspace bootstrap is best-effort; user can set profile in Settings
+      }
       return NextResponse.redirect(`${origin}${next}`);
     }
   }
 
-  return NextResponse.redirect(`${origin}/login?error=auth_callback`);
+  const signInUrl = new URL("/auth/signin", origin);
+  signInUrl.searchParams.set("error", "auth_callback");
+  return NextResponse.redirect(signInUrl.toString());
 }

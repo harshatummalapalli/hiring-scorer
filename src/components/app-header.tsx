@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { KARTA, karta } from "@/lib/brand/karta";
+import { UserMenu } from "@/components/user-menu";
 
 const NAV = [
   { href: "/jobs", label: "Jobs" },
@@ -25,19 +26,24 @@ export function AppHeader() {
           <span className="text-lg font-semibold tracking-tight text-white">
             {KARTA.name}
           </span>
-          <span className="text-xs font-light text-white/60">{KARTA.tagline}</span>
+          <span className="hidden text-xs font-light text-white/60 sm:inline">
+            {KARTA.tagline}
+          </span>
         </Link>
-        <nav className="flex shrink-0 items-center gap-1 text-sm">
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={navLinkClass(pathname.startsWith(item.href))}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        <div className="flex items-center gap-2 sm:gap-4">
+          <nav className="flex shrink-0 items-center gap-1 text-sm">
+            {NAV.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={navLinkClass(pathname.startsWith(item.href))}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+          <UserMenu />
+        </div>
       </div>
     </header>
   );
