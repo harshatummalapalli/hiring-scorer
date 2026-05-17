@@ -43,7 +43,7 @@ export async function GET(_request: Request, { params }: Params) {
       );
     }
 
-    const url = await createSignedResumeUrl(path, 60);
+    const url = await createSignedResumeUrl(supabase, path, 60);
     return NextResponse.json({ url });
   } catch (err) {
     const message =

@@ -130,7 +130,13 @@ export async function POST(request: Request) {
       const supabase = await createSupabaseServerClient();
       const userId = await getAuthenticatedUserId(supabase);
       try {
-        await storeUploadedResumeForCandidate(userId, id, jobId, resumeFile);
+        await storeUploadedResumeForCandidate(
+          supabase,
+          userId,
+          id,
+          jobId,
+          resumeFile,
+        );
       } catch (storageErr) {
         const message =
           storageErr instanceof Error

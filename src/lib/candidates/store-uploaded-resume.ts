@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   assertResumeFileAllowed,
   buildResumeStoragePath,
@@ -7,6 +8,7 @@ import {
 import { updateCandidateResumeStorage } from "@/lib/supabase/candidates";
 
 export async function storeUploadedResumeForCandidate(
+  supabase: SupabaseClient,
   userId: string,
   candidateId: string,
   jobId: string | null,
@@ -21,7 +23,7 @@ export async function storeUploadedResumeForCandidate(
     file.name,
   );
 
-  await uploadResumeToStorage(storagePath, bytes, mimeType);
+  await uploadResumeToStorage(supabase, storagePath, bytes, mimeType);
 
   const meta = buildStoredResumeMeta(
     storagePath,

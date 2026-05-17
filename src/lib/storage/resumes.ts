@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -12,8 +13,11 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
  *   - application/vnd.openxmlformats-officedocument.wordprocessingml.document
  *   - text/plain
  *
- * Server routes upload with the service role after auth checks. Signed download URLs
- * are issued for recruiters via createSignedResumeUrl.
+ * Then run supabase/resume-storage-policies.sql so authenticated users can upload
+ * under `{user_id}/...` using their session (no service role required for recruiter uploads).
+ *
+ * Service role (`SUPABASE_SERVICE_ROLE_KEY`) is still needed for public job applications
+ * and super-admin routes that bypass RLS.
  *
  * Retention: `resume_delete_after` on each candidate marks when the stored file may be
  * removed. A scheduled cleanup job should periodically delete objects in Storage where
@@ -100,16 +104,35 @@ function twelveMonthsFromNow(): Date {
   return d;
 }
 
+/** Upload using the recruiter's authenticated server session (requires storage RLS policies). */
 export async function uploadResumeToStorage(
+  supabase: SupabaseClient,
+  storagePath: string,
+  fileBytes: ArrayBuffer,
+  contentType: string,
+): Promise<void> {
+  const { error } = await supabase.storage
+    .from(RESUMES_BUCKET)
+    .upload(storagePath, fileBytes, {
+      contentType,
+      upsert: true,
+    });
+  if (error) throw new Error(error.message);
+}
+
+/** Upload on behalf of a workspace owner (public apply); requires service role. */
+export async function uploadResumeToStorageAsAdmin(
   storagePath: string,
   fileBytes: ArrayBuffer,
   contentType: string,
 ): Promise<void> {
   const admin = createSupabaseAdminClient();
-  const { error } = await admin.storage.from(RESUMES_BUCKET).upload(storagePath, fileBytes, {
-    contentType,
-    upsert: true,
-  });
+  const { error } = await admin.storage
+    .from(RESUMES_BUCKET)
+    .upload(storagePath, fileBytes, {
+      contentType,
+      upsert: true,
+    });
   if (error) throw new Error(error.message);
 }
 
@@ -131,11 +154,11 @@ export function buildStoredResumeMeta(
 }
 
 export async function createSignedResumeUrl(
+  supabase: SupabaseClient,
   storagePath: string,
   expiresInSeconds = 60,
 ): Promise<string> {
-  const admin = createSupabaseAdminClient();
-  const { data, error } = await admin.storage
+  const { data, error } = await supabase.storage
     .from(RESUMES_BUCKET)
     .createSignedUrl(storagePath, expiresInSeconds);
 
