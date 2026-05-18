@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import { storeUploadedResumeForCandidate } from "@/lib/candidates/store-uploaded-resume";
 import { buildSignalProfile } from "@/lib/candidates/build-signal-profile";
+import {
+  findDuplicateCandidates,
+  type DuplicateMatch,
+} from "@/lib/candidates/duplicate-detection";
+import {
+  enrichGithubProfile,
+  extractGithubUsername,
+} from "@/lib/candidates/github-enrichment";
 import { classifyApplicantPrefilter } from "@/lib/jobs/applicant-prefilter";
 import { getCandidateHeaderName } from "@/lib/candidates/profile-display";
 import { createActivity } from "@/lib/candidates/activity";
@@ -35,6 +43,7 @@ type PostBody = {
   displayName?: string;
   jobId?: string;
   source?: string;
+  forceUpload?: boolean;
 };
 
 function coerceResumeText(value: unknown): string {
@@ -69,6 +78,7 @@ async function parsePostInput(request: Request): Promise<{
         displayName: String(form.get("displayName") ?? "").trim() || undefined,
         jobId: String(form.get("jobId") ?? "").trim() || undefined,
         source: String(form.get("source") ?? "").trim() || undefined,
+        forceUpload: form.get("forceUpload") === "true",
       },
       resumeFile: resumeFile instanceof File && resumeFile.size > 0 ? resumeFile : null,
     };
@@ -104,11 +114,38 @@ export async function POST(request: Request) {
     const display_name =
       body.displayName?.trim() || getCandidateHeaderName(signal_profile);
 
+    if (!body.forceUpload) {
+      const duplicates = await findDuplicateCandidates({
+        resumeText,
+        displayName: display_name,
+      });
+      const primary = duplicates[0];
+      if (primary) {
+        return NextResponse.json(
+          {
+            error: "duplicate_candidate",
+            duplicate: primary as DuplicateMatch,
+            duplicates,
+          },
+          { status: 409 },
+        );
+      }
+    }
+
+    const githubUser = extractGithubUsername(resumeText);
+    const githubData = githubUser
+      ? await enrichGithubProfile(githubUser)
+      : null;
+
     const activity = [
       createActivity("added", "Candidate added to talent pool"),
     ];
 
-    const profile = { ...signal_profile, display_name };
+    const profile = {
+      ...signal_profile,
+      display_name,
+      ...(githubData ? { github: githubData } : {}),
+    };
 
     const jobId = body.jobId?.trim() || null;
     const source = body.source?.trim() || (jobId ? "uploaded" : "uploaded");

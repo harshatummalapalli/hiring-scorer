@@ -70,6 +70,7 @@ async function loadLatestScoreAnyRole(
 export async function addCandidateToPipeline(
   candidateId: string,
   roleBriefId: string,
+  shortlistReason: string | null = null,
 ): Promise<{ row: PipelineCandidateRow; created: boolean }> {
   const existing = await getPipelineEntry(roleBriefId, candidateId);
   if (existing) return { row: existing, created: false };
@@ -110,6 +111,7 @@ export async function addCandidateToPipeline(
     fit_score: fit_score != null ? Math.round(fit_score) : null,
     fit_verdict,
     insights,
+    shortlist_reason: shortlistReason,
   });
 
   return { row, created: true };

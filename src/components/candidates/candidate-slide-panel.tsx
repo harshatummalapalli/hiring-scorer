@@ -26,6 +26,8 @@ import { KartaMatchBreakdown } from "@/components/match/karta-match-breakdown";
 import { snapshotToRoleBrief } from "@/lib/saved-scores/build-save-payload";
 import { downloadKartaAssessmentPdf } from "@/lib/reports/karta-assessment-pdf";
 import type { RoleBriefSnapshot } from "@/types/saved-score";
+import { formatCoreStrengthLabel } from "@/lib/intelligence/skill-domains";
+import { CandidateDetailsSection } from "./candidate-details-section";
 import { SignalBar, VerdictBadge } from "./profile-shared";
 
 function formatDate(iso: string): string {
@@ -40,33 +42,110 @@ function formatDate(iso: string): string {
   }
 }
 
+function InsightBar({
+  label,
+  subtitle,
+  rating,
+  fillPercent,
+}: {
+  label: string;
+  subtitle: string;
+  rating: string;
+  fillPercent: number;
+}) {
+  return (
+    <div className="space-y-1">
+      <SignalBar label={label} rating={rating} fillPercent={fillPercent} />
+      <p className="text-[11px] leading-snug text-[#94A3B8]">{subtitle}</p>
+    </div>
+  );
+}
+
 function CandidateInsightsBars({ profile }: { profile: CandidateSignalProfile }) {
   return (
-    <div className="space-y-3">
-      <SignalBar
+    <div className="space-y-4">
+      <InsightBar
         label="Ownership Drive"
+        subtitle="Measures first-person ownership language versus participation in team work."
         rating={ownershipLabel(profile.resume_quality.ownership.ownership_count)}
         fillPercent={profile.ownership_ratio_percent}
       />
-      <SignalBar
+      <InsightBar
         label="Impact Evidence"
+        subtitle="Measures quantified outcomes with numbers versus vague activity descriptions."
         rating={impactEvidenceLabel(
           profile.quantification_ratio_percent,
           profile.quantification_level,
         )}
         fillPercent={profile.quantification_ratio_percent}
       />
-      <SignalBar
+      <InsightBar
         label="Career Growth"
+        subtitle="Measures progression speed relative to typical market pace for this experience level."
         rating={careerGrowthLabel(profile.trajectory_velocity)}
         fillPercent={careerGrowthBarPercent(profile.trajectory_velocity)}
       />
-      <SignalBar
+      <InsightBar
         label="Profile Depth"
+        subtitle="Measures whether claimed skills are demonstrated in work descriptions or listed only."
         rating={profileDepthLabel(profile.keyword_stuffing_flagged)}
         fillPercent={profileDepthBarPercent(profile.keyword_stuffing_flagged)}
       />
     </div>
+  );
+}
+
+function GithubPresenceSection({
+  github,
+}: {
+  github: NonNullable<CandidateSignalProfile["github"]>;
+}) {
+  return (
+    <section>
+      <h3 className={karta.sectionHeading}>Technical Presence</h3>
+      <dl className="mt-3 space-y-2 text-sm">
+        <div className="flex justify-between gap-4">
+          <dt className="text-[#64748B]">Activity</dt>
+          <dd
+            className={
+              github.is_active ? "font-medium text-emerald-700" : "text-[#94A3B8]"
+            }
+          >
+            {github.is_active ? "Active" : "Inactive"}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[#64748B]">Top languages</dt>
+          <dd className="mt-1 flex flex-wrap gap-1">
+            {github.top_languages.length === 0 ? (
+              <span className="text-[#94A3B8]">—</span>
+            ) : (
+              github.top_languages.map((lang) => (
+                <span
+                  key={lang}
+                  className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-[#334155]"
+                >
+                  {lang}
+                </span>
+              ))
+            )}
+          </dd>
+        </div>
+        <div className="flex justify-between gap-4">
+          <dt className="text-[#64748B]">Public repos</dt>
+          <dd className="font-medium text-[#1E293B]">{github.public_repos}</dd>
+        </div>
+        {github.most_starred_repo && (
+          <div className="flex justify-between gap-4">
+            <dt className="text-[#64748B]">Most starred project</dt>
+            <dd className="font-medium text-[#1E293B]">
+              {github.most_starred_repo.name} ({github.most_starred_repo.stars} ★)
+            </dd>
+          </div>
+        )}
+      </dl>
+      <p className="mt-2 text-[11px] text-[#94A3B8]">From public GitHub profile.</p>
+    </section>
   );
 }
 
@@ -96,6 +175,7 @@ export function CandidateSlidePanel({
   const [cvDownloadBusy, setCvDownloadBusy] = useState(false);
   const [scoring, setScoring] = useState(false);
   const [selectedFitId, setSelectedFitId] = useState<string | null>(null);
+  const [panelTab, setPanelTab] = useState<"insights" | "resume">("insights");
 
   const load = useCallback(async () => {
     if (!candidateId) {
@@ -346,6 +426,23 @@ export function CandidateSlidePanel({
                         : ""}
                     </p>
                   ) : null}
+                  <p className="mt-1 text-sm text-[#64748B]">
+                    {profile.total_years_experience}
+                    {profile.location ? ` · ${profile.location}` : ""}
+                  </p>
+                  {formatCoreStrengthLabel(
+                    profile.core_strength_primary,
+                    profile.core_strength_secondary,
+                  ) && (
+                    <p className="mt-0.5 text-[11px] font-medium text-[#0D9488]">
+                      Core strength:{" "}
+                      {formatCoreStrengthLabel(
+                        profile.core_strength_primary,
+                        profile.core_strength_secondary,
+                      )
+                        ?.replace(" + ", " · ")}
+                    </p>
+                  )}
                   {candidate.resume_file_path ? (
                     <button
                       type="button"
@@ -383,7 +480,45 @@ export function CandidateSlidePanel({
                 </button>
               </div>
 
-              {hasScore && displayResult && displayRoleBrief ? (
+              <div className="flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
+                <button
+                  type="button"
+                  onClick={() => setPanelTab("insights")}
+                  className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium ${
+                    panelTab === "insights"
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-600"
+                  }`}
+                >
+                  Insights
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPanelTab("resume")}
+                  className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium ${
+                    panelTab === "resume"
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-600"
+                  }`}
+                >
+                  Resume
+                </button>
+              </div>
+
+              {panelTab === "resume" ? (
+                <div className="space-y-4">
+                  <section className={`${karta.card} p-4`}>
+                    <h3 className={karta.sectionHeading}>Resume text</h3>
+                    <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap text-xs text-[#334155]">
+                      {candidate.resume_text}
+                    </pre>
+                  </section>
+                  <CandidateDetailsSection
+                    candidate={candidate}
+                    onSaved={() => void load()}
+                  />
+                </div>
+              ) : hasScore && displayResult && displayRoleBrief ? (
                 <>
                   {displayResult.deal_breaker_warning && (
                     <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -397,6 +532,10 @@ export function CandidateSlidePanel({
                       <CandidateInsightsBars profile={profile} />
                     </div>
                   </section>
+
+                  {profile.github && (
+                    <GithubPresenceSection github={profile.github} />
+                  )}
 
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <VerdictBadge
@@ -534,6 +673,10 @@ export function CandidateSlidePanel({
                       <CandidateInsightsBars profile={profile} />
                     </div>
                   </section>
+
+                  {profile.github && (
+                    <GithubPresenceSection github={profile.github} />
+                  )}
 
                   <div className="rounded-lg border border-dashed border-[#0D9488]/40 bg-teal-50/50 px-4 py-5 text-center">
                     <p className="text-sm font-medium text-[#1E293B]">

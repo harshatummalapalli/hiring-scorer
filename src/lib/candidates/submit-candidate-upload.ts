@@ -5,6 +5,7 @@ type SubmitCandidateOptions = {
   displayName?: string;
   jobId?: string;
   source?: string;
+  forceUpload?: boolean;
 };
 
 export async function submitCandidateWithResume(
@@ -17,6 +18,7 @@ export async function submitCandidateWithResume(
   if (options.displayName) form.append("displayName", options.displayName);
   if (options.jobId) form.append("jobId", options.jobId);
   if (options.source) form.append("source", options.source);
+  if (options.forceUpload) form.append("forceUpload", "true");
 
   return fetch("/api/candidates", {
     method: "POST",

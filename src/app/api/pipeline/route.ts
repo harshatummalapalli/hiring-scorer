@@ -33,6 +33,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       role_brief_id?: string;
       candidate_ids?: string[];
+      shortlist_reason?: string | null;
     };
     if (!body.role_brief_id?.trim()) {
       return NextResponse.json(
@@ -53,6 +54,7 @@ export async function POST(request: Request) {
       const result = await addCandidateToPipeline(
         candidateId,
         body.role_brief_id.trim(),
+        body.shortlist_reason?.trim() || null,
       );
       results.push(result);
     }

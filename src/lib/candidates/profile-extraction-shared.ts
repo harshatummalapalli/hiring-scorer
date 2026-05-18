@@ -317,6 +317,9 @@ export function mapParsedProfileToSignal(
     skills_verified,
     skills_listed_only,
     title_band: null,
+    core_strength_primary: null,
+    core_strength_secondary: null,
+    core_strength_breakdown: {},
   };
 }
 

@@ -204,10 +204,25 @@ function titleBandDescription(band: TitleBand | null): string {
   return TITLE_BAND_DESCRIPTIONS[band];
 }
 
+function buildGithubPromptBlock(
+  github: NonNullable<CandidateSignalProfile["github"]>,
+): string {
+  const starred = github.most_starred_repo
+    ? `${github.most_starred_repo.name} (${github.most_starred_repo.stars} stars)`
+    : "None";
+  return `Verified GitHub Activity:
+Username: ${github.username}
+Public repos: ${github.public_repos}
+Account active (pushed within 90 days): ${github.is_active ? "yes" : "no"}
+Top languages: ${github.top_languages.join(", ") || "None"}
+Most starred project: ${starred}`;
+}
+
 function buildUserMessage(
   roleBrief: RoleBrief,
   strippedResume: string,
   signals: BeyondKeywordSignals,
+  github?: CandidateSignalProfile["github"] | null,
 ): string {
   const titleLine = `${roleBrief.title}${roleBrief.title_band ? ` · ${roleBrief.title_band}` : ""}`;
 
@@ -255,7 +270,7 @@ Impact evidence: ${signals.quantification_ratio_percent}% — measures quantifie
 Profile depth: ${signals.profile_depth} — whether skills are demonstrated in work descriptions (Deep) versus listed only (Surface).
 Verified skills (in work descriptions): ${verifiedList}
 Listed-only skills (skills section only): ${listedOnlyList}
-
+${github ? `\n${buildGithubPromptBlock(github)}\n` : ""}
 SCORING INSTRUCTIONS:
 Rule one — before assigning any dimension score above 60 you must find and include the exact quote from the resume that justifies that score. If you cannot find a direct quote the score must be 60 or below.
 Rule two — skills appearing only in a skills section score maximum 45 for the skills dimension. Skills appearing in work descriptions score higher. Skills appearing in work descriptions with quantified outcomes score highest.
@@ -651,6 +666,7 @@ export async function scoreCandidate(
   strippedResumeText: string,
   roleBrief: RoleBrief,
   beyondKeywordSignals: BeyondKeywordSignals,
+  github?: CandidateSignalProfile["github"] | null,
 ): Promise<CandidateScoreResult> {
   const stripped = strippedResumeText.trim();
   if (!stripped) {
@@ -658,7 +674,12 @@ export async function scoreCandidate(
   }
 
   const client = new OpenAI({ apiKey: getApiKey("openai") });
-  const userMessage = buildUserMessage(roleBrief, stripped, beyondKeywordSignals);
+  const userMessage = buildUserMessage(
+    roleBrief,
+    stripped,
+    beyondKeywordSignals,
+    github,
+  );
 
   const completion = await client.chat.completions.create({
     model: "gpt-4o-mini",

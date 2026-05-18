@@ -62,7 +62,12 @@ export async function POST(request: Request, { params }: Params) {
     }
     const signals = buildScoringSignalsFromProfile(candidate.signal_profile);
 
-    const result = await scoreCandidate(scoringText, roleBrief, signals);
+    const result = await scoreCandidate(
+      scoringText,
+      roleBrief,
+      signals,
+      candidate.signal_profile?.github,
+    );
     result.recruiter_card.candidate_header.display_name =
       candidate.display_name ||
       filenameToDisplayName(filename);

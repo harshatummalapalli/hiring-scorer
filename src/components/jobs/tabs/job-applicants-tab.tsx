@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Loader2, Upload } from "lucide-react";
 import { ClickableCandidateName } from "@/components/candidates/clickable-candidate-name";
-import { VerdictBadge } from "@/components/candidates/profile-shared";
-import { useCandidatePanel } from "@/contexts/candidate-panel-context";
-import { getScoreForRole } from "@/lib/candidates/active-role-score";
-import { formatTotalExperienceDisplay } from "@/lib/candidates/format-total-experience";
+import { CoreStrengthLabel } from "@/components/candidates/core-strength-label";
+import { DuplicateWarningModal } from "@/components/candidates/duplicate-warning-modal";
 import { CandidateListMeta } from "@/components/candidates/candidate-list-meta";
+import { useCandidatePanel } from "@/contexts/candidate-panel-context";
+import { formatTotalExperienceDisplay } from "@/lib/candidates/format-total-experience";
+import type { DuplicateMatch } from "@/lib/candidates/duplicate-messages";
 import { karta } from "@/lib/brand/karta";
 import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
@@ -19,10 +20,20 @@ import type { CandidateListItem } from "@/types/candidate";
 import type { Job } from "@/types/job";
 import { sourceBadgeLabel } from "@/types/job";
 
+type TalentMatch = {
+  candidateId: string;
+  candidateName: string;
+  yearsExperience: string;
+  matchPercent: number;
+  previousRoleTitle: string;
+  seniorityNote?: string | null;
+};
+
 type JobApplicantsTabProps = {
   jobId: string;
   jobTitle: string;
   roleBrief: Job;
+  onGoToAssessed?: () => void;
 };
 
 type UploadUiState =
@@ -30,18 +41,31 @@ type UploadUiState =
   | { phase: "processing"; files: ResumeUploadFileItem[] }
   | { phase: "success"; files: ResumeUploadFileItem[]; count: number };
 
+type PendingUpload = {
+  resumeText: string;
+  resumeFilename: string;
+  resumeFile: File;
+};
+
 export function JobApplicantsTab({
   jobId,
   jobTitle,
   roleBrief,
 }: JobApplicantsTabProps) {
   const [candidates, setCandidates] = useState<CandidateListItem[]>([]);
+  const [matches, setMatches] = useState<TalentMatch[]>([]);
   const [loading, setLoading] = useState(true);
+  const [matchesLoading, setMatchesLoading] = useState(true);
   const [scoringId, setScoringId] = useState<string | null>(null);
+  const [batchScoring, setBatchScoring] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [uploadUi, setUploadUi] = useState<UploadUiState>({ phase: "idle" });
   const [unlikelyOpen, setUnlikelyOpen] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [rematchingId, setRematchingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [duplicateMatch, setDuplicateMatch] = useState<DuplicateMatch | null>(null);
+  const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null);
   const newApplicantsRef = useRef<HTMLElement>(null);
   const { openPanel, refreshPanel, candidateId: openPanelId } = useCandidatePanel();
 
@@ -66,9 +90,24 @@ export function JobApplicantsTab({
     }
   }, [jobId]);
 
+  const loadMatches = useCallback(async () => {
+    setMatchesLoading(true);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/talent-matches`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to load matches");
+      setMatches(json.matches as TalentMatch[]);
+    } catch {
+      setMatches([]);
+    } finally {
+      setMatchesLoading(false);
+    }
+  }, [jobId]);
+
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadMatches();
+  }, [load, loadMatches]);
 
   const newApplicants = useMemo(
     () =>
@@ -82,22 +121,30 @@ export function JobApplicantsTab({
     [candidates],
   );
 
-  const reviewed = useMemo(
-    () =>
-      candidates
-        .filter((c) => c.scoring_status === "scored")
-        .sort((a, b) => {
-          const sa = getScoreForRole(a, jobId)?.overall_score ?? 0;
-          const sb = getScoreForRole(b, jobId)?.overall_score ?? 0;
-          return sb - sa;
-        }),
-    [candidates, jobId],
-  );
-
   const unlikely = useMemo(
     () => candidates.filter((c) => c.scoring_status === "low_relevance"),
     [candidates],
   );
+
+  const allNewSelected =
+    newApplicants.length > 0 && selected.size === newApplicants.length;
+
+  const toggleAll = () => {
+    if (allNewSelected) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(newApplicants.map((c) => c.id)));
+    }
+  };
+
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const scoreOne = async (candidateId: string) => {
     setScoringId(candidateId);
@@ -117,6 +164,67 @@ export function JobApplicantsTab({
     } finally {
       setScoringId(null);
     }
+  };
+
+  const scoreSelected = async () => {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    setBatchScoring(true);
+    setError(null);
+    try {
+      for (const id of ids) {
+        const res = await fetch(`/api/candidates/${id}/score`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ roleBriefId: jobId }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "Scoring failed");
+      }
+      setSelected(new Set());
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Batch scoring failed");
+    } finally {
+      setBatchScoring(false);
+    }
+  };
+
+  const rematch = async (candidateId: string) => {
+    setRematchingId(candidateId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/candidates/${candidateId}/score`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roleBriefId: jobId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Re-match failed");
+      await load();
+      await loadMatches();
+      if (openPanelId === candidateId) refreshPanel();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Re-match failed");
+    } finally {
+      setRematchingId(null);
+    }
+  };
+
+  const uploadOne = async (pending: PendingUpload, force = false) => {
+    const res = await submitCandidateWithResume({
+      ...pending,
+      jobId,
+      source: "uploaded",
+      forceUpload: force,
+    });
+    const json = await res.json();
+    if (res.status === 409 && json.duplicate) {
+      setDuplicateMatch(json.duplicate as DuplicateMatch);
+      setPendingUpload(pending);
+      throw new Error("duplicate");
+    }
+    if (!res.ok) throw new Error(json.error ?? "Upload failed");
   };
 
   const uploadFiles = async (files: FileList | null) => {
@@ -141,18 +249,22 @@ export function JobApplicantsTab({
 
         try {
           const resumeText = await parseResumeFile(file);
-          const res = await submitCandidateWithResume({
+          await uploadOne({
             resumeText,
             resumeFilename: file.name,
             resumeFile: file,
-            jobId,
-            source: "uploaded",
           });
-          const json = await res.json();
-          if (!res.ok) throw new Error(json.error ?? "Upload failed");
           nextFiles[i] = { name: file.name, status: "done" };
           successCount += 1;
         } catch (err) {
+          if (err instanceof Error && err.message === "duplicate") {
+            nextFiles[i] = {
+              name: file.name,
+              status: "error",
+              error: "Duplicate — resolve prompt",
+            };
+            break;
+          }
           nextFiles[i] = {
             name: file.name,
             status: "error",
@@ -162,33 +274,48 @@ export function JobApplicantsTab({
         setUploadUi({ phase: "processing", files: [...nextFiles] });
       }
 
-      await load();
+      if (successCount > 0) {
+        await load();
+        await loadMatches();
+      }
 
-      if (successCount === 0) {
+      if (successCount === 0 && !duplicateMatch) {
         setError("No resumes could be processed. Check the files and try again.");
         setUploadUi({ phase: "idle" });
         return;
       }
 
-      setUploadUi({
-        phase: "success",
-        files: nextFiles,
-        count: successCount,
-      });
-
-      requestAnimationFrame(() => {
-        newApplicantsRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
+      if (successCount > 0) {
+        setUploadUi({
+          phase: "success",
+          files: nextFiles,
+          count: successCount,
         });
-      });
-
-      window.setTimeout(() => {
-        setUploadUi({ phase: "idle" });
-      }, 5000);
+        requestAnimationFrame(() => {
+          newApplicantsRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        });
+        window.setTimeout(() => setUploadUi({ phase: "idle" }), 5000);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
       setUploadUi({ phase: "idle" });
+    }
+  };
+
+  const handleDuplicateProceed = async () => {
+    if (!pendingUpload) return;
+    const pending = pendingUpload;
+    setDuplicateMatch(null);
+    setPendingUpload(null);
+    try {
+      await uploadOne(pending, true);
+      await load();
+      await loadMatches();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
     }
   };
 
@@ -208,136 +335,55 @@ export function JobApplicantsTab({
     }
   };
 
-  const renderRow = (
-    c: CandidateListItem,
-    mode: "new" | "reviewed",
-  ) => {
-    const score = getScoreForRole(c, jobId);
-    const isScoring = scoringId === c.id;
-    const rowClickable = mode === "reviewed";
-    return (
-      <tr
-        key={c.id}
-        className={`border-b border-slate-100 last:border-0 ${
-          rowClickable ? "cursor-pointer hover:bg-slate-50" : ""
-        }`}
-        onClick={
-          rowClickable
-            ? (e) => {
-                if ((e.target as HTMLElement).closest("button, a, input")) {
-                  return;
-                }
-                openPanel(c.id, panelOptions);
-              }
-            : undefined
-        }
-      >
-        <td className="px-4 py-3">
-          <div>
-            {mode === "new" ? (
-              <ClickableCandidateName
-                candidateId={c.id}
-                panelOptions={panelOptions}
-              >
-                {c.display_name}
-              </ClickableCandidateName>
-            ) : (
-              <span className="font-medium text-slate-900">{c.display_name}</span>
-            )}
-            <CandidateListMeta
-              currentTitle={c.current_title}
-              currentCompany={c.current_company}
-              yearsExperience={c.signal_profile.total_years_experience}
-            />
-          </div>
-        </td>
-        <td className="px-4 py-3 text-slate-600">
-          {formatTotalExperienceDisplay(c.signal_profile.total_years_experience)}
-        </td>
-        <td className="px-4 py-3">
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
-            {sourceBadgeLabel(c.source)}
-          </span>
-        </td>
-        <td className="px-4 py-3 text-right">
-          {mode === "new" ? (
-            isScoring ? (
-              <span className="inline-flex items-center gap-2 text-sm text-slate-500">
-                <Loader2 className="h-4 w-4 animate-spin text-[#0D9488]" />
-                Scoring…
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => void scoreOne(c.id)}
-                className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-600"
-              >
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-200 opacity-75" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-100" />
-                </span>
-                Review and Score
-              </button>
-            )
-          ) : score ? (
-            <VerdictBadge verdict={score.verdict} score={score.overall_score} compact />
-          ) : null}
-        </td>
-      </tr>
-    );
-  };
-
   return (
     <div className="space-y-8">
-      <div className="w-full space-y-4">
-        <div className="flex flex-wrap items-center justify-end gap-3">
-          <label
-            className={`inline-flex cursor-pointer items-center gap-2 ${karta.btnSecondary} ${
-              uploading ? "pointer-events-none opacity-70" : ""
-            }`}
-          >
-            {uploading ? (
-              <Loader2 className="h-4 w-4 animate-spin text-[#0D9488]" />
-            ) : (
-              <Upload className="h-4 w-4" />
-            )}
-            Upload Resumes
-            <input
-              type="file"
-              accept=".pdf,.doc,.docx,.txt"
-              multiple
-              className="sr-only"
-              disabled={uploading}
-              onChange={(e) => {
-                void uploadFiles(e.target.files);
-                e.target.value = "";
-              }}
-            />
-          </label>
-          <button
-            type="button"
-            className={karta.btnSecondary}
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <label
+          className={`inline-flex cursor-pointer items-center gap-2 ${karta.btnPrimary} ${
+            uploading ? "pointer-events-none opacity-70" : ""
+          }`}
+        >
+          {uploading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Upload className="h-4 w-4" />
+          )}
+          Add Applicants
+          <input
+            type="file"
+            accept=".pdf,.doc,.docx,.txt"
+            multiple
+            className="sr-only"
             disabled={uploading}
-            onClick={() =>
-              alert(
-                "LinkedIn profile import is coming soon. Paste a profile URL in a future release.",
-              )
-            }
-          >
-            Import LinkedIn Profile
-          </button>
-        </div>
-
-        {uploadUi.phase !== "idle" && (
-          <ResumeUploadProgress
-            files={uploadUi.files}
-            phase={uploadUi.phase}
-            successCount={
-              uploadUi.phase === "success" ? uploadUi.count : undefined
-            }
+            onChange={(e) => {
+              void uploadFiles(e.target.files);
+              e.target.value = "";
+            }}
           />
-        )}
+        </label>
+        <button
+          type="button"
+          className={karta.btnSecondary}
+          disabled={uploading}
+          onClick={() =>
+            alert(
+              "LinkedIn profile import is coming soon. Paste a profile URL in a future release.",
+            )
+          }
+        >
+          Import LinkedIn Profile
+        </button>
       </div>
+
+      {uploadUi.phase !== "idle" && (
+        <ResumeUploadProgress
+          files={uploadUi.files}
+          phase={uploadUi.phase}
+          successCount={
+            uploadUi.phase === "success" ? uploadUi.count : undefined
+          }
+        />
+      )}
 
       {error && (
         <p className="text-sm text-red-600" role="alert">
@@ -350,9 +396,25 @@ export function JobApplicantsTab({
         id="new-applicants"
         className={`${karta.card} overflow-hidden`}
       >
-        <h3 className="border-b border-slate-200 px-5 py-4 text-base font-semibold text-slate-900">
-          New Applicants
-        </h3>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+          <h3 className="text-base font-semibold text-slate-900">
+            New Applicants
+          </h3>
+          {selected.size > 0 && (
+            <button
+              type="button"
+              disabled={batchScoring}
+              onClick={() => void scoreSelected()}
+              className={karta.btnPrimary}
+            >
+              {batchScoring ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                `Score Selected (${selected.size})`
+              )}
+            </button>
+          )}
+        </div>
         {loading ? (
           <div className="flex items-center justify-center gap-2 px-5 py-12 text-sm text-[#64748B]">
             <Loader2 className="h-5 w-5 animate-spin text-[#0D9488]" />
@@ -366,39 +428,152 @@ export function JobApplicantsTab({
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase text-slate-500">
+                <th className="w-10 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={allNewSelected}
+                    onChange={toggleAll}
+                    aria-label="Select all new applicants"
+                  />
+                </th>
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Experience</th>
                 <th className="px-4 py-3">Source</th>
                 <th className="px-4 py-3 text-right">Action</th>
               </tr>
             </thead>
-            <tbody>{newApplicants.map((c) => renderRow(c, "new"))}</tbody>
+            <tbody>
+              {newApplicants.map((c) => {
+                const isScoring = scoringId === c.id;
+                return (
+                  <tr
+                    key={c.id}
+                    className="border-b border-slate-100 last:border-0"
+                  >
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(c.id)}
+                        onChange={() => toggleOne(c.id)}
+                        aria-label={`Select ${c.display_name}`}
+                      />
+                    </td>
+                    <td className="px-4 py-3">
+                      <ClickableCandidateName
+                        candidateId={c.id}
+                        panelOptions={panelOptions}
+                      >
+                        {c.display_name}
+                      </ClickableCandidateName>
+                      <CandidateListMeta
+                        currentTitle={c.current_title}
+                        currentCompany={c.current_company}
+                        yearsExperience={
+                          c.signal_profile.total_years_experience
+                        }
+                      />
+                      <CoreStrengthLabel
+                        primary={c.signal_profile.core_strength_primary}
+                        secondary={c.signal_profile.core_strength_secondary}
+                      />
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">
+                      {formatTotalExperienceDisplay(
+                        c.signal_profile.total_years_experience,
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                        {sourceBadgeLabel(c.source)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {isScoring ? (
+                        <span className="inline-flex items-center gap-2 text-sm text-slate-500">
+                          <Loader2 className="h-4 w-4 animate-spin text-[#0D9488]" />
+                          Scoring…
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void scoreOne(c.id)}
+                          className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-600"
+                        >
+                          Review and Score
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
           </table>
         )}
       </section>
 
       <section className={`${karta.card} overflow-hidden`}>
         <h3 className="border-b border-slate-200 px-5 py-4 text-base font-semibold text-slate-900">
-          Reviewed Applicants
+          Recommended from Your Talent Pool
         </h3>
-        {loading ? (
+        {matchesLoading ? (
           <div className="flex justify-center px-5 py-12">
             <Loader2 className="h-5 w-5 animate-spin text-[#0D9488]" />
           </div>
-        ) : reviewed.length === 0 ? (
-          <p className="px-5 py-8 text-sm text-slate-500">No reviewed applicants yet.</p>
+        ) : matches.length === 0 ? (
+          <p className="px-5 py-8 text-sm text-slate-500">
+            No talent pool matches for this role yet.
+          </p>
         ) : (
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase text-slate-500">
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Experience</th>
-                <th className="px-4 py-3">Source</th>
-                <th className="px-4 py-3 text-right">Match</th>
-              </tr>
-            </thead>
-            <tbody>{reviewed.map((c) => renderRow(c, "reviewed"))}</tbody>
-          </table>
+          <ul className="divide-y divide-slate-100">
+            {matches.map((m) => (
+              <li
+                key={m.candidateId}
+                className="flex flex-wrap items-center justify-between gap-4 px-5 py-4"
+              >
+                <div>
+                  <ClickableCandidateName
+                    candidateId={m.candidateId}
+                    panelOptions={panelOptions}
+                    className="font-semibold text-[#1E293B] hover:text-[#0D9488] hover:underline"
+                  >
+                    {m.candidateName}
+                  </ClickableCandidateName>
+                  <p className="mt-1 text-sm text-[#64748B]">
+                    {formatTotalExperienceDisplay(m.yearsExperience)} · Previously
+                    scored: {m.previousRoleTitle}
+                  </p>
+                  {m.seniorityNote && (
+                    <p
+                      className={`mt-1 text-xs ${
+                        m.seniorityNote.includes("below")
+                          ? "text-amber-700"
+                          : "text-[#94A3B8]"
+                      }`}
+                    >
+                      {m.seniorityNote}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="text-lg font-semibold text-[#0D9488]">
+                    {m.matchPercent}%
+                  </span>
+                  <button
+                    type="button"
+                    disabled={rematchingId === m.candidateId}
+                    onClick={() => void rematch(m.candidateId)}
+                    className={karta.btnSecondary}
+                  >
+                    {rematchingId === m.candidateId ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Re-match"
+                    )}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 
@@ -436,29 +611,29 @@ export function JobApplicantsTab({
             ) : (
               <table className="w-full text-left text-sm">
                 <tbody>
-                  {unlikely.map((c) => {
-                    const score = getScoreForRole(c, jobId);
-                    return (
-                      <tr key={c.id} className="border-b border-slate-100">
-                        <td className="px-4 py-3 font-medium">{c.display_name}</td>
-                        <td className="px-4 py-3 text-right">
-                          {score && (
-                            <VerdictBadge
-                              verdict={score.verdict}
-                              score={score.overall_score}
-                              compact
-                            />
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {unlikely.map((c) => (
+                    <tr key={c.id} className="border-b border-slate-100">
+                      <td className="px-4 py-3 font-medium">{c.display_name}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             )}
           </div>
         )}
       </section>
+
+      {duplicateMatch && (
+        <DuplicateWarningModal
+          match={duplicateMatch}
+          onViewExisting={() => {
+            openPanel(duplicateMatch.candidateId, panelOptions);
+            setDuplicateMatch(null);
+            setPendingUpload(null);
+          }}
+          onProceed={() => void handleDuplicateProceed()}
+        />
+      )}
     </div>
   );
 }

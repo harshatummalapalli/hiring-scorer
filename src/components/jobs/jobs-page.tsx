@@ -6,6 +6,7 @@ import { Loader2, Plus } from "lucide-react";
 import { RoleBriefCreator } from "@/components/role-briefs/role-brief-creator";
 import { JobLimitModal } from "@/components/workspace/job-limit-modal";
 import { karta } from "@/lib/brand/karta";
+import { formatKartaDate } from "@/lib/dates/format-karta-date";
 import { getErrorMessage } from "@/lib/errors";
 import type { JobListItem } from "@/types/job";
 import { JOB_STATUS_LABELS } from "@/types/job";
@@ -184,9 +185,7 @@ export function JobsPage() {
                 <div>
                   <dt className="text-xs text-[#64748B]">Posted</dt>
                   <dd className="font-semibold text-[#1E293B]">
-                    {job.daysSinceCreated === 0
-                      ? "Today"
-                      : `${job.daysSinceCreated}d ago`}
+                    {formatKartaDate(job.created_at)}
                   </dd>
                 </div>
               </dl>

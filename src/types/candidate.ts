@@ -2,6 +2,8 @@ import type {
   CandidateScoringStatus,
   CandidateSource,
 } from "@/types/job";
+import type { CoreStrengthBreakdown } from "@/lib/intelligence/skill-domains";
+import type { GithubProfileData } from "@/lib/candidates/github-enrichment";
 import type { CompanyType, FitVerdict, ResumeQualitySignals } from "@/types/score";
 import type { CandidateScoreResult } from "@/types/score";
 
@@ -73,6 +75,11 @@ export type CandidateSignalProfile = {
   skills_verified: VerifiedSkill[];
   skills_listed_only: string[];
   title_band: string | null;
+  core_strength_primary: string | null;
+  core_strength_secondary: string | null;
+  core_strength_breakdown: CoreStrengthBreakdown;
+  github?: GithubProfileData | null;
+  resume_content_hash?: string | null;
 };
 
 export type CandidateActivityType =
@@ -180,5 +187,21 @@ export type CandidateExperienceFilter =
 
 export type CandidateSortOption =
   | "recent"
+  | "oldest"
   | "highest_score"
+  | "name_az"
   | "most_scored";
+
+export type CandidateCoreStrengthFilter =
+  | "all"
+  | "backend"
+  | "frontend"
+  | "data_ml"
+  | "devops_infra"
+  | "ai_llm";
+
+export type CandidateSourceFilter =
+  | "all"
+  | "uploaded"
+  | "linkedin_profile"
+  | "application";

@@ -2,6 +2,10 @@ import {
   careerGrowthLabel,
   ownershipLabel,
 } from "@/lib/candidates/signal-labels";
+import {
+  coreStrengthOverlapsRole,
+  primaryRoleDomains,
+} from "@/lib/intelligence/skill-domains";
 import type { CandidateSignalProfile } from "@/types/candidate";
 import type { RoleBrief, TitleBand } from "@/types/role-brief";
 
@@ -22,7 +26,62 @@ export type TalentRecommendation = {
   yearsExperience: string;
   score: number;
   matchedSkills: string[];
+  seniorityNote?: string | null;
 };
+
+const BAND_RANK: Record<TitleBand, number> = {
+  Entry: 1,
+  Mid: 2,
+  Senior: 3,
+  Staff: 4,
+  Principal: 5,
+};
+
+export function titleBandRank(band: string | null | undefined): number | null {
+  if (!band?.trim()) return null;
+  const key = band.trim() as TitleBand;
+  return BAND_RANK[key] ?? null;
+}
+
+export function seniorityGapNote(
+  jobBand: TitleBand | null,
+  candidateBand: string | null | undefined,
+): string | null {
+  const jobRank = titleBandRank(jobBand);
+  const candRank = titleBandRank(candidateBand);
+  if (jobRank == null || candRank == null) return null;
+  const gap = candRank - jobRank;
+  if (gap === -1) return "Slightly below target level";
+  if (gap === 1) return "May be overqualified";
+  return null;
+}
+
+export function passesSeniorityFilter(
+  jobBand: TitleBand | null,
+  candidateBand: string | null | undefined,
+): boolean {
+  const jobRank = titleBandRank(jobBand);
+  const candRank = titleBandRank(candidateBand);
+  if (jobRank == null || candRank == null) return true;
+  const gap = Math.abs(candRank - jobRank);
+  if (gap >= 2) return false;
+  if (
+    (jobRank <= 2 && candRank >= 4) ||
+    (jobRank >= 4 && candRank <= 1)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function passesCoreStrengthFilter(
+  roleBrief: RoleBrief,
+  profile: CandidateSignalProfile,
+): boolean {
+  const roleDomains = primaryRoleDomains(roleBrief);
+  if (roleDomains.length === 0) return true;
+  return coreStrengthOverlapsRole(profile, roleDomains);
+}
 
 const MAX_MUST_HAVE_POINTS = 60;
 const POINTS_PER_MUST_HAVE = 15;
@@ -215,6 +274,15 @@ export function scoreAllTalentRecommendations(
 
   for (const c of candidates) {
     if (!c.signal_profile) continue;
+    if (!passesCoreStrengthFilter(roleBrief, c.signal_profile)) continue;
+    if (
+      !passesSeniorityFilter(
+        roleBrief.title_band,
+        c.signal_profile.title_band,
+      )
+    ) {
+      continue;
+    }
     const { score, matchedSkills } = computeLocalRecommendationScore(
       roleBrief,
       c.signal_profile,
@@ -226,6 +294,10 @@ export function scoreAllTalentRecommendations(
       yearsExperience: c.signal_profile.total_years_experience?.trim() || "—",
       score,
       matchedSkills,
+      seniorityNote: seniorityGapNote(
+        roleBrief.title_band,
+        c.signal_profile.title_band,
+      ),
     });
   }
 

@@ -6,21 +6,26 @@ import { Loader2, Search, Upload, X } from "lucide-react";
 import { useCandidatePanel } from "@/contexts/candidate-panel-context";
 import { karta } from "@/lib/brand/karta";
 import {
+  candidateHasGithub,
   filterCandidates,
+  matchesCoreStrengthFilter,
+  matchesSourceFilter,
   sortCandidates,
 } from "@/lib/candidates/list-filters";
 import { CandidateListMeta } from "@/components/candidates/candidate-list-meta";
+import { CoreStrengthLabel } from "@/components/candidates/core-strength-label";
+import { formatKartaDateAdded } from "@/lib/dates/format-karta-date";
 import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
 import type {
+  CandidateCoreStrengthFilter,
   CandidateExperienceFilter,
   CandidateListItem,
+  CandidateSortOption,
+  CandidateSourceFilter,
   CandidateVerdictFilter,
 } from "@/types/candidate";
-import type { CandidateSource } from "@/types/job";
 import { sourceBadgeLabel } from "@/types/job";
-
-type SourceFilter = "all" | CandidateSource;
 
 export function TalentPoolWorkspace() {
   const router = useRouter();
@@ -30,7 +35,11 @@ export function TalentPoolWorkspace() {
   const [search, setSearch] = useState("");
   const [verdict, setVerdict] = useState<CandidateVerdictFilter>("all");
   const [experience, setExperience] = useState<CandidateExperienceFilter>("all");
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
+  const [sourceFilter, setSourceFilter] = useState<CandidateSourceFilter>("all");
+  const [sort, setSort] = useState<CandidateSortOption>("recent");
+  const [coreStrength, setCoreStrength] =
+    useState<CandidateCoreStrengthFilter>("all");
+  const [hasGithubOnly, setHasGithubOnly] = useState(false);
   const { openPanel, candidateId: panelCandidateId } = useCandidatePanel();
   const [showUpload, setShowUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -86,12 +95,23 @@ export function TalentPoolWorkspace() {
       companyType: "all",
       experience,
     });
-    const withSource =
-      sourceFilter === "all"
-        ? base
-        : base.filter((c) => c.source === sourceFilter);
-    return sortCandidates(withSource, "recent");
-  }, [candidates, search, verdict, experience, sourceFilter]);
+    return sortCandidates(
+      base
+        .filter((c) => matchesSourceFilter(c, sourceFilter))
+        .filter((c) => matchesCoreStrengthFilter(c, coreStrength))
+        .filter((c) => !hasGithubOnly || candidateHasGithub(c)),
+      sort,
+    );
+  }, [
+    candidates,
+    search,
+    verdict,
+    experience,
+    sourceFilter,
+    sort,
+    coreStrength,
+    hasGithubOnly,
+  ]);
 
   const handleFiles = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -179,14 +199,27 @@ export function TalentPoolWorkspace() {
           />
         </div>
         <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as CandidateSortOption)}
+          className={karta.input}
+          aria-label="Sort"
+        >
+          <option value="recent">Most recently added</option>
+          <option value="oldest">Oldest first</option>
+          <option value="highest_score">Highest match score</option>
+          <option value="name_az">Name A to Z</option>
+        </select>
+        <select
           value={sourceFilter}
-          onChange={(e) => setSourceFilter(e.target.value as SourceFilter)}
+          onChange={(e) =>
+            setSourceFilter(e.target.value as CandidateSourceFilter)
+          }
           className={karta.input}
           aria-label="Filter by source"
         >
           <option value="all">All sources</option>
           <option value="uploaded">Uploaded</option>
-          <option value="application">Application</option>
+          <option value="application">Applied Directly</option>
           <option value="linkedin_profile">LinkedIn Profile</option>
         </select>
         <select
@@ -196,11 +229,26 @@ export function TalentPoolWorkspace() {
           aria-label="Filter by verdict"
         >
           <option value="all">All verdicts</option>
-          <option value="strong">Strong fit</option>
-          <option value="possible">Possible fit</option>
-          <option value="weak">Weak fit</option>
-          <option value="not_suitable">Not suitable</option>
-          <option value="unscored">Unscored</option>
+          <option value="strong">Strong Match</option>
+          <option value="possible">Potential Match</option>
+          <option value="weak">Low Match</option>
+          <option value="not_suitable">No Match</option>
+          <option value="unscored">Not scored yet</option>
+        </select>
+        <select
+          value={coreStrength}
+          onChange={(e) =>
+            setCoreStrength(e.target.value as CandidateCoreStrengthFilter)
+          }
+          className={karta.input}
+          aria-label="Filter by core strength"
+        >
+          <option value="all">Any strength</option>
+          <option value="backend">Backend</option>
+          <option value="frontend">Frontend</option>
+          <option value="data_ml">Data and ML</option>
+          <option value="devops_infra">DevOps and Infra</option>
+          <option value="ai_llm">AI and LLM</option>
         </select>
         <select
           value={experience}
@@ -216,6 +264,14 @@ export function TalentPoolWorkspace() {
           <option value="8-12">8–12 years</option>
           <option value="13+">13+ years</option>
         </select>
+        <label className="flex items-center gap-2 text-sm text-[#334155]">
+          <input
+            type="checkbox"
+            checked={hasGithubOnly}
+            onChange={(e) => setHasGithubOnly(e.target.checked)}
+          />
+          Has GitHub
+        </label>
       </div>
 
       {loading ? (
@@ -255,6 +311,13 @@ export function TalentPoolWorkspace() {
                     currentCompany={c.current_company}
                     yearsExperience={c.signal_profile.total_years_experience}
                   />
+                  <CoreStrengthLabel
+                    primary={c.signal_profile.core_strength_primary}
+                    secondary={c.signal_profile.core_strength_secondary}
+                  />
+                  <p className="mt-2 text-[11px] text-[#94A3B8]">
+                    {formatKartaDateAdded(c.applied_at ?? c.created_at)}
+                  </p>
                   {jobBadges.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-1">
                       {jobBadges.map((s) => (

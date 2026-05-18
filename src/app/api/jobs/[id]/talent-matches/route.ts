@@ -59,6 +59,7 @@ export async function GET(_request: Request, { params }: Params) {
         yearsExperience: r.yearsExperience,
         matchPercent: r.score,
         matchedSkills: r.matchedSkills,
+        seniorityNote: r.seniorityNote ?? null,
         previousRoleTitle: prev?.role_brief_title ?? "Another role",
         previousRoleId: prev?.role_brief_id ?? null,
         previousScore: prev?.overall_score ?? null,

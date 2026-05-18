@@ -179,6 +179,7 @@ export async function insertPipelineCandidate(row: {
   present_salary?: string | null;
   expected_salary?: string | null;
   recruiter_notes?: string | null;
+  shortlist_reason?: string | null;
 }): Promise<PipelineCandidateRow> {
   const supabase = await getServerSupabase();
   const userId = await getAuthenticatedUserId(supabase);
@@ -200,6 +201,7 @@ export async function insertPipelineCandidate(row: {
           present_salary: row.present_salary ?? null,
           expected_salary: row.expected_salary ?? null,
           recruiter_notes: row.recruiter_notes ?? null,
+          shortlist_reason: row.shortlist_reason ?? null,
         },
         userId,
       ),

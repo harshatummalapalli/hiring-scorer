@@ -28,6 +28,8 @@ import {
   polishTitleAndCompany,
 } from "./extract-resume-header";
 import { prepareSignalQuote, toStrippedResumeText } from "./resume-text";
+import { computeCoreStrengthFromVerifiedSkills } from "@/lib/intelligence/skill-domains";
+import { hashResumeContentPrefix } from "@/lib/candidates/resume-content-hash";
 
 function skillInText(skill: string, text: string): { index: number; len: number } | null {
   const needle = skill.trim();
@@ -234,6 +236,7 @@ export function buildSignalProfile(
     experience[0]?.title ?? professional_summary.slice(0, 200),
   );
   const trajectory_velocity = computeTrajectoryVelocity(experience);
+  const coreStrength = computeCoreStrengthFromVerifiedSkills(verified);
 
   return {
     display_name,
@@ -272,6 +275,10 @@ export function buildSignalProfile(
     skills_verified: verified,
     skills_listed_only: listedOnly,
     title_band,
+    core_strength_primary: coreStrength.core_strength_primary,
+    core_strength_secondary: coreStrength.core_strength_secondary,
+    core_strength_breakdown: coreStrength.core_strength_breakdown,
+    resume_content_hash: hashResumeContentPrefix(resumeText),
   };
 }
 

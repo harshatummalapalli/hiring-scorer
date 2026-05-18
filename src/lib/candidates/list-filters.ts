@@ -1,8 +1,14 @@
+import {
+  domainIdFromLabel,
+  type SkillDomainId,
+} from "@/lib/intelligence/skill-domains";
 import type {
   CandidateCompanyTypeFilter,
+  CandidateCoreStrengthFilter,
   CandidateExperienceFilter,
   CandidateListItem,
   CandidateSortOption,
+  CandidateSourceFilter,
   CandidateVerdictFilter,
 } from "@/types/candidate";
 import type { CompanyType, FitVerdict } from "@/types/score";
@@ -98,6 +104,17 @@ export function sortCandidates(
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );
       });
+    case "oldest":
+      return copy.sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      );
+    case "name_az":
+      return copy.sort((a, b) =>
+        a.display_name.localeCompare(b.display_name, undefined, {
+          sensitivity: "base",
+        }),
+      );
     case "recent":
     default:
       return copy.sort(
@@ -105,6 +122,45 @@ export function sortCandidates(
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
       );
   }
+}
+
+const CORE_FILTER_TO_DOMAIN: Record<
+  Exclude<CandidateCoreStrengthFilter, "all">,
+  SkillDomainId
+> = {
+  backend: "backend",
+  frontend: "frontend",
+  data_ml: "data_ml",
+  devops_infra: "devops_infra",
+  ai_llm: "ai_llm",
+};
+
+export function matchesCoreStrengthFilter(
+  item: CandidateListItem,
+  filter: CandidateCoreStrengthFilter,
+): boolean {
+  if (filter === "all") return true;
+  const target = CORE_FILTER_TO_DOMAIN[filter];
+  const profile = item.signal_profile;
+  const ids = [
+    domainIdFromLabel(profile.core_strength_primary),
+    domainIdFromLabel(profile.core_strength_secondary),
+  ].filter(Boolean);
+  return ids.includes(target);
+}
+
+export function candidateHasGithub(item: CandidateListItem): boolean {
+  return Boolean(item.signal_profile.github?.username);
+}
+
+export function matchesSourceFilter(
+  item: CandidateListItem,
+  filter: "all" | "uploaded" | "linkedin_profile" | "application",
+): boolean {
+  if (filter === "all") return true;
+  if (filter === "application") return item.source === "application";
+  if (filter === "linkedin_profile") return item.source === "linkedin_profile";
+  return item.source === "uploaded";
 }
 
 export function filterCandidates(
