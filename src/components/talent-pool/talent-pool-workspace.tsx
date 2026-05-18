@@ -10,6 +10,7 @@ import {
   sortCandidates,
 } from "@/lib/candidates/list-filters";
 import { formatTotalExperienceDisplay } from "@/lib/candidates/format-total-experience";
+import { formatTitleAtCompanySubtitle } from "@/lib/candidates/profile-display";
 import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
 import type {
@@ -241,6 +242,10 @@ export function TalentPoolWorkspace() {
             const jobBadges = c.role_scores
               .filter((s) => s.role_brief_title)
               .slice(0, 4);
+            const roleSubtitle = formatTitleAtCompanySubtitle(
+              c.current_title,
+              c.current_company,
+            );
             return (
               <li key={c.id}>
                 <button
@@ -257,7 +262,7 @@ export function TalentPoolWorkspace() {
                     </span>
                   </div>
                   <p className="mt-1 text-sm text-[#64748B]">
-                    {experienceLabel(c)}
+                    {roleSubtitle ?? experienceLabel(c)}
                   </p>
                   {jobBadges.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-1">

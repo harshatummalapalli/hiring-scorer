@@ -15,16 +15,15 @@ import {
 import {
   computeTrajectoryVelocity,
   estimateYearsExperience,
-  extractCurrentCompany,
   extractExplicitYearsOfExperience,
   extractLocation,
-  extractTitleFromResumeHeader,
   resolveProfessionalSummary,
   parseEducationEntries,
   parseExperienceWithFallback,
   parseSkillsFromSection,
   splitResumeSections,
 } from "./parse-resume-structure";
+import { extractCurrentTitleAndCompany } from "./extract-resume-header";
 import { prepareSignalQuote, toStrippedResumeText } from "./resume-text";
 
 function skillInText(skill: string, text: string): { index: number; len: number } | null {
@@ -189,17 +188,22 @@ export function buildSignalProfile(
   const { linkedin_url, portfolio_links } = extractResumeLinks(resumeText);
   const display_name = identity.display_name;
 
+  const { current_title: headerTitle, current_company: headerCompany } =
+    extractCurrentTitleAndCompany(resumeText);
   const recentRole = experience.find((e) => isValidExperienceEntry(e));
   const experienceTitle = recentRole?.title.trim();
-  const headerTitle = extractTitleFromResumeHeader(resumeText)?.trim();
-  const most_recent_title =
-    experienceTitle ||
-    (headerTitle && !isSummaryLikeTitle(headerTitle) ? headerTitle : "") ||
+  const experienceCompany = recentRole?.company.trim();
+
+  const resolvedTitle =
+    headerTitle?.trim() ||
+    (experienceTitle && !isSummaryLikeTitle(experienceTitle)
+      ? experienceTitle
+      : "") ||
     "";
+  const current_title = resolvedTitle || null;
+  const most_recent_title = resolvedTitle;
   const current_company =
-    recentRole?.company.trim() ||
-    extractCurrentCompany(resumeText)?.trim() ||
-    null;
+    headerCompany?.trim() || experienceCompany || null;
   const location = extractLocation(resumeText);
   const explicitYears = extractExplicitYearsOfExperience(resumeText, rawSections);
   const fromRoles = estimateYearsExperience(experience);
@@ -229,6 +233,7 @@ export function buildSignalProfile(
     display_name,
     first_name: identity.first_name,
     last_name: identity.last_name,
+    current_title,
     most_recent_title,
     current_company,
     location,

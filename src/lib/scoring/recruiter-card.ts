@@ -19,50 +19,10 @@ const COMPANY_TYPES: CompanyType[] = [
   "Startup",
 ];
 
-import { stripTrailingJobTitleWords } from "@/lib/candidates/resolve-display-name";
+import { displayNameFromFilename } from "@/lib/candidates/extract-resume-header";
 
 export function filenameToDisplayName(filename: string): string {
-  let base = filename.replace(/\.[^.]+$/, "");
-  base = base.replace(/\[[^\]]*\]/g, "");
-  base = base.replace(/\([^)]*\)/g, "");
-  base = base.replace(/[_-]+/g, " ");
-  base = base.replace(
-    /\b(?:naukri|linkedin|indeed|monster|glassdoor|jobsearch|hirist|apna|shine)\b/gi,
-    "",
-  );
-  base = base.replace(/\b\d+\s*y(?:rs?|ears?)?\b/gi, "");
-  base = base.replace(
-    /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/gi,
-    "",
-  );
-  base = base.replace(/\b20\d{2}\b/g, "");
-  base = base.replace(
-    /\b(?:resume|cv|curriculum vitae|profile|final|new|updated|revised|v\d+)\b/gi,
-    "",
-  );
-  base = base.replace(/\b(?:mle|ml|be|btech|b\.tech)\b/gi, "");
-  base = base.replace(/\s+/g, " ").trim();
-
-  if (!base) return "Candidate";
-
-  const companyWord =
-    /^(?:microsoft|google|amazon|meta|apple|netflix|flipkart|swiggy|zomato|razorpay|phonepe|paytm|freshworks|infosys|tcs|wipro|cognizant|hcl|accenture|capgemini|deloitte|ibm|oracle|sap|adobe|salesforce|uber|airbnb|stripe|linkedin|naukri|hirist|apna|shine)$/i;
-
-  let words = base
-    .split(" ")
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
-
-  while (words.length > 2 && companyWord.test(words[words.length - 1] ?? "")) {
-    words.pop();
-  }
-
-  words = stripTrailingJobTitleWords(words);
-
-  if (words.length > 4 || words.join(" ").length > 32) {
-    return words.slice(0, 2).join(" ") || "Candidate";
-  }
-  return words.join(" ") || "Candidate";
+  return displayNameFromFilename(filename);
 }
 
 export function scoreToVerdict(score: number): FitVerdict {

@@ -1,6 +1,5 @@
-import { filenameToDisplayName } from "@/lib/scoring/recruiter-card";
+import { resolveDisplayNameFromResume } from "./extract-resume-header";
 import { cleanDisplayName } from "./resolve-display-name";
-import { extractNameFromRawResume } from "./parse-resume-structure";
 
 export type ParsedIdentity = {
   first_name: string;
@@ -32,7 +31,5 @@ export function parseResumeIdentity(
   resumeText: string,
   resumeFilename: string,
 ): ParsedIdentity {
-  const fromResume = extractNameFromRawResume(resumeText);
-  if (fromResume) return splitFullName(fromResume);
-  return splitFullName(filenameToDisplayName(resumeFilename));
+  return splitFullName(resolveDisplayNameFromResume(resumeText, resumeFilename));
 }

@@ -48,6 +48,8 @@ function rowToCandidate(row: Record<string, unknown>): CandidateRow {
   return {
     id: String(row.id),
     display_name,
+    current_title: signal_profile.current_title ?? null,
+    current_company: signal_profile.current_company ?? null,
     resume_filename: row.resume_filename != null ? String(row.resume_filename) : null,
     resume_text: resumeText,
     signal_profile: { ...signal_profile, display_name },

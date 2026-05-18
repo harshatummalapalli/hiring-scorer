@@ -47,6 +47,7 @@ export type CandidateSignalProfile = {
   display_name: string;
   first_name: string;
   last_name: string;
+  current_title: string | null;
   most_recent_title: string;
   current_company: string | null;
   location: string | null;
@@ -102,6 +103,8 @@ export type CandidateNote = {
 export type CandidateRow = {
   id: string;
   display_name: string;
+  current_title: string | null;
+  current_company: string | null;
   resume_filename: string | null;
   resume_file_path: string | null;
   resume_file_name: string | null;

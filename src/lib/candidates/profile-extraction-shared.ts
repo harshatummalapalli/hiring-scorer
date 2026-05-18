@@ -287,6 +287,7 @@ export function mapParsedProfileToSignal(
     display_name,
     first_name: g.first_name?.trim() || identity.first_name,
     last_name: g.last_name?.trim() || identity.last_name,
+    current_title: g.current_title?.trim() || null,
     most_recent_title: g.current_title ?? "",
     current_company: g.current_company ?? null,
     location: g.location ?? null,

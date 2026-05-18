@@ -136,7 +136,8 @@ export function getDisplayJobTitle(profile: CandidateSignalProfile): string {
   const fromValid = profile.experience.find((e) => isValidExperienceEntry(e));
   if (fromValid) return fromValid.title.trim();
 
-  const stored = profile.most_recent_title?.trim() ?? "";
+  const stored =
+    profile.current_title?.trim() || profile.most_recent_title?.trim() || "";
   if (
     stored &&
     stored !== "Not stated" &&
@@ -172,6 +173,19 @@ export function formatCandidateHeadline(profile: CandidateSignalProfile): string
   const years = formatYearsExperience(profile);
   if (years) parts.push(years);
   return parts.join(" · ");
+}
+
+/** Subtitle for list rows: "Title at Company" from stored resume extraction. */
+export function formatTitleAtCompanySubtitle(
+  currentTitle: string | null | undefined,
+  currentCompany: string | null | undefined,
+): string | null {
+  const title = currentTitle?.trim();
+  const company = currentCompany?.trim();
+  if (title && company) return `${title} at ${company}`;
+  if (title) return title;
+  if (company) return company;
+  return null;
 }
 
 export function evidenceContainsRedaction(text: string): boolean {
