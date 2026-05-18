@@ -1,4 +1,5 @@
 import type { CandidateSignalProfile, ExperienceEntry } from "@/types/candidate";
+import { formatTitleAtCompany } from "@/lib/candidates/extract-resume-header";
 import { isBadDisplayName } from "@/lib/candidates/resolve-display-name";
 
 const REDACTED_TOKEN =
@@ -153,6 +154,9 @@ export function getDisplayJobTitle(profile: CandidateSignalProfile): string {
 }
 
 export function getCandidateHeaderName(profile: CandidateSignalProfile): string {
+  const display = profile.display_name?.trim();
+  if (display && !isBadDisplayName(display)) return display;
+
   const first = profile.first_name?.trim();
   const last = profile.last_name?.trim();
   if (first && last) {
@@ -160,8 +164,6 @@ export function getCandidateHeaderName(profile: CandidateSignalProfile): string 
     if (!isBadDisplayName(full)) return full;
   }
   if (first && !isBadDisplayName(first)) return first;
-  const display = profile.display_name?.trim();
-  if (display && !isBadDisplayName(display)) return display;
   return "Unknown Candidate";
 }
 
@@ -180,12 +182,7 @@ export function formatTitleAtCompanySubtitle(
   currentTitle: string | null | undefined,
   currentCompany: string | null | undefined,
 ): string | null {
-  const title = currentTitle?.trim();
-  const company = currentCompany?.trim();
-  if (title && company) return `${title} at ${company}`;
-  if (title) return title;
-  if (company) return company;
-  return null;
+  return formatTitleAtCompany(currentTitle, currentCompany);
 }
 
 export function evidenceContainsRedaction(text: string): boolean {

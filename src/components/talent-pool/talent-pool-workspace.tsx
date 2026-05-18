@@ -9,8 +9,7 @@ import {
   filterCandidates,
   sortCandidates,
 } from "@/lib/candidates/list-filters";
-import { formatTotalExperienceDisplay } from "@/lib/candidates/format-total-experience";
-import { formatTitleAtCompanySubtitle } from "@/lib/candidates/profile-display";
+import { CandidateListMeta } from "@/components/candidates/candidate-list-meta";
 import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
 import type {
@@ -20,12 +19,6 @@ import type {
 } from "@/types/candidate";
 import type { CandidateSource } from "@/types/job";
 import { sourceBadgeLabel } from "@/types/job";
-
-function experienceLabel(c: CandidateListItem): string {
-  return formatTotalExperienceDisplay(
-    c.signal_profile.total_years_experience,
-  );
-}
 
 type SourceFilter = "all" | CandidateSource;
 
@@ -242,10 +235,6 @@ export function TalentPoolWorkspace() {
             const jobBadges = c.role_scores
               .filter((s) => s.role_brief_title)
               .slice(0, 4);
-            const roleSubtitle = formatTitleAtCompanySubtitle(
-              c.current_title,
-              c.current_company,
-            );
             return (
               <li key={c.id}>
                 <button
@@ -261,9 +250,11 @@ export function TalentPoolWorkspace() {
                       {sourceBadgeLabel(c.source)}
                     </span>
                   </div>
-                  <p className="mt-1 text-sm text-[#64748B]">
-                    {roleSubtitle ?? experienceLabel(c)}
-                  </p>
+                  <CandidateListMeta
+                    currentTitle={c.current_title}
+                    currentCompany={c.current_company}
+                    yearsExperience={c.signal_profile.total_years_experience}
+                  />
                   {jobBadges.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-1">
                       {jobBadges.map((s) => (

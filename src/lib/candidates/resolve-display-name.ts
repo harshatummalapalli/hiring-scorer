@@ -89,7 +89,7 @@ function capitalizeWord(w: string): string {
   return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
 }
 
-function splitCamelCaseToken(word: string): string[] | null {
+export function splitCamelCaseToken(word: string): string[] | null {
   const parts = word
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .split(/\s+/)
@@ -100,7 +100,7 @@ function splitCamelCaseToken(word: string): string[] | null {
   return null;
 }
 
-function splitCompoundSurname(word: string): string[] | null {
+export function splitCompoundSurname(word: string): string[] | null {
   const lower = word.toLowerCase();
   for (const suffix of INDIAN_SURNAME_SUFFIXES) {
     if (!lower.endsWith(suffix) || lower.length <= suffix.length + 2) continue;
@@ -116,6 +116,7 @@ function splitCompoundSurname(word: string): string[] | null {
 export function cleanDisplayName(name: string): string {
   let words = name
     .trim()
+    .replace(/[.,;:!?]+$/g, "")
     .replace(/[_-]+/g, " ")
     .split(/\s+/)
     .filter(Boolean)

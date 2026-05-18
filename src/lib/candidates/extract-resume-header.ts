@@ -1,5 +1,9 @@
-import { cleanDisplayName, isBadDisplayName } from "./resolve-display-name";
-import { filenameToDisplayName } from "@/lib/scoring/recruiter-card";
+import {
+  cleanDisplayName,
+  isBadDisplayName,
+  splitCamelCaseToken,
+  splitCompoundSurname,
+} from "./resolve-display-name";
 
 const FILENAME_NOISE =
   /\b(?:resume|cv|curriculum\s*vitae|profile|final|new|updated|revised|draft|copy|latest|v\d+)\b/gi;
@@ -8,10 +12,16 @@ const SECTION_WORD =
   /\b(?:summary|experience|education|skills|profile|objective|contact|work|employment|projects|certifications|references|about|career|professional|qualifications|highlights|expertise|competencies|activities|interests|hobbies|languages|awards|achievements)\b/i;
 
 const TITLE_KEYWORD =
-  /\b(?:engineer|manager|director|analyst|consultant|developer|architect|lead|senior|junior|staff|principal|head|vp)\b/i;
+  /\b(?:engineer|engineering|manager|management|director|analyst|analysis|consultant|consulting|developer|development|architect|architecture|lead|senior|sr|junior|jr|staff|principal|head|vp|vice|president|scientist|designer|design|specialist|administrator|coordinator|associate|executive|programmer|tester|intern|trainee|founder|co[- ]?founder|cto|ceo|cfo|coo|product|data|ml|ai|software|hardware|devops|sre|qa|technologist|professional)\b/i;
+
+const ORG_SUFFIX =
+  /\b(?:labs?|technologies|technology|solutions|systems|software|services|inc|ltd|llc|corp|corporation|company|group|bank|studio|media|health|pay|finance|consulting)\b/i;
 
 const PHONE_PATTERN =
   /\+?\d{1,4}[-.\s]?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}|\b\d{10,15}\b/;
+
+const LOCATION_HINT =
+  /\b(?:india|usa|u\.?s\.?a?|uk|canada|australia|singapore|remote|hybrid|delhi|mumbai|bangalore|bengaluru|hyderabad|pune|chennai|kolkata|gurgaon|gurugram|noida|indore|jaipur|kochi|remote)\b/i;
 
 function resumeLines(resumeText: string): string[] {
   return resumeText.split(/\r?\n/).map((l) => l.trim());
@@ -23,7 +33,27 @@ function capitalizeWord(w: string): string {
   return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
 }
 
-/** Fix 1: filename → at most two name words after extension/noise removal. */
+function stripNamePunctuation(name: string): string {
+  return name
+    .replace(/[.,;:!?]+$/g, "")
+    .replace(/^[,;:\s]+/, "")
+    .trim();
+}
+
+function splitGluedFilenameToken(base: string): string {
+  const cleaned = cleanDisplayName(base);
+  if (cleaned.includes(" ")) return cleaned;
+
+  const camel = splitCamelCaseToken(base);
+  if (camel && camel.length >= 2) return camel.join(" ");
+
+  const compound = splitCompoundSurname(base);
+  if (compound && compound.length >= 2) return compound.join(" ");
+
+  return cleaned;
+}
+
+/** Filename → at most two name words after extension/noise removal. */
 export function displayNameFromFilename(resumeFilename: string): string {
   let base = resumeFilename.replace(/\.[^.]+$/, "");
   base = base.replace(/\[[^\]]*\]/g, " ");
@@ -40,18 +70,23 @@ export function displayNameFromFilename(resumeFilename: string): string {
   );
   base = base.replace(/\b20\d{2}\b/g, "");
   base = base.replace(FILENAME_NOISE, " ");
-  base = base.replace(/\b(?:mle|ml|be|btech|b\.tech)\b/gi, "");
+  base = base.replace(
+    /\b(?:python|java|javascript|typescript|react|node|backend|frontend|fullstack|full[- ]?stack|mle|ml|be|btech|b\.tech|developer|engineer)\b/gi,
+    "",
+  );
+  base = base.replace(/[^\w\s.']/g, " ");
   base = base.replace(/\s+/g, " ").trim();
 
   if (!base) return "Candidate";
 
-  const words = base
+  const expanded = splitGluedFilenameToken(base);
+  const words = expanded
     .split(/\s+/)
     .filter(Boolean)
     .map(capitalizeWord)
     .slice(0, 2);
 
-  return words.join(" ").trim() || "Candidate";
+  return stripNamePunctuation(words.join(" ")) || "Candidate";
 }
 
 function isCapitalizedNameWord(word: string): boolean {
@@ -62,17 +97,30 @@ function isCapitalizedNameWord(word: string): boolean {
   );
 }
 
+function firstSegment(line: string): string {
+  return line.split(/[|•·]/)[0]?.trim() ?? line.trim();
+}
+
 function isPersonNameLine(line: string): boolean {
-  const t = line.trim();
-  if (!t || t.length > 48) return false;
+  const t = firstSegment(line);
+  if (!t || t.length > 52) return false;
   if (/\d/.test(t)) return false;
   if (/@/.test(t)) return false;
   if (PHONE_PATTERN.test(t)) return false;
-  if (/[|•·,;:(){}\[\]#+~!%^&*<>]/.test(t)) return false;
   if (/https?:\/\//i.test(t) || /linkedin\.com/i.test(t)) return false;
   if (SECTION_WORD.test(t)) return false;
+  if (TITLE_KEYWORD.test(t) && t.split(/\s+/).length > 2) return false;
 
   const words = t.split(/\s+/).filter(Boolean);
+  if (words.length === 1) {
+    const w = words[0] ?? "";
+    return (
+      w.length >= 3 &&
+      w.length <= 22 &&
+      isCapitalizedNameWord(w) &&
+      !TITLE_KEYWORD.test(w)
+    );
+  }
   if (words.length < 2 || words.length > 4) return false;
   if (!words.every(isCapitalizedNameWord)) return false;
   if (TITLE_KEYWORD.test(t)) return false;
@@ -81,12 +129,13 @@ function isPersonNameLine(line: string): boolean {
 }
 
 function personNameScore(name: string): number {
-  const cleaned = cleanDisplayName(name);
+  const cleaned = stripNamePunctuation(cleanDisplayName(name));
   if (!cleaned || isBadDisplayName(cleaned)) return 0;
 
   let score = 10;
   const words = cleaned.split(/\s+/).filter(Boolean);
   if (words.length === 2 || words.length === 3) score += 8;
+  if (words.length === 1) score += 5;
   if (words.length === 4) score += 4;
   if (TITLE_KEYWORD.test(cleaned)) score -= 25;
   if (SECTION_WORD.test(cleaned)) score -= 25;
@@ -94,12 +143,12 @@ function personNameScore(name: string): number {
   return score;
 }
 
-/** Fix 2: scan first 5 lines for a person-name line. */
+/** Scan first 8 lines for a person-name line (incl. single-word names). */
 export function extractDisplayNameFromResumeText(resumeText: string): string | null {
-  const lines = resumeLines(resumeText).filter(Boolean).slice(0, 5);
+  const lines = resumeLines(resumeText).filter(Boolean).slice(0, 8);
   for (const line of lines) {
     if (!isPersonNameLine(line)) continue;
-    return cleanDisplayName(line);
+    return stripNamePunctuation(cleanDisplayName(firstSegment(line)));
   }
   return null;
 }
@@ -108,15 +157,15 @@ export function resolveDisplayNameFromResume(
   resumeText: string,
   resumeFilename: string,
 ): string {
-  const fromFilename = cleanDisplayName(
-    displayNameFromFilename(resumeFilename),
+  const fromFilename = stripNamePunctuation(
+    cleanDisplayName(displayNameFromFilename(resumeFilename)),
   );
   const fromResume = extractDisplayNameFromResumeText(resumeText);
 
   if (fromResume && !isBadDisplayName(fromResume)) {
     const resumeScore = personNameScore(fromResume);
     const filenameScore = personNameScore(fromFilename);
-    if (resumeScore > filenameScore) {
+    if (resumeScore >= filenameScore || filenameScore < 8) {
       return fromResume;
     }
   }
@@ -129,7 +178,7 @@ export function resolveDisplayNameFromResume(
     return fromResume;
   }
 
-  return cleanDisplayName(filenameToDisplayName(resumeFilename)) || "Candidate";
+  return stripNamePunctuation(cleanDisplayName(displayNameFromFilename(resumeFilename))) || "Candidate";
 }
 
 function isSectionHeaderLine(line: string): boolean {
@@ -139,39 +188,123 @@ function isSectionHeaderLine(line: string): boolean {
   return false;
 }
 
-/** Fix 3: lines 2–10 (1-based) for a job-title line under 60 characters. */
-export function extractCurrentTitleFromResumeText(
-  resumeText: string,
-): string | null {
-  const lines = resumeLines(resumeText);
-  const slice = lines.slice(1, 10);
-
-  for (const line of slice) {
-    const t = line.trim();
-    if (!t || t.length >= 60) continue;
-    if (/\[REDACTED/i.test(t)) continue;
-    if (/@/.test(t) || PHONE_PATTERN.test(t)) continue;
-    if (isPersonNameLine(t)) continue;
-    if (isSectionHeaderLine(t)) continue;
-    if (!TITLE_KEYWORD.test(t)) continue;
-    return t.slice(0, 59).trim();
-  }
-  return null;
+function looksLikeLocation(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  if (LOCATION_HINT.test(t)) return true;
+  if (/\b[A-Z][a-z]+,\s*[A-Z][a-z]{2,}\b/.test(t)) return true;
+  if (/^\d{5,6}\b/.test(t)) return true;
+  return false;
 }
 
-function parseCompanyFromLine(line: string): string | null {
+function looksLikeJobTitle(text: string): boolean {
+  return TITLE_KEYWORD.test(text);
+}
+
+function companyLooksLikeTitle(title: string | null, company: string): boolean {
+  const c = company.trim();
+  const t = title?.trim() ?? "";
+  if (!c) return true;
+  if (t && c.toLowerCase() === t.toLowerCase()) return true;
+  if (t && c.toLowerCase().includes(t.toLowerCase()) && c.length <= t.length + 8) {
+    return true;
+  }
+  if (looksLikeJobTitle(c) && !ORG_SUFFIX.test(c)) {
+    const words = c.split(/\s+/).filter(Boolean);
+    if (words.length >= 2) return true;
+  }
+  return false;
+}
+
+export function polishTitleAndCompany(
+  title: string | null | undefined,
+  company: string | null | undefined,
+): { current_title: string | null; current_company: string | null } {
+  let current_title = title?.replace(/\s+/g, " ").trim() || null;
+  let current_company = company?.replace(/\s+/g, " ").trim() || null;
+
+  if (current_title && current_title.length > 72) {
+    current_title = current_title.slice(0, 72).trim();
+  }
+  if (current_company && current_company.length > 48) {
+    current_company = current_company.slice(0, 48).trim();
+  }
+
+  if (current_company && companyLooksLikeTitle(current_title, current_company)) {
+    current_company = null;
+  }
+  if (current_company && looksLikeLocation(current_company)) {
+    current_company = null;
+  }
+
+  return {
+    current_title: current_title || null,
+    current_company: current_company || null,
+  };
+}
+
+function parsePipeHeaderLine(line: string): {
+  current_title: string | null;
+  current_company: string | null;
+} {
+  const parts = line
+    .split(/[|•·]/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length < 2) {
+    return { current_title: null, current_company: null };
+  }
+
+  const titleIdx = parts.findIndex(
+    (p) => looksLikeJobTitle(p) && !looksLikeLocation(p) && p.length < 90,
+  );
+  if (titleIdx < 0) {
+    return { current_title: null, current_company: null };
+  }
+
+  const rawTitle = parts[titleIdx].slice(0, 72).trim();
+  for (let i = titleIdx + 1; i < parts.length; i++) {
+    const seg = parts[i]?.trim() ?? "";
+    if (!seg || looksLikeLocation(seg)) continue;
+    if (/@|PHONE_PATTERN/.test(seg)) continue;
+    if (looksLikeJobTitle(seg) && !ORG_SUFFIX.test(seg)) continue;
+
+    return polishTitleAndCompany(rawTitle, seg);
+  }
+
+  return polishTitleAndCompany(rawTitle, null);
+}
+
+function parseAtCompanyLine(line: string): {
+  current_title: string | null;
+  current_company: string | null;
+} | null {
+  const match = line.match(/^(.+?)\s+(?:at|@)\s+(.+)$/i);
+  if (!match?.[1] || !match[2]) return null;
+
+  const title = match[1].trim();
+  const company = match[2].split(/[|•,]/)[0]?.trim() ?? "";
+  if (!looksLikeJobTitle(title)) return null;
+
+  return polishTitleAndCompany(title, company);
+}
+
+function parseCompanyFromLine(line: string, title: string | null): string | null {
   const t = line.trim();
   if (!t || t.length > 80) return null;
 
   const atMatch = t.match(/\s+@\s+(.+)$/i) ?? t.match(/\s+at\s+(.+)$/i);
   if (atMatch?.[1]) {
-    const co = atMatch[1].split(/[|,]/)[0]?.trim();
-    if (co && co.length >= 2 && co.length <= 60) return co;
+    const co = atMatch[1].split(/[|,•·]/)[0]?.trim();
+    if (co && !companyLooksLikeTitle(title, co) && !looksLikeLocation(co)) {
+      return co.slice(0, 48);
+    }
   }
 
   if (isSectionHeaderLine(t)) return null;
   if (/@/.test(t) || PHONE_PATTERN.test(t)) return null;
-  if (/\d{5,}/.test(t)) return null;
+  if (looksLikeLocation(t)) return null;
+  if (looksLikeJobTitle(t)) return null;
 
   const words = t.split(/\s+/).filter(Boolean);
   if (words.length === 1) {
@@ -189,75 +322,92 @@ function parseCompanyFromLine(line: string): string | null {
   if (!words.every((w) => /^[A-Z]/.test(w) || /^(?:of|and|the|&)$/i.test(w))) {
     return null;
   }
-  if (TITLE_KEYWORD.test(t) && !atMatch) return null;
 
-  return t.length <= 60 ? t : t.slice(0, 60).trim();
+  const candidate = t.length <= 48 ? t : t.slice(0, 48).trim();
+  if (companyLooksLikeTitle(title, candidate)) return null;
+  return candidate;
 }
 
-/** Fix 4: company on the next 3 lines after the title line. */
-export function extractCurrentCompanyFromResumeText(
-  resumeText: string,
-  titleLineIndex: number | null,
+function extractCompanyAfterTitle(
+  lines: string[],
+  titleIndex: number,
+  title: string | null,
 ): string | null {
-  const lines = resumeLines(resumeText);
-  if (titleLineIndex == null || titleLineIndex < 0) return null;
-
-  for (let j = titleLineIndex + 1; j < Math.min(titleLineIndex + 4, lines.length); j++) {
-    const company = parseCompanyFromLine(lines[j] ?? "");
+  for (let j = titleIndex + 1; j < Math.min(titleIndex + 4, lines.length); j++) {
+    const company = parseCompanyFromLine(lines[j] ?? "", title);
     if (company) return company;
   }
   return null;
 }
 
+/** Header scan (lines 1–12) with pipe / at / bullet patterns. */
 export function extractCurrentTitleAndCompany(resumeText: string): {
   current_title: string | null;
   current_company: string | null;
 } {
   const lines = resumeLines(resumeText);
-  let titleIndex: number | null = null;
-  let current_title: string | null = null;
 
-  for (let i = 1; i < Math.min(10, lines.length); i++) {
-    const t = (lines[i] ?? "").trim();
-    if (!t || t.length >= 60) continue;
-    if (/@/.test(t) || PHONE_PATTERN.test(t)) continue;
-    if (isPersonNameLine(t)) continue;
-    if (isSectionHeaderLine(t)) continue;
-    if (!TITLE_KEYWORD.test(t)) continue;
+  for (let i = 0; i < Math.min(12, lines.length); i++) {
+    const raw = (lines[i] ?? "").trim();
+    if (!raw) continue;
+    if (/@/.test(raw) || PHONE_PATTERN.test(raw)) continue;
+    if (isSectionHeaderLine(raw)) continue;
 
-    const atSplit = t.match(/^(.+?)\s+(?:at|@)\s+(.+)$/i);
-    if (atSplit) {
-      current_title = atSplit[1]?.trim().slice(0, 59) || null;
-      const inlineCompany = atSplit[2]?.split(/[|,]/)[0]?.trim();
-      if (inlineCompany && inlineCompany.length >= 2) {
-        return {
-          current_title,
-          current_company: inlineCompany.slice(0, 60),
-        };
-      }
-    } else {
-      current_title = t.slice(0, 59).trim();
+    const nameProbe = firstSegment(raw);
+    if (i < 3 && isPersonNameLine(nameProbe) && !looksLikeJobTitle(raw)) {
+      continue;
     }
-    titleIndex = i;
-    break;
+
+    if (/[|•·]/.test(raw) && looksLikeJobTitle(raw)) {
+      const piped = parsePipeHeaderLine(raw);
+      if (piped.current_title) return piped;
+    }
+
+    const atParsed = parseAtCompanyLine(raw);
+    if (atParsed?.current_title) return atParsed;
+
+    const bulletTitle = raw.match(/^([^•·|]{4,}?)(?:\s*[•·]\s*|\s+-\s+)(.+)$/);
+    if (bulletTitle && looksLikeJobTitle(bulletTitle[1])) {
+      const title = bulletTitle[1].trim();
+      const rest = bulletTitle[2].trim();
+      const restParts = rest.split(/[•·|]/).map((p) => p.trim());
+      for (const part of restParts) {
+        if (part && !looksLikeLocation(part) && !companyLooksLikeTitle(title, part)) {
+          if (!looksLikeJobTitle(part) || ORG_SUFFIX.test(part)) {
+            return polishTitleAndCompany(title, part);
+          }
+        }
+      }
+      return polishTitleAndCompany(title, null);
+    }
+
+    if (raw.length >= 60 && looksLikeJobTitle(raw)) {
+      const shortened = parsePipeHeaderLine(raw.replace(/\s+-\s+/g, " | "));
+      if (shortened.current_title) return shortened;
+    }
+
+    if (raw.length < 90 && looksLikeJobTitle(raw) && !isPersonNameLine(raw)) {
+      const title = raw.slice(0, 72).trim();
+      const company = extractCompanyAfterTitle(lines, i, title);
+      return polishTitleAndCompany(title, company);
+    }
   }
 
-  const current_company =
-    titleIndex != null
-      ? extractCurrentCompanyFromResumeText(resumeText, titleIndex)
-      : null;
-
-  return { current_title, current_company };
+  return { current_title: null, current_company: null };
 }
 
 export function formatTitleAtCompany(
   currentTitle: string | null | undefined,
   currentCompany: string | null | undefined,
 ): string | null {
-  const title = currentTitle?.trim();
-  const company = currentCompany?.trim();
-  if (title && company) return `${title} at ${company}`;
-  if (title) return title;
-  if (company) return company;
+  const { current_title, current_company } = polishTitleAndCompany(
+    currentTitle,
+    currentCompany,
+  );
+  if (current_title && current_company) {
+    return `${current_title} at ${current_company}`;
+  }
+  if (current_title) return current_title;
+  if (current_company) return current_company;
   return null;
 }

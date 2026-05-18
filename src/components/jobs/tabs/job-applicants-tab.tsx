@@ -7,7 +7,7 @@ import { VerdictBadge } from "@/components/candidates/profile-shared";
 import { useCandidatePanel } from "@/contexts/candidate-panel-context";
 import { getScoreForRole } from "@/lib/candidates/active-role-score";
 import { formatTotalExperienceDisplay } from "@/lib/candidates/format-total-experience";
-import { formatTitleAtCompanySubtitle } from "@/lib/candidates/profile-display";
+import { CandidateListMeta } from "@/components/candidates/candidate-list-meta";
 import { karta } from "@/lib/brand/karta";
 import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
@@ -215,11 +215,6 @@ export function JobApplicantsTab({
     const score = getScoreForRole(c, jobId);
     const isScoring = scoringId === c.id;
     const rowClickable = mode === "reviewed";
-    const roleSubtitle = formatTitleAtCompanySubtitle(
-      c.current_title,
-      c.current_company,
-    );
-
     return (
       <tr
         key={c.id}
@@ -249,9 +244,11 @@ export function JobApplicantsTab({
             ) : (
               <span className="font-medium text-slate-900">{c.display_name}</span>
             )}
-            {roleSubtitle ? (
-              <p className="mt-0.5 text-xs text-slate-500">{roleSubtitle}</p>
-            ) : null}
+            <CandidateListMeta
+              currentTitle={c.current_title}
+              currentCompany={c.current_company}
+              yearsExperience={c.signal_profile.total_years_experience}
+            />
           </div>
         </td>
         <td className="px-4 py-3 text-slate-600">

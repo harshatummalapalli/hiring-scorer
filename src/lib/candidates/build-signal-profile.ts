@@ -23,7 +23,10 @@ import {
   parseSkillsFromSection,
   splitResumeSections,
 } from "./parse-resume-structure";
-import { extractCurrentTitleAndCompany } from "./extract-resume-header";
+import {
+  extractCurrentTitleAndCompany,
+  polishTitleAndCompany,
+} from "./extract-resume-header";
 import { prepareSignalQuote, toStrippedResumeText } from "./resume-text";
 
 function skillInText(skill: string, text: string): { index: number; len: number } | null {
@@ -200,10 +203,13 @@ export function buildSignalProfile(
       ? experienceTitle
       : "") ||
     "";
-  const current_title = resolvedTitle || null;
-  const most_recent_title = resolvedTitle;
-  const current_company =
-    headerCompany?.trim() || experienceCompany || null;
+  const polished = polishTitleAndCompany(
+    resolvedTitle || null,
+    headerCompany?.trim() || experienceCompany || null,
+  );
+  const current_title = polished.current_title;
+  const most_recent_title = polished.current_title ?? "";
+  const current_company = polished.current_company;
   const location = extractLocation(resumeText);
   const explicitYears = extractExplicitYearsOfExperience(resumeText, rawSections);
   const fromRoles = estimateYearsExperience(experience);
