@@ -10,6 +10,8 @@ import { JobShortlistTab } from "@/components/jobs/tabs/job-shortlist-tab";
 import { formatKartaDate } from "@/lib/dates/format-karta-date";
 import { getErrorMessage } from "@/lib/errors";
 import type { Job } from "@/types/job";
+import { SlidingTabs } from "@/components/ui/sliding-tabs";
+import { karta } from "@/lib/brand/karta";
 import { JOB_STATUS_LABELS } from "@/types/job";
 
 const TABS = [
@@ -95,7 +97,7 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
           <ArrowLeft className="h-4 w-4" />
           Jobs
         </Link>
-        <h1 className="mt-4 text-2xl font-semibold text-[#1E293B]">{job.title}</h1>
+        <h1 className={`mt-4 ${karta.pageTitle}`}>{job.title}</h1>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {job.title_band && (
             <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-[#64748B]">
@@ -113,22 +115,11 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
         </div>
       </div>
 
-      <div className="flex gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-50 p-1">
-        {TABS.map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setTab(id)}
-            className={`shrink-0 rounded-md px-4 py-2 text-sm font-medium transition ${
-              tab === id
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <SlidingTabs
+        tabs={TABS.map(([id, label]) => ({ id, label }))}
+        value={tab}
+        onChange={setTab}
+      />
 
       {tab === "overview" && (
         <JobOverviewTab job={job} onJobUpdated={setJob} />

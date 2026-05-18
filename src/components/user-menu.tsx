@@ -70,7 +70,7 @@ export function UserMenu() {
         aria-haspopup="menu"
       >
         <span
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0D9488] text-sm font-semibold text-white"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0D9488] text-sm font-semibold text-white transition-shadow duration-150 hover:ring-2 hover:ring-teal-400"
           aria-hidden
         >
           {initial}

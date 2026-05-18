@@ -18,9 +18,7 @@ export function AuthCard({ children }: AuthCardProps) {
             className="h-12 w-12"
             priority
           />
-          <p className="mt-4 text-2xl font-semibold tracking-tight text-[#1E293B]">
-            {KARTA.name}
-          </p>
+          <p className={`mt-4 ${karta.pageTitle}`}>{KARTA.name}</p>
           <p className="mt-2 max-w-xs text-sm leading-relaxed text-[#64748B]">
             {KARTA.tagline}
           </p>

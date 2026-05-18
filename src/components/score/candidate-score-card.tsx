@@ -99,7 +99,7 @@ export function CandidateScoreCard({
       <div className={compact ? "space-y-6 p-5" : "space-y-10 p-8 sm:p-10"}>
         {!hideHeader && (
           <header className="space-y-4 border-b border-slate-100 pb-8">
-          <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
+          <h2 className="text-[24px] font-semibold leading-[1.2] tracking-tight text-[#1E293B]">
             {candidate_header.display_name}
           </h2>
           <dl className="grid gap-3 text-sm sm:grid-cols-2">

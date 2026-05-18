@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Copy } from "lucide-react";
 import QRCode from "qrcode";
+import { CopyButton } from "@/components/ui/copy-button";
 import { buildFullApplyUrl } from "@/lib/jobs/apply-url";
 import { karta } from "@/lib/brand/karta";
 
@@ -15,7 +15,6 @@ export function ApplyLinkPanel({
   applyLink,
   applicationToken,
 }: ApplyLinkPanelProps) {
-  const [copied, setCopied] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const fullUrl = buildFullApplyUrl(applyLink, applicationToken);
 
@@ -26,13 +25,6 @@ export function ApplyLinkPanel({
     }
     void QRCode.toDataURL(fullUrl, { width: 160, margin: 2 }).then(setQrDataUrl);
   }, [fullUrl]);
-
-  const copy = async () => {
-    if (!fullUrl) return;
-    await navigator.clipboard.writeText(fullUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   return (
     <section className={`${karta.card} p-6`}>
@@ -46,20 +38,7 @@ export function ApplyLinkPanel({
             <code className="block flex-1 break-all rounded-md bg-[#F8FAFC] px-3 py-2 text-sm text-[#1E293B]">
               {fullUrl || "No apply link yet — save the job to generate one."}
             </code>
-            {fullUrl && (
-              <button
-                type="button"
-                onClick={() => void copy()}
-                className={`inline-flex shrink-0 items-center gap-2 ${karta.btnOutlineTeal}`}
-              >
-                {copied ? (
-                  <Check className="h-4 w-4" />
-                ) : (
-                  <Copy className="h-4 w-4" />
-                )}
-                Copy Link
-              </button>
-            )}
+            {fullUrl && <CopyButton text={fullUrl} label="Copy Link" />}
           </div>
         </div>
         {qrDataUrl && (

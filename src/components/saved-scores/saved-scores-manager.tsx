@@ -9,6 +9,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { SavedScoreDetailModal } from "@/components/saved-scores/saved-score-detail-modal";
+import { EmptyState } from "@/components/ui/empty-state";
+import { karta } from "@/lib/brand/karta";
 import { getErrorMessage } from "@/lib/errors";
 import { snapshotToRoleBrief } from "@/lib/saved-scores/build-save-payload";
 import { CONFIDENCE_FILTER_OPTIONS } from "@/lib/saved-scores/confidence-badge";
@@ -223,7 +225,7 @@ export function SavedScoresManager() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className={karta.filterBar}>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label className="block text-sm sm:col-span-2 lg:col-span-1">
             <span className="mb-1 block font-medium text-slate-700">Search</span>
@@ -237,7 +239,7 @@ export function SavedScoresManager() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Candidate filename…"
-                className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm"
+                className={`w-full pl-9 ${karta.input}`}
               />
             </div>
           </label>
@@ -283,7 +285,7 @@ export function SavedScoresManager() {
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as SavedScoreSort)}
-              className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              className={karta.input}
             >
               <option value="date-desc">Date scored (newest)</option>
               <option value="date-asc">Date scored (oldest)</option>
@@ -296,7 +298,7 @@ export function SavedScoresManager() {
             type="button"
             onClick={() => downloadSavedScoresCsv(filtered)}
             disabled={filtered.length === 0}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            className={`inline-flex items-center gap-2 ${karta.btnOutlineTeal} px-3 py-2 text-sm disabled:opacity-50`}
           >
             <Download className="h-4 w-4" aria-hidden />
             Export CSV ({filtered.length})
@@ -312,17 +314,21 @@ export function SavedScoresManager() {
       )}
 
       {filtered.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-white px-6 py-16 text-center text-sm text-slate-500">
-          {rows.length === 0
-            ? "No saved scores yet. Score a candidate and click Save to Supabase."
-            : "No scores match your filters."}
-        </div>
+        <EmptyState
+          illustration="filters"
+          heading={rows.length === 0 ? "No saved scores yet" : "No matches"}
+          subtitle={
+            rows.length === 0
+              ? "Score a candidate and save to Supabase to see results here."
+              : "Try adjusting your search or filters."
+          }
+        />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className={karta.tableWrap}>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-left text-sm">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-500">
+                <tr className={karta.tableHeadRow}>
                   <th className="px-4 py-3">Candidate</th>
                   <th className="px-4 py-3">Role brief</th>
                   <th className="px-4 py-3">Score</th>
@@ -482,7 +488,7 @@ function FilterSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+        className={`w-full ${karta.input}`}
       >
         {options.map((o) => (
           <option key={o.value || "__all"} value={o.value}>

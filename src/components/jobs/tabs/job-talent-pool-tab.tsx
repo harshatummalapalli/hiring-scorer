@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { ClickableCandidateName } from "@/components/candidates/clickable-candidate-name";
 import { useCandidatePanel } from "@/contexts/candidate-panel-context";
+import { EmptyState } from "@/components/ui/empty-state";
 import { karta } from "@/lib/brand/karta";
 import type { Job } from "@/types/job";
 
@@ -92,16 +93,17 @@ export function JobTalentPoolTab({ jobId, roleBrief }: JobTalentPoolTabProps) {
         </p>
       )}
       {matches.length === 0 ? (
-        <div className={`${karta.card} px-6 py-12 text-center text-sm text-[#64748B]`}>
-          No talent pool matches yet. Add candidates to your talent pool and score
-          them against other roles first.
-        </div>
+        <EmptyState
+          illustration="network"
+          heading="No talent pool matches yet"
+          subtitle="Add candidates to your talent pool and score them against other roles first."
+        />
       ) : (
         <ul className="space-y-3">
           {matches.map((m) => (
             <li
               key={m.candidateId}
-              className={`flex flex-wrap items-center justify-between gap-4 ${karta.card} p-5`}
+              className={`flex flex-wrap items-center justify-between gap-4 ${karta.cardClickable} p-5`}
             >
               <div>
                 <ClickableCandidateName

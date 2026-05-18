@@ -14,6 +14,8 @@ import {
 } from "@/lib/candidates/list-filters";
 import { CandidateListMeta } from "@/components/candidates/candidate-list-meta";
 import { CoreStrengthLabel } from "@/components/candidates/core-strength-label";
+import { EmptyState } from "@/components/ui/empty-state";
+import { formatTotalExperienceDisplay } from "@/lib/candidates/format-total-experience";
 import { formatKartaDateAdded } from "@/lib/dates/format-karta-date";
 import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
@@ -278,63 +280,84 @@ export function TalentPoolWorkspace() {
         <div className="flex justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
         </div>
+      ) : candidates.length === 0 ? (
+        <EmptyState
+          illustration="network"
+          heading="Your talent pool starts here"
+          subtitle="Every resume you score becomes part of your permanent talent intelligence."
+          action={
+            <button
+              type="button"
+              onClick={() => setShowUpload(true)}
+              className={`inline-flex items-center gap-2 ${karta.btnPrimary}`}
+            >
+              <Upload className="h-4 w-4" />
+              Upload Resumes
+            </button>
+          }
+        />
       ) : filtered.length === 0 ? (
-        <p className={`${karta.card} py-12 text-center text-sm text-[#64748B]`}>
-          No candidates match your filters.
-        </p>
+        <EmptyState
+          illustration="filters"
+          heading="No matches"
+          subtitle="Try adjusting your search or filters to find candidates."
+        />
       ) : (
-        <ul className="grid gap-4 sm:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {filtered.map((c) => {
-            const topSkills = c.signal_profile.skills_verified
-              .slice(0, 2)
-              .map((s) => s.skill);
             const jobBadges = c.role_scores
               .filter((s) => s.role_brief_title)
               .slice(0, 4);
+            const years = formatTotalExperienceDisplay(
+              c.signal_profile.total_years_experience,
+            );
+            const yearsLabel =
+              years && years !== "—" ? years : null;
             return (
               <li key={c.id}>
                 <button
                   type="button"
                   onClick={() => openTalentPoolPanel(c.id)}
-                  className={`w-full text-left ${karta.card} p-5 transition hover:border-slate-300`}
+                  className={`w-full text-left ${karta.cardClickable} p-5`}
                 >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-[#1E293B]">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-[16px] font-semibold leading-[1.2] text-[#1E293B]">
                       {c.display_name}
                     </span>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                    <span
+                      className={`shrink-0 rounded-full bg-slate-100 px-2 py-0.5 ${karta.badge} text-slate-700`}
+                    >
                       {sourceBadgeLabel(c.source)}
                     </span>
                   </div>
-                  <CandidateListMeta
-                    currentTitle={c.current_title}
-                    currentCompany={c.current_company}
-                    yearsExperience={c.signal_profile.total_years_experience}
-                    signalProfile={c.signal_profile}
-                  />
                   <CoreStrengthLabel
                     primary={c.signal_profile.core_strength_primary}
                     secondary={c.signal_profile.core_strength_secondary}
+                    prefix=""
+                    className="mt-1.5 text-xs font-medium text-[#0D9488]"
                   />
-                  <p className="mt-2 text-[11px] text-[#94A3B8]">
-                    {formatKartaDateAdded(c.applied_at ?? c.created_at)}
+                  <CandidateListMeta
+                    currentTitle={c.current_title}
+                    currentCompany={c.current_company}
+                    signalProfile={c.signal_profile}
+                    showYears={false}
+                  />
+                  <p className="mt-2 text-[13px] text-[#94A3B8]">
+                    {[yearsLabel, `Added ${formatKartaDateAdded(c.applied_at ?? c.created_at)}`]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </p>
                   {jobBadges.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-1">
                       {jobBadges.map((s) => (
                         <span
                           key={s.id}
-                          className="rounded-full bg-[#0D9488]/10 px-2 py-0.5 text-xs font-medium text-[#0D9488]"
+                          className={`rounded-full bg-[#0D9488]/10 px-2 py-0.5 ${karta.badge} text-[#0D9488]`}
                         >
                           {s.role_brief_title}
                         </span>
                       ))}
                     </div>
-                  )}
-                  {topSkills.length > 0 && (
-                    <p className="mt-2 text-xs text-[#64748B]">
-                      Verified: {topSkills.join(" · ")}
-                    </p>
                   )}
                 </button>
               </li>

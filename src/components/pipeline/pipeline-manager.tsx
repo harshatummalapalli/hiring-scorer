@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import type { PipelineCandidateRow, PipelineRoleSection } from "@/types/pipeline";
 import { VerdictBadge } from "@/components/candidates/profile-shared";
+import { EmptyState } from "@/components/ui/empty-state";
 import { karta } from "@/lib/brand/karta";
 import { formatInsightsText } from "@/lib/pipeline/insights-from-score";
 import { buildPipelineWorkbook, downloadPipelineExcel } from "@/lib/pipeline/export-excel";
@@ -307,7 +308,7 @@ function RoleSection({
           <ChevronRight className="h-5 w-5 shrink-0 text-slate-500" />
         )}
         <div className="min-w-0 flex-1">
-          <h2 className="text-base font-semibold text-slate-900">{section.title}</h2>
+          <h2 className={karta.cardTitle}>{section.title}</h2>
           <p className="text-sm text-slate-500">
             {section.title_band ?? "Band not set"} · {section.candidates.length}{" "}
             {section.candidates.length === 1 ? "candidate" : "candidates"}
@@ -335,7 +336,7 @@ function RoleSection({
             <div className="overflow-x-auto">
               <table className="w-full min-w-[960px] text-left text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <tr className={karta.tableHeadRow}>
                     <th className="px-4 py-3">Name</th>
                     <th className="min-w-[180px] px-4 py-3">Email</th>
                     <th className="px-4 py-3">Phone</th>
@@ -600,13 +601,16 @@ export function PipelineManager() {
           <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
         </div>
       ) : sections.length === 0 ? (
-        <p className={`${karta.card} border-dashed px-6 py-12 text-center text-[#64748B]`}>
-          Shortlist candidates from the{" "}
-          <Link href="/talent-pool" className="font-medium text-[#0D9488] underline">
-            Talent Pool
-          </Link>{" "}
-          page to build your pipeline.
-        </p>
+        <EmptyState
+          illustration="network"
+          heading="Your pipeline is empty"
+          subtitle="Shortlist candidates from your talent pool or job applicants to track them here."
+          action={
+            <Link href="/talent-pool" className={karta.btnPrimary}>
+              Go to Talent Pool
+            </Link>
+          }
+        />
       ) : (
         <div className="space-y-4">
           {sections.map((section) => (

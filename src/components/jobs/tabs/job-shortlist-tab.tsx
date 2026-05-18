@@ -5,6 +5,7 @@ import { Download, Loader2 } from "lucide-react";
 import { ClickableCandidateName } from "@/components/candidates/clickable-candidate-name";
 import { VerdictBadge } from "@/components/candidates/profile-shared";
 import type { Job } from "@/types/job";
+import { EmptyState } from "@/components/ui/empty-state";
 import { karta } from "@/lib/brand/karta";
 import { formatInsightsText } from "@/lib/pipeline/insights-from-score";
 import {
@@ -198,15 +199,16 @@ export function JobShortlistTab({
       )}
 
       {rows.length === 0 ? (
-        <p className={`${karta.card} px-6 py-12 text-center text-sm text-[#64748B]`}>
-          No candidates on the shortlist yet. Score applicants and add them from the
-          talent pool.
-        </p>
+        <EmptyState
+          illustration="people"
+          heading="Shortlist is empty"
+          subtitle="Score applicants and add strong matches from the Assessed tab or talent pool."
+        />
       ) : (
         <div className={`overflow-x-auto ${karta.card}`}>
           <table className="w-full min-w-[960px] text-left text-sm">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <tr className={karta.tableHeadRow}>
                 <th className="px-4 py-3">Name</th>
                 <th className="min-w-[180px] px-4 py-3">Email</th>
                 <th className="px-4 py-3">Phone</th>

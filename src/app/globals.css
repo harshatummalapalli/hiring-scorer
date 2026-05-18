@@ -8,7 +8,7 @@
   --karta-slate: #1e293b;
   --karta-body: #334155;
   --karta-muted: #64748b;
-  --karta-border: #f1f5f9;
+  --karta-border: #e2e8f0;
   --karta-bar-track: #e2e8f0;
   --background: #f8fafc;
   --foreground: #334155;
@@ -17,16 +17,43 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter), system-ui, sans-serif;
 }
 
 body {
   background: var(--karta-page);
   color: var(--karta-body);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-inter), system-ui, sans-serif;
   font-size: 15px;
+  font-weight: 400;
   line-height: 1.5;
+}
+
+h1,
+h2,
+h3,
+h4,
+.karta-heading {
+  line-height: 1.2;
+}
+
+/* Panel slide */
+@keyframes panel-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes panel-backdrop-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 
 @keyframes panel-slide-in {
@@ -38,8 +65,182 @@ body {
   }
 }
 
-.panel-slide-in {
-  animation: panel-slide-in 0.28s ease-out;
+@keyframes panel-slide-out {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.panel-backdrop-enter {
+  animation: panel-backdrop-in 200ms ease forwards;
+}
+
+.panel-backdrop-exit {
+  animation: panel-backdrop-out 200ms ease-in forwards;
+}
+
+.panel-slide-enter {
+  animation: panel-slide-in 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.panel-slide-exit {
+  animation: panel-slide-out 200ms ease-in forwards;
+}
+
+/* Insight bars */
+@keyframes insight-bar-fill {
+  from {
+    width: 0%;
+  }
+  to {
+    width: var(--bar-width, 100%);
+  }
+}
+
+@keyframes insight-rating-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.insight-bar-fill {
+  animation: insight-bar-fill 600ms ease-out forwards;
+}
+
+.insight-rating-fade {
+  animation: insight-rating-fade 300ms ease-out forwards;
+}
+
+/* Verdict badge entrance */
+@keyframes verdict-badge-enter {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.verdict-badge-enter {
+  animation: verdict-badge-enter 250ms ease-out forwards;
+}
+
+/* Page fade */
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.page-fade-in {
+  animation: page-fade-in 200ms ease forwards;
+}
+
+/* Button press */
+.btn-press:active {
+  transform: scale(0.97);
+  transition: transform 100ms ease;
+}
+
+/* Scoring row pulse border */
+@keyframes scoring-row-pulse {
+  0%,
+  100% {
+    border-left-color: #0d9488;
+  }
+  50% {
+    border-left-color: rgba(13, 148, 136, 0.35);
+  }
+}
+
+.scoring-row-active {
+  border-left-width: 3px;
+  border-left-style: solid;
+  border-left-color: #0d9488;
+  animation: scoring-row-pulse 1.5s ease-in-out infinite;
+}
+
+.applicant-row-selected {
+  border-left-width: 2px;
+  border-left-style: solid;
+  border-left-color: #0d9488;
+  transition: border-color 150ms ease;
+}
+
+/* Review button amber dot */
+@keyframes review-dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.review-dot-pulse {
+  animation: review-dot-pulse 1.5s ease-in-out infinite;
+}
+
+/* Upload skeleton */
+@keyframes upload-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.upload-skeleton {
+  animation: upload-skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+/* JD step dot */
+@keyframes jd-step-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+}
+
+.jd-step-dot-active {
+  animation: jd-step-dot 1.2s ease-in-out infinite;
+}
+
+/* Checkbox check */
+@keyframes checkbox-pop {
+  0% {
+    transform: scale(0.6);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.checkbox-checked {
+  animation: checkbox-pop 150ms ease-out;
 }
 
 input[type="range"]::-webkit-slider-thumb {

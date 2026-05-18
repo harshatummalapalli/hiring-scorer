@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { karta } from "@/lib/brand/karta";
 
 type SuccessPageProps = {
   params: Promise<{ token: string }>;
@@ -47,9 +48,7 @@ export default function ApplySuccessPage({ params }: SuccessPageProps) {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-16 text-center">
-      <h1 className="text-2xl font-semibold text-[#1E293B]">
-        Application received
-      </h1>
+      <h1 className={karta.pageTitle}>Application received</h1>
       <p className="mt-3 text-sm text-[#64748B]">
         Thank you for applying to {jobTitle}. The hiring team will review your
         resume shortly.

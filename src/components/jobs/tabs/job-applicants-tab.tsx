@@ -16,6 +16,7 @@ import {
   ResumeUploadProgress,
   type ResumeUploadFileItem,
 } from "@/components/jobs/resume-upload-progress";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { CandidateListItem } from "@/types/candidate";
 import type { Job } from "@/types/job";
 import { sourceBadgeLabel } from "@/types/job";
@@ -396,10 +397,10 @@ export function JobApplicantsTab({
         id="new-applicants"
         className={`${karta.card} overflow-hidden`}
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
-          <h3 className="text-base font-semibold text-slate-900">
-            New Applicants
-          </h3>
+        <div
+          className={`flex flex-wrap items-center justify-between gap-3 border-b border-[#E2E8F0] px-5 py-4 ${karta.accentAmberHeader}`}
+        >
+          <h3 className={karta.cardTitle}>New Applicants</h3>
           {selected.size > 0 && (
             <button
               type="button"
@@ -421,13 +422,18 @@ export function JobApplicantsTab({
             Loading applicants…
           </div>
         ) : newApplicants.length === 0 ? (
-          <p className="px-5 py-8 text-sm text-slate-500">
-            No new applicants for {jobTitle}.
-          </p>
+          <div className="px-4 py-6">
+            <EmptyState
+              illustration="people"
+              heading="Ready when you are"
+              subtitle="Upload resumes to start building your applicant pipeline."
+              className="border-0 shadow-none"
+            />
+          </div>
         ) : (
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase text-slate-500">
+              <tr className={karta.tableHeadRow}>
                 <th className="w-10 px-4 py-3">
                   <input
                     type="checkbox"
@@ -445,17 +451,25 @@ export function JobApplicantsTab({
             <tbody>
               {newApplicants.map((c) => {
                 const isScoring = scoringId === c.id;
+                const isSelected = selected.has(c.id);
                 return (
                   <tr
                     key={c.id}
-                    className="border-b border-slate-100 last:border-0"
+                    className={`border-b border-[#E2E8F0] last:border-0 transition-[border-color] duration-150 ${
+                      isScoring
+                        ? "scoring-row-active"
+                        : isSelected
+                          ? "applicant-row-selected"
+                          : ""
+                    }`}
                   >
                     <td className="px-4 py-3">
                       <input
                         type="checkbox"
-                        checked={selected.has(c.id)}
+                        checked={isSelected}
                         onChange={() => toggleOne(c.id)}
                         aria-label={`Select ${c.display_name}`}
+                        className={isSelected ? "checkbox-checked" : ""}
                       />
                     </td>
                     <td className="px-4 py-3">
@@ -489,16 +503,20 @@ export function JobApplicantsTab({
                     </td>
                     <td className="px-4 py-3 text-right">
                       {isScoring ? (
-                        <span className="inline-flex items-center gap-2 text-sm text-slate-500">
+                        <span className="inline-flex items-center gap-2 text-sm font-medium text-[#64748B]">
                           <Loader2 className="h-4 w-4 animate-spin text-[#0D9488]" />
-                          Scoring…
+                          Analysing…
                         </span>
                       ) : (
                         <button
                           type="button"
                           onClick={() => void scoreOne(c.id)}
-                          className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-600"
+                          className={`btn-press inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-600`}
                         >
+                          <span
+                            className="review-dot-pulse inline-block h-2 w-2 rounded-full bg-amber-200"
+                            aria-hidden
+                          />
                           Review and Score
                         </button>
                       )}

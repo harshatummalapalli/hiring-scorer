@@ -10,6 +10,7 @@ import { VerdictBadge } from "@/components/candidates/profile-shared";
 import { useCandidatePanel } from "@/contexts/candidate-panel-context";
 import { getScoreForRole } from "@/lib/candidates/active-role-score";
 import { formatTotalExperienceDisplay } from "@/lib/candidates/format-total-experience";
+import { EmptyState } from "@/components/ui/empty-state";
 import { karta } from "@/lib/brand/karta";
 import { VERDICT_SORT_ORDER } from "@/lib/brand/karta";
 import type { CandidateListItem } from "@/types/candidate";
@@ -122,14 +123,16 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
         </p>
       )}
       {assessed.length === 0 ? (
-        <div className={`${karta.card} px-6 py-12 text-center text-sm text-[#64748B]`}>
-          No assessed candidates yet. Score applicants from the Applicants tab.
-        </div>
+        <EmptyState
+          illustration="people"
+          heading="No assessed candidates yet"
+          subtitle="Score applicants from the Applicants tab to see match results here."
+        />
       ) : (
         <div className={`${karta.card} overflow-hidden`}>
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase text-slate-500">
+              <tr className={karta.tableHeadRow}>
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Experience</th>
                 <th className="px-4 py-3">Match</th>

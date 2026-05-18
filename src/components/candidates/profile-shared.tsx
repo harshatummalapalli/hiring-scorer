@@ -1,9 +1,9 @@
-import type { FitVerdict } from "@/types/score";
 import type { ReactNode } from "react";
 import {
   VERDICT_BADGE_BASE,
   VERDICT_BADGE_UNMATCHED,
   verdictBadgeClass,
+  verdictBadgeShadow,
   verdictLabel,
   karta,
 } from "@/lib/brand/karta";
@@ -28,13 +28,14 @@ export function VerdictBadge({
   verdict,
   score,
   showScore,
+  animateIn = true,
 }: {
   verdict: string | null | undefined;
   score?: number | null;
-  /** @deprecated Size is unified; only controls whether the numeric match is shown. */
   compact?: boolean;
-  /** Show match score after the label (pipeline table). */
   showScore?: boolean;
+  /** Play entrance animation when badge mounts with a verdict */
+  animateIn?: boolean;
 }) {
   if (!verdict) {
     return (
@@ -42,8 +43,14 @@ export function VerdictBadge({
     );
   }
 
+  const shadow = verdictBadgeShadow(verdict);
+
   return (
-    <span className={`${VERDICT_BADGE_BASE} ${verdictBadgeClass(verdict)}`}>
+    <span
+      className={`${VERDICT_BADGE_BASE} ${verdictBadgeClass(verdict)} ${shadow} ${
+        animateIn ? "verdict-badge-enter" : ""
+      }`}
+    >
       {verdictLabel(verdict)}
       {score != null && showScore ? ` ${score}` : null}
     </span>

@@ -45,7 +45,7 @@ export function ResumeUpload({
       </div>
 
       <label
-        className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 px-6 py-10 transition hover:border-slate-300 hover:bg-slate-100 ${
+        className={`flex cursor-pointer flex-col items-center justify-center rounded-[10px] border-2 border-dashed border-[#E2E8F0] bg-[#F8FAFC] px-6 py-10 transition hover:border-[rgba(13,148,136,0.3)] hover:bg-[#F0FDFA] ${
           disabled ? "pointer-events-none opacity-60" : ""
         }`}
       >

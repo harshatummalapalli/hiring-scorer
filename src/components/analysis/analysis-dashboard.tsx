@@ -1,6 +1,7 @@
 "use client";
 
 import { Download, RefreshCw } from "lucide-react";
+import { karta } from "@/lib/brand/karta";
 import type { AnalysisFindings } from "@/lib/analysis/compute-findings";
 import {
   downloadAnalysisJson,
@@ -28,10 +29,8 @@ export function AnalysisDashboard({
     <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Configuration analysis
-          </h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-600">
+          <h1 className={karta.pageTitle}>Configuration analysis</h1>
+          <p className={`mt-1 max-w-2xl ${karta.muted}`}>
             Compare model role assignments across scenarios using stored scoring
             runs and historical data.
           </p>
@@ -41,7 +40,7 @@ export function AnalysisDashboard({
             type="button"
             onClick={onRefresh}
             disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            className={`inline-flex items-center gap-2 ${karta.btnSecondary} px-3 py-2 text-sm disabled:opacity-60`}
           >
             <RefreshCw
               className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
@@ -52,7 +51,7 @@ export function AnalysisDashboard({
           <button
             type="button"
             onClick={() => downloadAnalysisJson(findings)}
-            className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+            className={`inline-flex items-center gap-2 ${karta.btnPrimary} px-3 py-2 text-sm`}
           >
             <Download className="h-4 w-4" aria-hidden />
             Export analysis
@@ -74,7 +73,7 @@ export function AnalysisDashboard({
         </p>
       )}
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className={`${karta.card} p-6`}>
         <h2 className="text-sm font-semibold text-slate-900">Data sufficiency</h2>
         <p
           className={`mt-2 text-sm ${findings.sufficiency.sufficient ? "text-emerald-700" : "text-amber-800"}`}
@@ -105,7 +104,7 @@ export function AnalysisDashboard({
         </section>
       )}
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className={`${karta.card} p-6`}>
         <h2 className="text-sm font-semibold text-slate-900">
           Configuration ranking (differentiation power)
         </h2>
@@ -144,7 +143,7 @@ export function AnalysisDashboard({
         <ConfigRankingTable rows={findings.configurationRanking} />
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className={`${karta.card} p-6`}>
         <h2 className="text-sm font-semibold text-slate-900">Model behaviour</h2>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[640px] text-left text-sm">
@@ -179,7 +178,7 @@ export function AnalysisDashboard({
         </div>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className={`${karta.card} p-6`}>
         <h2 className="text-sm font-semibold text-slate-900">
           Dimension reliability
         </h2>
@@ -215,7 +214,7 @@ export function AnalysisDashboard({
         </ul>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className={`${karta.card} p-6`}>
         <h2 className="text-sm font-semibold text-slate-900">Scoring runs log</h2>
         <ul className="mt-3 max-h-64 space-y-1 overflow-y-auto text-sm text-slate-600">
           {findings.entries.map((e) => (

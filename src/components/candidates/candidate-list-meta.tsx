@@ -11,6 +11,8 @@ type CandidateListMetaProps = {
   yearsExperience?: string | null;
   /** When set (Talent Pool), shows formatted resume-bullet fallback if title/company are missing. */
   signalProfile?: CandidateSignalProfile | null;
+  /** Show experience years line (off on Talent Pool cards — years shown elsewhere). */
+  showYears?: boolean;
 };
 
 export function CandidateListMeta({
@@ -18,14 +20,17 @@ export function CandidateListMeta({
   currentCompany,
   yearsExperience,
   signalProfile,
+  showYears = true,
 }: CandidateListMetaProps) {
   const roleLine = formatTitleAtCompanySubtitle(currentTitle, currentCompany);
   const bulletFallback =
     signalProfile && !roleLine
       ? getTalentPoolBulletFallbackDisplay(signalProfile)
       : null;
-  const years = formatTotalExperienceDisplay(yearsExperience ?? null);
-  const hasYears = years && years !== "—";
+  const years = showYears
+    ? formatTotalExperienceDisplay(yearsExperience ?? null)
+    : null;
+  const hasYears = Boolean(years && years !== "—");
 
   if (!roleLine && !hasYears && !bulletFallback) return null;
 

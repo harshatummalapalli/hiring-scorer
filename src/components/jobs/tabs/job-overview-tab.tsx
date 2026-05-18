@@ -160,7 +160,7 @@ export function JobOverviewTab({ job, onJobUpdated }: JobOverviewTabProps) {
         </p>
       </section>
 
-      <section className={`${karta.card} p-6`}>
+      <section className={karta.accentTealOverview}>
         <h3 className={karta.sectionHeading}>Scoring Intelligence</h3>
         <div className="mt-4 flex flex-wrap items-center gap-4">
           <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-[#0D9488]">

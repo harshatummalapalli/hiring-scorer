@@ -174,7 +174,7 @@ export function AnalysisCards({
 
       {tab === "requirements" && (
         <div className="space-y-8">
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className={`${karta.card} p-6`}>
         <h3 className="text-sm font-semibold text-slate-900">Seniority band</h3>
         <p className="mt-1 text-xs text-slate-500">
           Target level for this role.
@@ -269,7 +269,7 @@ function StringCategoryCard({
     <section
       onDragOver={onDragOver}
       onDrop={onDrop}
-      className={`rounded-2xl border bg-white p-5 shadow-sm transition ${
+      className={`${karta.card} p-5 transition ${
         isDragging ? "border-slate-400 ring-2 ring-slate-100" : "border-slate-200"
       }`}
     >
@@ -352,7 +352,7 @@ function CoreSignalsCard({
     <section
       onDragOver={onDragOver}
       onDrop={onDrop}
-      className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+      className={`${karta.card} p-6`}
     >
       <h3 className="font-semibold text-[#1E293B]">Key Requirements</h3>
       <p className="mt-1 text-xs text-[#64748B]">
@@ -487,7 +487,7 @@ function SemanticClustersCard({
   };
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+    <section className={`${karta.card} p-6`}>
       <h3 className="font-semibold text-slate-900">Semantic clusters</h3>
       <p className="mt-1 text-xs text-slate-500">
         Required skills mapped to technologies that imply proficiency.

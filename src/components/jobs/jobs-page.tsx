@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2, Plus } from "lucide-react";
 import { RoleBriefCreator } from "@/components/role-briefs/role-brief-creator";
+import { EmptyState } from "@/components/ui/empty-state";
 import { JobLimitModal } from "@/components/workspace/job-limit-modal";
 import { karta } from "@/lib/brand/karta";
 import { formatKartaDate } from "@/lib/dates/format-karta-date";
@@ -106,7 +107,7 @@ export function JobsPage() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-[#1E293B]">Jobs</h1>
+          <h1 className={karta.pageTitle}>Jobs</h1>
           {usage && (
             <p className="mt-1 text-xs text-[#94A3B8]">
               {usage.jobs.current} of {usage.jobs.max} jobs ·{" "}
@@ -138,26 +139,32 @@ export function JobsPage() {
           <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
         </div>
       ) : jobs.length === 0 ? (
-        <div className={`${karta.card} border-dashed px-6 py-16 text-center`}>
-          <p className="font-medium text-[#334155]">No jobs yet</p>
-          <p className="mt-1 text-sm text-[#64748B]">
-            Post your first job to start receiving and scoring applicants.
-          </p>
-          <button
-            type="button"
-            onClick={() => setShowPost(true)}
-            className={`mt-6 inline-flex items-center gap-2 ${karta.btnPrimary}`}
-          >
-            <Plus className="h-4 w-4" />
-            Post a Job
-          </button>
-        </div>
+        <EmptyState
+          illustration="briefcase"
+          heading="Your first role is waiting"
+          subtitle="Post a job and Karta will start building your talent intelligence."
+          action={
+            <button
+              type="button"
+              onClick={() => setShowPost(true)}
+              className={`inline-flex items-center gap-2 ${karta.btnPrimary}`}
+            >
+              <Plus className="h-4 w-4" />
+              Post a Job
+            </button>
+          }
+        />
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {jobs.map((job) => (
-            <li key={job.id} className={`flex flex-col ${karta.card} p-5`}>
+            <li
+              key={job.id}
+              className={`flex flex-col ${karta.card} ${karta.cardHover} p-5 ${
+                job.status === "active" ? karta.jobCardActive : ""
+              }`}
+            >
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-semibold text-[#1E293B]">{job.title}</h2>
+                <h2 className={karta.cardTitle}>{job.title}</h2>
                 {job.title_band && (
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-[#64748B]">
                     {job.title_band}
@@ -202,7 +209,7 @@ export function JobsPage() {
 
       {showPost && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-8">
-          <div className="relative w-full max-w-4xl rounded-2xl bg-white p-6 shadow-xl sm:p-10">
+          <div className={`relative w-full max-w-4xl ${karta.card} p-6 shadow-xl sm:p-10`}>
             <button
               type="button"
               onClick={() => setShowPost(false)}
@@ -210,7 +217,7 @@ export function JobsPage() {
             >
               Close
             </button>
-            <h2 className="text-xl font-semibold text-[#1E293B] pr-16">Post a job</h2>
+            <h2 className={`${karta.cardTitle} pr-16`}>Post a job</h2>
             <p className="mt-1 text-sm text-[#64748B]">
               Paste the JD — Karta will extract requirements and generate a scoring prompt.
             </p>

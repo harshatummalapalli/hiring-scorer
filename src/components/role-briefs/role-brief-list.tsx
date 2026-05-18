@@ -2,6 +2,7 @@
 
 import { Check, Pencil, Star, Trash2 } from "lucide-react";
 import type { RoleBrief } from "@/types/role-brief";
+import { EmptyState } from "@/components/ui/empty-state";
 import { karta } from "@/lib/brand/karta";
 import { TalentPoolRecommendations } from "@/components/role-briefs/talent-pool-recommendations";
 
@@ -26,13 +27,11 @@ export function RoleBriefList({
 }: RoleBriefListProps) {
   if (briefs.length === 0) {
     return (
-      <div className={`${karta.card} border-dashed px-6 py-12 text-center`}>
-        <p className="text-[15px] font-medium text-[#334155]">No job roles yet</p>
-        <p className="mt-1 text-sm text-[#64748B]">
-          Add your first job role to get started — paste a JD and Karta will break
-          it down instantly.
-        </p>
-      </div>
+      <EmptyState
+        illustration="briefcase"
+        heading="No job roles yet"
+        subtitle="Add your first job role — paste a JD and Karta will break it down instantly."
+      />
     );
   }
 
@@ -52,7 +51,7 @@ export function RoleBriefList({
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="truncate font-semibold text-[#1E293B]">
+                  <h3 className={`truncate ${karta.cardTitle}`}>
                     {brief.title}
                   </h3>
                   {isActive && (

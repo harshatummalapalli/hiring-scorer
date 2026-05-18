@@ -27,9 +27,11 @@ import { snapshotToRoleBrief } from "@/lib/saved-scores/build-save-payload";
 import { downloadKartaAssessmentPdf } from "@/lib/reports/karta-assessment-pdf";
 import type { RoleBriefSnapshot } from "@/types/saved-score";
 import { formatCoreStrengthLabel } from "@/lib/intelligence/skill-domains";
+import { AnimatedSignalBar } from "@/components/ui/animated-signal-bar";
+import { SlidingTabs } from "@/components/ui/sliding-tabs";
 import { CandidateDetailsSection } from "./candidate-details-section";
 import { CandidatePanelHeader } from "./candidate-panel-header";
-import { SignalBar, VerdictBadge } from "./profile-shared";
+import { VerdictBadge } from "./profile-shared";
 
 function formatDate(iso: string): string {
   try {
@@ -43,55 +45,66 @@ function formatDate(iso: string): string {
   }
 }
 
-function InsightBar({
-  label,
-  subtitle,
-  rating,
-  fillPercent,
+function CandidateInsightsBars({
+  profile,
+  animate,
 }: {
-  label: string;
-  subtitle: string;
-  rating: string;
-  fillPercent: number;
+  profile: CandidateSignalProfile;
+  animate: boolean;
 }) {
   return (
-    <div className="space-y-1">
-      <SignalBar label={label} rating={rating} fillPercent={fillPercent} />
-      <p className="text-[11px] leading-snug text-[#94A3B8]">{subtitle}</p>
-    </div>
-  );
-}
-
-function CandidateInsightsBars({ profile }: { profile: CandidateSignalProfile }) {
-  return (
     <div className="space-y-4">
-      <InsightBar
-        label="Ownership Drive"
-        subtitle="Measures first-person ownership language versus participation in team work."
-        rating={ownershipLabel(profile.resume_quality.ownership.ownership_count)}
-        fillPercent={profile.ownership_ratio_percent}
-      />
-      <InsightBar
-        label="Impact Evidence"
-        subtitle="Measures quantified outcomes with numbers versus vague activity descriptions."
-        rating={impactEvidenceLabel(
-          profile.quantification_ratio_percent,
-          profile.quantification_level,
-        )}
-        fillPercent={profile.quantification_ratio_percent}
-      />
-      <InsightBar
-        label="Career Growth"
-        subtitle="Measures progression speed relative to typical market pace for this experience level."
-        rating={careerGrowthLabel(profile.trajectory_velocity)}
-        fillPercent={careerGrowthBarPercent(profile.trajectory_velocity)}
-      />
-      <InsightBar
-        label="Profile Depth"
-        subtitle="Measures whether claimed skills are demonstrated in work descriptions or listed only."
-        rating={profileDepthLabel(profile.keyword_stuffing_flagged)}
-        fillPercent={profileDepthBarPercent(profile.keyword_stuffing_flagged)}
-      />
+      <div>
+        <AnimatedSignalBar
+          label="Ownership Drive"
+          rating={ownershipLabel(profile.resume_quality.ownership.ownership_count)}
+          fillPercent={profile.ownership_ratio_percent}
+          animate={animate}
+          delayMs={0}
+        />
+        <p className="mt-1 text-[11px] leading-snug text-[#94A3B8]">
+          Measures first-person ownership language versus participation in team work.
+        </p>
+      </div>
+      <div>
+        <AnimatedSignalBar
+          label="Impact Evidence"
+          rating={impactEvidenceLabel(
+            profile.quantification_ratio_percent,
+            profile.quantification_level,
+          )}
+          fillPercent={profile.quantification_ratio_percent}
+          animate={animate}
+          delayMs={100}
+        />
+        <p className="mt-1 text-[11px] leading-snug text-[#94A3B8]">
+          Measures quantified outcomes with numbers versus vague activity descriptions.
+        </p>
+      </div>
+      <div>
+        <AnimatedSignalBar
+          label="Career Growth"
+          rating={careerGrowthLabel(profile.trajectory_velocity)}
+          fillPercent={careerGrowthBarPercent(profile.trajectory_velocity)}
+          animate={animate}
+          delayMs={200}
+        />
+        <p className="mt-1 text-[11px] leading-snug text-[#94A3B8]">
+          Measures progression speed relative to typical market pace for this experience level.
+        </p>
+      </div>
+      <div>
+        <AnimatedSignalBar
+          label="Profile Depth"
+          rating={profileDepthLabel(profile.keyword_stuffing_flagged)}
+          fillPercent={profileDepthBarPercent(profile.keyword_stuffing_flagged)}
+          animate={animate}
+          delayMs={300}
+        />
+        <p className="mt-1 text-[11px] leading-snug text-[#94A3B8]">
+          Measures whether claimed skills are demonstrated in work descriptions or listed only.
+        </p>
+      </div>
     </div>
   );
 }
@@ -177,6 +190,23 @@ export function CandidateSlidePanel({
   const [scoring, setScoring] = useState(false);
   const [selectedFitId, setSelectedFitId] = useState<string | null>(null);
   const [panelTab, setPanelTab] = useState<"insights" | "resume">("insights");
+  const [panelExiting, setPanelExiting] = useState(false);
+  const [insightsAnimateKey, setInsightsAnimateKey] = useState(0);
+
+  const handlePanelClose = () => {
+    setPanelExiting(true);
+    window.setTimeout(() => {
+      setPanelExiting(false);
+      onClose();
+    }, 200);
+  };
+
+  useEffect(() => {
+    if (candidateId) {
+      setPanelExiting(false);
+      setInsightsAnimateKey((k) => k + 1);
+    }
+  }, [candidateId]);
 
   const load = useCallback(async () => {
     if (!candidateId) {
@@ -344,6 +374,8 @@ export function CandidateSlidePanel({
   if (!candidateId) return null;
 
   const profile = candidate?.signal_profile;
+  const insightsAnimate =
+    panelTab === "insights" && !loading && Boolean(profile);
   const card = displayResult?.recruiter_card;
   const verdict = displayResult
     ? scoreToVerdict(displayResult.overall_score)
@@ -355,19 +387,23 @@ export function CandidateSlidePanel({
       <button
         type="button"
         aria-label="Close panel"
-        className="fixed inset-0 z-40 bg-black/30"
-        onClick={onClose}
+        className={`fixed inset-0 z-40 bg-black/15 backdrop-blur-[2px] ${
+          panelExiting ? "panel-backdrop-exit" : "panel-backdrop-enter"
+        }`}
+        onClick={handlePanelClose}
       />
       <aside
-        className="panel-slide-in fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-[#F1F5F9] bg-white shadow-xl md:w-[70%]"
+        className={`fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-[#E2E8F0] bg-white shadow-[-8px_0_32px_rgba(0,0,0,0.12)] md:w-[70%] ${
+          panelExiting ? "panel-slide-exit" : "panel-slide-enter"
+        }`}
         role="dialog"
         aria-modal
         aria-label="Candidate insights"
       >
-        <div className="flex items-center justify-end border-b border-[#F1F5F9] px-4 py-2">
+        <div className="flex items-center justify-end border-b border-[#E2E8F0] px-4 py-2">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handlePanelClose}
             className="rounded-md p-1.5 text-[#64748B] hover:bg-slate-100"
             aria-label="Close"
           >
@@ -477,30 +513,14 @@ export function CandidateSlidePanel({
                 </button>
               </div>
 
-              <div className="flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
-                <button
-                  type="button"
-                  onClick={() => setPanelTab("insights")}
-                  className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium ${
-                    panelTab === "insights"
-                      ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-600"
-                  }`}
-                >
-                  Insights
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPanelTab("resume")}
-                  className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium ${
-                    panelTab === "resume"
-                      ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-600"
-                  }`}
-                >
-                  Resume
-                </button>
-              </div>
+              <SlidingTabs
+                tabs={[
+                  { id: "insights", label: "Insights" },
+                  { id: "resume", label: "Resume" },
+                ]}
+                value={panelTab}
+                onChange={setPanelTab}
+              />
 
               {panelTab === "resume" ? (
                 <div className="space-y-4">
@@ -526,7 +546,11 @@ export function CandidateSlidePanel({
                   <section>
                     <h3 className={karta.sectionHeading}>Candidate Insights</h3>
                     <div className="mt-3">
-                      <CandidateInsightsBars profile={profile} />
+                      <CandidateInsightsBars
+                        key={insightsAnimateKey}
+                        profile={profile}
+                        animate={insightsAnimate}
+                      />
                     </div>
                   </section>
 
@@ -597,7 +621,7 @@ export function CandidateSlidePanel({
                   )}
 
                   {card && card.what_stands_out.length > 0 && (
-                    <section>
+                    <section className={karta.accentTealSection}>
                       <h3 className={karta.sectionHeading}>
                         Why This Candidate
                       </h3>
@@ -667,7 +691,11 @@ export function CandidateSlidePanel({
                   <section>
                     <h3 className={karta.sectionHeading}>Candidate Insights</h3>
                     <div className="mt-3">
-                      <CandidateInsightsBars profile={profile} />
+                      <CandidateInsightsBars
+                        key={insightsAnimateKey}
+                        profile={profile}
+                        animate={insightsAnimate}
+                      />
                     </div>
                   </section>
 
@@ -688,7 +716,7 @@ export function CandidateSlidePanel({
                       {scoring ? (
                         <span className="inline-flex items-center gap-2">
                           <Loader2 className="h-4 w-4 animate-spin" />
-                          Scoring…
+                          Analysing…
                         </span>
                       ) : (
                         "Score Now"
