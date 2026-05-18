@@ -113,6 +113,27 @@ function firstSubstantialBullet(profile: CandidateSignalProfile): string | null 
   return null;
 }
 
+const SKIP_RESUME_LINE =
+  /^(?:summary|experience|education|skills|contact|curriculum|vitae|resume|cv|profile|objective|references|work\s+history)$/i;
+
+/** First substantive resume line for unscored cards (no title extracted). */
+export function getTalentPoolResumeLineFallback(
+  resumeText: string | null | undefined,
+): string | null {
+  const text = resumeText?.trim();
+  if (!text) return null;
+
+  for (const raw of text.split(/\r?\n/)) {
+    const line = stripResumeBulletPrefix(raw).trim();
+    if (line.length <= 20 || line.length >= 80) continue;
+    if (/@|https?:\/\//i.test(line)) continue;
+    if (/^\d+[\d\s\-().]*$/.test(line)) continue;
+    if (SKIP_RESUME_LINE.test(line.replace(/[#*_]/g, "").trim())) continue;
+    return line;
+  }
+  return null;
+}
+
 /** Supplementary talent-pool line when title/company are missing — from resume bullets. */
 export function getTalentPoolBulletFallbackDisplay(
   profile: CandidateSignalProfile,

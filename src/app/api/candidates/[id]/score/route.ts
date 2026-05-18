@@ -9,7 +9,9 @@ import { stripPII } from "@/lib/resume/strip-pii";
 import { insertSavedScoreWithFallback } from "@/lib/saved-scores/insert-with-fallback";
 import { buildSavedScoreInsertPayload } from "@/lib/saved-scores/build-save-payload";
 import { scoringStatusFromOverall } from "@/lib/jobs/scoring-status";
+import { scoreToVerdict } from "@/lib/scoring/recruiter-card";
 import { getCandidateById, updateCandidate } from "@/lib/supabase/candidates";
+import { recordRecruiterDecision } from "@/lib/decisions/recruiter-decisions";
 import { logWorkspaceActivityIfAuthed } from "@/lib/activity/log";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import type { RoleBrief } from "@/types/role-brief";
@@ -114,6 +116,16 @@ export async function POST(request: Request, { params }: Params) {
         role_brief_id: roleBrief.id,
         saved_score_id: savedScoreId,
       },
+    });
+
+    await recordRecruiterDecision({
+      candidateId: id,
+      jobId: roleBrief.id,
+      decisionType: "scored",
+      reasonCategory: scoreToVerdict(result.overall_score),
+      reasonDetail: String(result.overall_score),
+      candidateProfile: candidate.signal_profile,
+      roleBrief,
     });
 
     return NextResponse.json({ result, savedScoreId });

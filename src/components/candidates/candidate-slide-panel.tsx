@@ -31,6 +31,8 @@ import { AnimatedSignalBar } from "@/components/ui/animated-signal-bar";
 import { SlidingTabs } from "@/components/ui/sliding-tabs";
 import { CandidateDetailsSection } from "./candidate-details-section";
 import { CandidatePanelHeader } from "./candidate-panel-header";
+import { ScoreRolePickerModal } from "./score-role-picker-modal";
+import { useScoreCandidate } from "@/lib/candidates/use-score-candidate";
 import { VerdictBadge } from "./profile-shared";
 
 function formatDate(iso: string): string {
@@ -187,7 +189,6 @@ export function CandidateSlidePanel({
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [cvDownloadBusy, setCvDownloadBusy] = useState(false);
-  const [scoring, setScoring] = useState(false);
   const [selectedFitId, setSelectedFitId] = useState<string | null>(null);
   const [panelTab, setPanelTab] = useState<"insights" | "resume">("insights");
   const [panelExiting, setPanelExiting] = useState(false);
@@ -281,34 +282,46 @@ export function CandidateSlidePanel({
     return { met, total: Math.max(total, 1) };
   }, [displayResult, displayRoleBrief]);
 
-  const scoreRoleBriefId = contextJobId ?? roleBrief?.id ?? activeBriefId;
+  const scoreRoleBriefId = contextJobId ?? roleBrief?.id ?? null;
+
+  const {
+    scoring: scoringFromPicker,
+    error: scorePickerError,
+    pickerOpen,
+    pickerCandidate,
+    preselectedJobId,
+    requestScoreWithDefaultJob,
+    confirmPicker,
+    closePicker,
+    runScore,
+  } = useScoreCandidate(async () => {
+    await load();
+    onScored?.();
+  });
+
+  const scoring = scoringFromPicker;
 
   const handleScoreNow = async () => {
-    if (!candidateId) return;
-    if (!scoreRoleBriefId) {
-      setError(
-        "Select an active job role on the Job Roles page, or open this candidate from a job.",
-      );
+    if (!candidateId || !candidate) return;
+    setError(null);
+    if (scoreRoleBriefId) {
+      try {
+        await runScore(candidateId, scoreRoleBriefId);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Scoring failed");
+      }
       return;
     }
-    setScoring(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/candidates/${candidateId}/score`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roleBriefId: scoreRoleBriefId }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Scoring failed");
-      await load();
-      onScored?.();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Scoring failed");
-    } finally {
-      setScoring(false);
-    }
+    requestScoreWithDefaultJob(
+      candidateId,
+      candidate.display_name,
+      activeBriefId,
+    );
   };
+
+  useEffect(() => {
+    if (scorePickerError) setError(scorePickerError);
+  }, [scorePickerError]);
 
   const addNote = async () => {
     if (!candidateId || !noteText.trim()) return;
@@ -709,7 +722,7 @@ export function CandidateSlidePanel({
                     </p>
                     <button
                       type="button"
-                      disabled={scoring || !scoreRoleBriefId}
+                      disabled={scoring}
                       onClick={() => void handleScoreNow()}
                       className={`mt-4 ${karta.btnPrimary}`}
                     >
@@ -722,11 +735,6 @@ export function CandidateSlidePanel({
                         "Score Now"
                       )}
                     </button>
-                    {!scoreRoleBriefId && (
-                      <p className="mt-2 text-xs text-[#64748B]">
-                        Open from a job or set an active job role to score.
-                      </p>
-                    )}
                   </div>
                 </>
               )}
@@ -798,6 +806,14 @@ export function CandidateSlidePanel({
           ) : null}
         </div>
       </aside>
+      {pickerOpen && pickerCandidate && (
+        <ScoreRolePickerModal
+          candidateName={pickerCandidate.name}
+          preselectedJobId={preselectedJobId}
+          onClose={closePicker}
+          onConfirm={(jobId) => void confirmPicker(jobId)}
+        />
+      )}
     </>
   );
 }

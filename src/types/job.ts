@@ -10,7 +10,12 @@ export type CandidateSource =
   | "linkedin_profile"
   | string;
 
-export type CandidateScoringStatus = "unscored" | "scored" | "low_relevance";
+export type CandidateScoringStatus =
+  | "unscored"
+  | "scored"
+  | "low_relevance"
+  | "skipped"
+  | "manually_rejected";
 
 export type JobFields = {
   application_token: string | null;
@@ -54,8 +59,21 @@ export function parseAutoScoreMode(value: unknown): AutoScoreMode {
 
 export function parseScoringStatus(value: unknown): CandidateScoringStatus {
   const s = String(value ?? "unscored").toLowerCase();
-  if (s === "scored" || s === "low_relevance") return s;
+  if (
+    s === "scored" ||
+    s === "low_relevance" ||
+    s === "unlikely_fit" ||
+    s === "skipped" ||
+    s === "manually_rejected"
+  ) {
+    if (s === "unlikely_fit") return "low_relevance";
+    return s as CandidateScoringStatus;
+  }
   return "unscored";
+}
+
+export function isUnlikelyFitStatus(status: CandidateScoringStatus): boolean {
+  return status === "low_relevance" || status === "manually_rejected";
 }
 
 export function parseCandidateSource(value: unknown): CandidateSource {

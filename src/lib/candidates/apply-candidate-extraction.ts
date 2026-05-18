@@ -4,6 +4,7 @@ import {
   type ExtractedCandidateFields,
 } from "./extract-resume-fields";
 import { splitFullName } from "./parse-resume-identity";
+import { sanitizeDisplayNameArtifacts } from "./resolve-display-name";
 
 export type CandidateExtractionPatch = {
   display_name: string;
@@ -19,11 +20,12 @@ export function extractAndBuildPatch(
   existingProfile?: CandidateSignalProfile,
 ): { fields: ExtractedCandidateFields; patch: CandidateExtractionPatch } {
   const fields = extractCandidateFields(resumeText, resumeFilename);
-  const identity = splitFullName(fields.full_name);
+  const displayName = sanitizeDisplayNameArtifacts(fields.full_name);
+  const identity = splitFullName(displayName);
 
   const signal_profile: Partial<CandidateSignalProfile> = {
     ...existingProfile,
-    display_name: fields.full_name,
+    display_name: displayName,
     first_name: identity.first_name,
     last_name: identity.last_name,
     current_title: fields.current_title,
@@ -40,7 +42,7 @@ export function extractAndBuildPatch(
   return {
     fields,
     patch: {
-      display_name: fields.full_name,
+      display_name: displayName,
       application_email: fields.extracted_email,
       application_phone: fields.extracted_phone,
       linkedin_url: fields.linkedin_url,

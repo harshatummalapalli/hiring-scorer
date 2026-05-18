@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { ClickableCandidateName } from "@/components/candidates/clickable-candidate-name";
 import { CoreStrengthLabel } from "@/components/candidates/core-strength-label";
 import { CandidateListMeta } from "@/components/candidates/candidate-list-meta";
 import { ShortlistReasonModal } from "@/components/candidates/shortlist-reason-modal";
+import { SkipReasonModal } from "@/components/candidates/skip-reason-modal";
 import { VerdictBadge } from "@/components/candidates/profile-shared";
 import { useCandidatePanel } from "@/contexts/candidate-panel-context";
 import { getScoreForRole } from "@/lib/candidates/active-role-score";
@@ -15,6 +16,7 @@ import { karta } from "@/lib/brand/karta";
 import { VERDICT_SORT_ORDER } from "@/lib/brand/karta";
 import type { CandidateListItem } from "@/types/candidate";
 import type { Job } from "@/types/job";
+
 type JobAssessedTabProps = {
   jobId: string;
   roleBrief: Job;
@@ -27,8 +29,11 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
   const [shortlistTarget, setShortlistTarget] = useState<CandidateListItem | null>(
     null,
   );
+  const [skipTarget, setSkipTarget] = useState<CandidateListItem | null>(null);
   const [shortlisting, setShortlisting] = useState(false);
+  const [skipping, setSkipping] = useState(false);
   const [pipelineIds, setPipelineIds] = useState<Set<string>>(new Set());
+  const [skippedOpen, setSkippedOpen] = useState(false);
   const { openPanel } = useCandidatePanel();
 
   const panelOpts = useMemo(
@@ -66,7 +71,9 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
   }, [load]);
 
   const assessed = useMemo(() => {
-    const scored = candidates.filter((c) => c.scoring_status === "scored");
+    const scored = candidates.filter(
+      (c) => c.scoring_status === "scored",
+    );
     return scored.sort((a, b) => {
       const sa = getScoreForRole(a, jobId);
       const sb = getScoreForRole(b, jobId);
@@ -78,6 +85,11 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
       return (sb?.overall_score ?? 0) - (sa?.overall_score ?? 0);
     });
   }, [candidates, jobId]);
+
+  const skipped = useMemo(
+    () => candidates.filter((c) => c.scoring_status === "skipped"),
+    [candidates],
+  );
 
   const confirmShortlist = async (reason: string | null) => {
     if (!shortlistTarget) return;
@@ -97,10 +109,36 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
       if (!res.ok) throw new Error(json.error ?? "Shortlist failed");
       setPipelineIds((prev) => new Set(prev).add(shortlistTarget.id));
       setShortlistTarget(null);
+      await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Shortlist failed");
     } finally {
       setShortlisting(false);
+    }
+  };
+
+  const confirmSkip = async (reason: string, detail: string | null) => {
+    if (!skipTarget) return;
+    setSkipping(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/candidates/${skipTarget.id}/skip`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roleBriefId: jobId,
+          skipReason: reason,
+          skipReasonDetail: detail,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Skip failed");
+      setSkipTarget(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Skip failed");
+    } finally {
+      setSkipping(false);
     }
   };
 
@@ -162,7 +200,7 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
                       <CandidateListMeta
                         currentTitle={c.current_title}
                         currentCompany={c.current_company}
-                        yearsExperience={c.signal_profile.total_years_experience}
+                        showYears={false}
                       />
                       <CoreStrengthLabel
                         primary={c.signal_profile.core_strength_primary}
@@ -189,14 +227,24 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
                           Shortlisted
                         </span>
                       ) : (
-                        <button
-                          type="button"
-                          disabled={shortlisting}
-                          onClick={() => setShortlistTarget(c)}
-                          className={karta.btnPrimary}
-                        >
-                          Shortlist
-                        </button>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            disabled={shortlisting || skipping}
+                            onClick={() => setShortlistTarget(c)}
+                            className={karta.btnPrimary}
+                          >
+                            Shortlist
+                          </button>
+                          <button
+                            type="button"
+                            disabled={shortlisting || skipping}
+                            onClick={() => setSkipTarget(c)}
+                            className={karta.btnSecondary}
+                          >
+                            Skip
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -207,11 +255,63 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
         </div>
       )}
 
+      {skipped.length > 0 && (
+        <section className={`${karta.card} overflow-hidden`}>
+          <button
+            type="button"
+            onClick={() => setSkippedOpen((o) => !o)}
+            className="flex w-full items-center justify-between px-5 py-4 text-left hover:bg-slate-50"
+          >
+            <span className="text-base font-semibold text-slate-900">
+              Skipped ({skipped.length})
+            </span>
+            {skippedOpen ? (
+              <ChevronDown className="h-5 w-5 text-slate-500" />
+            ) : (
+              <ChevronRight className="h-5 w-5 text-slate-500" />
+            )}
+          </button>
+          {skippedOpen && (
+            <div className="border-t border-slate-200">
+              <table className="w-full text-left text-sm">
+                <tbody>
+                  {skipped.map((c) => {
+                    const score = getScoreForRole(c, jobId);
+                    return (
+                      <tr key={c.id} className="border-b border-slate-100">
+                        <td className="px-4 py-3 font-medium">{c.display_name}</td>
+                        <td className="px-4 py-3">
+                          {score && (
+                            <VerdictBadge
+                              verdict={score.verdict}
+                              score={score.overall_score}
+                              compact
+                            />
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
       {shortlistTarget && (
         <ShortlistReasonModal
           candidateName={shortlistTarget.display_name}
           onClose={() => setShortlistTarget(null)}
           onConfirm={(reason) => void confirmShortlist(reason)}
+        />
+      )}
+
+      {skipTarget && (
+        <SkipReasonModal
+          candidateName={skipTarget.display_name}
+          onClose={() => setSkipTarget(null)}
+          onConfirm={(reason, detail) => void confirmSkip(reason, detail)}
         />
       )}
     </div>

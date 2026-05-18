@@ -11,6 +11,8 @@ type CandidateListMetaProps = {
   yearsExperience?: string | null;
   /** When set (Talent Pool), shows formatted resume-bullet fallback if title/company are missing. */
   signalProfile?: CandidateSignalProfile | null;
+  /** Precomputed resume line for unscored cards without a title. */
+  resumeSubtitleFallback?: string | null;
   /** Show experience years line (off on Talent Pool cards — years shown elsewhere). */
   showYears?: boolean;
 };
@@ -20,6 +22,7 @@ export function CandidateListMeta({
   currentCompany,
   yearsExperience,
   signalProfile,
+  resumeSubtitleFallback,
   showYears = true,
 }: CandidateListMetaProps) {
   const roleLine = formatTitleAtCompanySubtitle(currentTitle, currentCompany);
@@ -27,12 +30,14 @@ export function CandidateListMeta({
     signalProfile && !roleLine
       ? getTalentPoolBulletFallbackDisplay(signalProfile)
       : null;
+  const resumeLineFallback =
+    !roleLine && !bulletFallback ? resumeSubtitleFallback?.trim() || null : null;
   const years = showYears
     ? formatTotalExperienceDisplay(yearsExperience ?? null)
     : null;
   const hasYears = Boolean(years && years !== "—");
 
-  if (!roleLine && !hasYears && !bulletFallback) return null;
+  if (!roleLine && !hasYears && !bulletFallback && !resumeLineFallback) return null;
 
   return (
     <div className="mt-1.5 min-w-0 space-y-0.5">
@@ -52,10 +57,18 @@ export function CandidateListMeta({
           {bulletFallback}
         </p>
       ) : null}
+      {!roleLine && !bulletFallback && resumeLineFallback ? (
+        <p
+          className="truncate text-xs leading-snug text-[#94A3B8]"
+          title={resumeLineFallback}
+        >
+          {resumeLineFallback}
+        </p>
+      ) : null}
       {hasYears ? (
         <p
           className={
-            roleLine || bulletFallback
+            roleLine || bulletFallback || resumeLineFallback
               ? "text-xs text-[#94A3B8]"
               : "text-sm text-[#64748B]"
           }

@@ -134,6 +134,10 @@ export type CandidateRow = {
   application_location: string | null;
   applied_at: string | null;
   scoring_status: CandidateScoringStatus;
+  manual_rejection_reason: string | null;
+  manual_rejection_detail: string | null;
+  manually_rejected_at: string | null;
+  manually_rejected_by: string | null;
   linkedin_url: string | null;
   created_at: string;
   updated_at: string;
@@ -162,6 +166,8 @@ export type CandidatePoolFilter = "all" | "scored" | "unscored";
 
 export type CandidateListItem = Omit<CandidateRow, "resume_text"> & {
   resume_text?: string;
+  /** Precomputed grey subtitle when title extraction is missing. */
+  resume_subtitle_fallback?: string | null;
   role_scores: CandidateScoreSummary[];
   highest_score: number;
 };

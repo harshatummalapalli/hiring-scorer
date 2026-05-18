@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
+import { recordRecruiterDecision } from "@/lib/decisions/recruiter-decisions";
 import { addCandidateToPipeline } from "@/lib/pipeline/add-to-pipeline";
+import { getCandidateById } from "@/lib/supabase/candidates";
+import { getJobById } from "@/lib/supabase/jobs";
 import { getPipelineBoard } from "@/lib/supabase/pipeline";
 
 export async function GET(request: Request) {
@@ -49,6 +52,8 @@ export async function POST(request: Request) {
       );
     }
 
+    const roleBrief = await getJobById(body.role_brief_id.trim());
+
     const results = [];
     for (const candidateId of ids) {
       const result = await addCandidateToPipeline(
@@ -57,6 +62,18 @@ export async function POST(request: Request) {
         body.shortlist_reason?.trim() || null,
       );
       results.push(result);
+
+      const candidate = await getCandidateById(candidateId);
+      if (candidate && roleBrief) {
+        await recordRecruiterDecision({
+          candidateId,
+          jobId: body.role_brief_id.trim(),
+          decisionType: "shortlisted",
+          reasonCategory: body.shortlist_reason?.trim() || null,
+          candidateProfile: candidate.signal_profile,
+          roleBrief,
+        });
+      }
     }
 
     const board = await getPipelineBoard();

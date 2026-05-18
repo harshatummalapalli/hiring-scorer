@@ -76,6 +76,7 @@ function ReparseAllCandidatesCard() {
       let offset = 0;
       let total = 0;
       let done = false;
+      let updatedTotal = 0;
       while (!done) {
         const res = await fetch(
           `/api/admin/reparse-candidates?offset=${offset}&limit=25`,
@@ -85,12 +86,15 @@ function ReparseAllCandidatesCard() {
         if (!res.ok) throw new Error(json.error ?? "Reparse failed");
         total = Number(json.total ?? 0);
         const processed = Number(json.processed ?? 0);
+        updatedTotal += Number(json.updatedInBatch ?? 0);
         done = Boolean(json.done);
         offset = processed;
         setProgress(`Reparsed ${processed} of ${total} candidates…`);
         if (!done && (json.batchSize ?? 0) === 0) break;
       }
-      setProgress(`Done. Reparsed ${total} candidates.`);
+      setProgress(
+        `Done. Reparsed ${total} candidates. Updated ${updatedTotal} display names.`,
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Reparse failed");
       setProgress(null);
@@ -100,12 +104,14 @@ function ReparseAllCandidatesCard() {
   };
 
   return (
-    <section className={`${karta.card} p-6`}>
-      <h2 className={karta.sectionHeading}>Candidate data</h2>
+    <section
+      className={`${karta.card} border-2 border-[#0D9488]/30 bg-gradient-to-br from-[#0D9488]/5 to-white p-6 shadow-sm`}
+    >
+      <h2 className="text-lg font-semibold text-[#1E293B]">Reparse All Candidates</h2>
       <p className="mt-2 text-sm text-[#64748B]">
-        Re-run resume extraction (name, email, phone, title, location, LinkedIn) on
-        all stored candidates. Use after improving parsers for LinkedIn PDFs and
-        other formats.
+        Re-run improved name extraction on every candidate with stored resume text:
+        header scan, email fallback, and filename cleanup. Fixes glued or numeric
+        display names (e.g. Tushar886, Jimmykrgrd).
       </p>
       {progress && (
         <p className="mt-3 text-sm font-medium text-[#0D9488]">{progress}</p>
@@ -119,7 +125,7 @@ function ReparseAllCandidatesCard() {
         type="button"
         disabled={running}
         onClick={() => void run()}
-        className={`mt-4 ${karta.btnPrimary}`}
+        className={`mt-5 w-full sm:w-auto ${karta.btnPrimary} px-8 py-3 text-base font-semibold`}
       >
         {running ? (
           <span className="inline-flex items-center gap-2">
@@ -202,6 +208,8 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-10">
+      <ReparseAllCandidatesCard />
+
       <section>
         <h2 className={karta.pageTitle}>Platform overview</h2>
         {overview && (
@@ -232,8 +240,6 @@ export function AdminDashboard() {
       </section>
 
       <AdminCostDashboard />
-
-      <ReparseAllCandidatesCard />
 
       <section>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

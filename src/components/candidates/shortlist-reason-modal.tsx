@@ -5,10 +5,7 @@ import { karta } from "@/lib/brand/karta";
 
 const REASONS = [
   { id: "strong_technical", label: "Strong technical fit" },
-  {
-    id: "client_requested",
-    label: "Client or hiring manager requested this profile",
-  },
+  { id: "client_requested", label: "Client or hiring manager requested" },
   { id: "culture", label: "Good culture signal" },
   { id: "explore", label: "Want to explore further" },
 ] as const;
@@ -22,7 +19,6 @@ type ShortlistReasonModalProps = {
 };
 
 export function ShortlistReasonModal({
-  candidateName,
   onClose,
   onConfirm,
 }: ShortlistReasonModalProps) {
@@ -43,11 +39,8 @@ export function ShortlistReasonModal({
           id="shortlist-reason-title"
           className="text-lg font-semibold text-[#1E293B]"
         >
-          Shortlist {candidateName}
+          Why are you shortlisting?
         </h2>
-        <p className="mt-2 text-sm text-[#64748B]">
-          Why are you shortlisting? (optional)
-        </p>
         <fieldset className="mt-4 space-y-2">
           {REASONS.map((r) => (
             <label
@@ -66,24 +59,26 @@ export function ShortlistReasonModal({
             </label>
           ))}
         </fieldset>
-        <div className="mt-6 flex justify-end gap-3">
-          <button type="button" onClick={onClose} className={karta.btnSecondary}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => onConfirm(null)}
-            className={karta.btnSecondary}
-          >
-            Skip
-          </button>
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <button
             type="button"
             onClick={() => onConfirm(reasonText)}
-            className={karta.btnPrimary}
+            className="text-sm font-medium text-[#64748B] underline-offset-2 hover:text-[#1E293B] hover:underline"
           >
-            Shortlist
+            Skip this step
           </button>
+          <div className="flex gap-3">
+            <button type="button" onClick={onClose} className={karta.btnSecondary}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => onConfirm(reasonText)}
+              className={karta.btnPrimary}
+            >
+              Confirm Shortlist
+            </button>
+          </div>
         </div>
       </div>
     </div>

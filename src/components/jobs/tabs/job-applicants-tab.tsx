@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, Loader2, Upload } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2, Upload, X } from "lucide-react";
+import { NotAFitModal } from "@/components/candidates/not-a-fit-modal";
 import { ClickableCandidateName } from "@/components/candidates/clickable-candidate-name";
 import { CoreStrengthLabel } from "@/components/candidates/core-strength-label";
 import { DuplicateWarningModal } from "@/components/candidates/duplicate-warning-modal";
@@ -19,7 +20,7 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import type { CandidateListItem } from "@/types/candidate";
 import type { Job } from "@/types/job";
-import { sourceBadgeLabel } from "@/types/job";
+import { isUnlikelyFitStatus, sourceBadgeLabel } from "@/types/job";
 
 type TalentMatch = {
   candidateId: string;
@@ -67,6 +68,8 @@ export function JobApplicantsTab({
   const [error, setError] = useState<string | null>(null);
   const [duplicateMatch, setDuplicateMatch] = useState<DuplicateMatch | null>(null);
   const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<CandidateListItem | null>(null);
+  const [rejecting, setRejecting] = useState(false);
   const newApplicantsRef = useRef<HTMLElement>(null);
   const { openPanel, refreshPanel, candidateId: openPanelId } = useCandidatePanel();
 
@@ -80,6 +83,7 @@ export function JobApplicantsTab({
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      await fetch(`/api/jobs/${jobId}/reclassify-applicants`, { method: "POST" });
       const res = await fetch(`/api/jobs/${jobId}/candidates`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to load");
@@ -123,7 +127,7 @@ export function JobApplicantsTab({
   );
 
   const unlikely = useMemo(
-    () => candidates.filter((c) => c.scoring_status === "low_relevance"),
+    () => candidates.filter((c) => isUnlikelyFitStatus(c.scoring_status)),
     [candidates],
   );
 
@@ -145,6 +149,31 @@ export function JobApplicantsTab({
       else next.add(id);
       return next;
     });
+  };
+
+  const confirmReject = async (reason: string, detail: string | null) => {
+    if (!rejectTarget) return;
+    setRejecting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/candidates/${rejectTarget.id}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roleBriefId: jobId,
+          reason,
+          reasonDetail: detail,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to mark not a fit");
+      setRejectTarget(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to mark not a fit");
+    } finally {
+      setRejecting(false);
+    }
   };
 
   const scoreOne = async (candidateId: string) => {
@@ -508,17 +537,28 @@ export function JobApplicantsTab({
                           Analysing…
                         </span>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => void scoreOne(c.id)}
-                          className={`btn-press inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-600`}
-                        >
-                          <span
-                            className="review-dot-pulse inline-block h-2 w-2 rounded-full bg-amber-200"
-                            aria-hidden
-                          />
-                          Review and Score
-                        </button>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            disabled={rejecting}
+                            onClick={() => setRejectTarget(c)}
+                            className={`inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50`}
+                          >
+                            <X className="h-3.5 w-3.5" aria-hidden />
+                            Not a Fit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void scoreOne(c.id)}
+                            className={`btn-press inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-600`}
+                          >
+                            <span
+                              className="review-dot-pulse inline-block h-2 w-2 rounded-full bg-amber-200"
+                              aria-hidden
+                            />
+                            Review and Score
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -631,7 +671,22 @@ export function JobApplicantsTab({
                 <tbody>
                   {unlikely.map((c) => (
                     <tr key={c.id} className="border-b border-slate-100">
-                      <td className="px-4 py-3 font-medium">{c.display_name}</td>
+                      <td className="px-4 py-3">
+                        <p className="font-medium">{c.display_name}</p>
+                        {c.scoring_status === "manually_rejected" && (
+                          <span className="mt-1 inline-block rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700">
+                            Manually marked as not a fit
+                          </span>
+                        )}
+                        {c.manual_rejection_reason && (
+                          <p className="mt-1 text-xs text-[#64748B]">
+                            {c.manual_rejection_reason}
+                            {c.manual_rejection_detail
+                              ? ` — ${c.manual_rejection_detail}`
+                              : ""}
+                          </p>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -640,6 +695,14 @@ export function JobApplicantsTab({
           </div>
         )}
       </section>
+
+      {rejectTarget && (
+        <NotAFitModal
+          candidateName={rejectTarget.display_name}
+          onClose={() => setRejectTarget(null)}
+          onConfirm={(reason, detail) => void confirmReject(reason, detail)}
+        />
+      )}
 
       {duplicateMatch && (
         <DuplicateWarningModal

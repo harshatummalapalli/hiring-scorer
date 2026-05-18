@@ -18,6 +18,8 @@ export type RecommendationCandidateInput = {
   id: string;
   display_name: string;
   signal_profile: CandidateSignalProfile;
+  /** Raw resume text for keyword fallback when skill arrays are empty. */
+  resume_text?: string | null;
 };
 
 export type TalentRecommendation = {
@@ -74,12 +76,22 @@ export function passesSeniorityFilter(
   return true;
 }
 
+export function profileHasSkillSignals(profile: CandidateSignalProfile): boolean {
+  const verified = profile.skills_verified?.length ?? 0;
+  const listed = profile.skills_listed_only?.length ?? 0;
+  const hasCore =
+    Boolean(profile.core_strength_primary?.trim()) ||
+    Boolean(profile.core_strength_secondary?.trim());
+  return verified + listed > 0 || hasCore;
+}
+
 export function passesCoreStrengthFilter(
   roleBrief: RoleBrief,
   profile: CandidateSignalProfile,
 ): boolean {
   const roleDomains = primaryRoleDomains(roleBrief);
   if (roleDomains.length === 0) return true;
+  if (!profileHasSkillSignals(profile)) return true;
   return coreStrengthOverlapsRole(profile, roleDomains);
 }
 
@@ -153,6 +165,17 @@ export function skillTermInProfile(
   return false;
 }
 
+function buildResumeTextHaystack(resumeText: string | null | undefined): string {
+  return (resumeText ?? "").toLowerCase();
+}
+
+function skillTermInHaystack(term: string, haystack: string): boolean {
+  const normalized = normalizeTerm(term);
+  if (normalized.length < 2) return false;
+  if (haystack.includes(normalized)) return true;
+  return false;
+}
+
 function buildHaystackTermSet(profile: CandidateSignalProfile): Set<string> {
   const set = new Set<string>();
   for (const v of profile.skills_verified ?? []) {
@@ -169,15 +192,25 @@ function buildHaystackTermSet(profile: CandidateSignalProfile): Set<string> {
 export function matchMustHaves(
   specs: MustHaveSpec[],
   profile: CandidateSignalProfile,
+  resumeText?: string | null,
 ): string[] {
   const haystack = buildProfileSkillHaystack(profile);
   const terms = buildHaystackTermSet(profile);
+  const resumeHaystack = buildResumeTextHaystack(resumeText);
+  const useResumeFallback =
+    resumeHaystack.length > 0 &&
+    (haystack.trim().length === 0 || terms.size === 0);
   const matched: string[] = [];
 
   for (const spec of specs) {
     const candidates = [spec.skill, ...spec.equivalents];
-    const hit = candidates.some((t) => skillTermInProfile(t, haystack, terms));
-    if (hit) matched.push(spec.skill);
+    const hitProfile = candidates.some((t) =>
+      skillTermInProfile(t, haystack, terms),
+    );
+    const hitResume =
+      useResumeFallback &&
+      candidates.some((t) => skillTermInHaystack(t, resumeHaystack));
+    if (hitProfile || hitResume) matched.push(spec.skill);
   }
 
   return matched;
@@ -243,9 +276,10 @@ export function computeLocalRecommendationScore(
   roleBrief: RoleBrief,
   profile: CandidateSignalProfile,
   mustHaveSpecs?: MustHaveSpec[],
+  resumeText?: string | null,
 ): { score: number; matchedSkills: string[] } {
   const specs = mustHaveSpecs ?? buildMustHaveSpecs(roleBrief);
-  const matchedSkills = matchMustHaves(specs, profile);
+  const matchedSkills = matchMustHaves(specs, profile, resumeText);
 
   const mustHavePoints = Math.min(
     matchedSkills.length * POINTS_PER_MUST_HAVE,
@@ -287,6 +321,7 @@ export function scoreAllTalentRecommendations(
       roleBrief,
       c.signal_profile,
       specs,
+      c.resume_text,
     );
     scored.push({
       candidateId: c.id,

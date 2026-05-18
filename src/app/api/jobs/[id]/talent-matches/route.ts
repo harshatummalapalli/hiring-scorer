@@ -47,9 +47,12 @@ export async function GET(_request: Request, { params }: Params) {
       id: c.id,
       display_name: c.display_name,
       signal_profile: c.signal_profile,
+      resume_text: c.resume_text,
     }));
 
-    const ranked = scoreAllTalentRecommendations(job, inputs).slice(0, 10);
+    const ranked = scoreAllTalentRecommendations(job, inputs)
+      .filter((r) => r.score > 0 || r.matchedSkills.length > 0)
+      .slice(0, 5);
 
     const matches = ranked.map((r) => {
       const prev = lastRoleByCandidate.get(r.candidateId);

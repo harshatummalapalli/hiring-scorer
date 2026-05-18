@@ -16,7 +16,12 @@ import { CandidateListMeta } from "@/components/candidates/candidate-list-meta";
 import { CoreStrengthLabel } from "@/components/candidates/core-strength-label";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatTotalExperienceDisplay } from "@/lib/candidates/format-total-experience";
-import { formatKartaDateAdded } from "@/lib/dates/format-karta-date";
+import { formatKartaDate } from "@/lib/dates/format-karta-date";
+import { ScoreRolePickerModal } from "@/components/candidates/score-role-picker-modal";
+import { useScoreCandidate } from "@/lib/candidates/use-score-candidate";
+import { useActiveRoleBrief } from "@/contexts/active-role-brief-context";
+import { VerdictBadge } from "@/components/candidates/profile-shared";
+import { getScoreForRole } from "@/lib/candidates/active-role-score";
 import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
 import type {
@@ -42,7 +47,18 @@ export function TalentPoolWorkspace() {
   const [coreStrength, setCoreStrength] =
     useState<CandidateCoreStrengthFilter>("all");
   const [hasGithubOnly, setHasGithubOnly] = useState(false);
-  const { openPanel, candidateId: panelCandidateId } = useCandidatePanel();
+  const { openPanel, candidateId: panelCandidateId, refreshPanel } =
+    useCandidatePanel();
+  const { activeBriefId } = useActiveRoleBrief();
+  const {
+    scoring,
+    pickerOpen,
+    pickerCandidate,
+    preselectedJobId,
+    requestScoreWithDefaultJob,
+    confirmPicker,
+    closePicker,
+  } = useScoreCandidate(() => void loadCandidates());
   const [showUpload, setShowUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -340,13 +356,50 @@ export function TalentPoolWorkspace() {
                     currentTitle={c.current_title}
                     currentCompany={c.current_company}
                     signalProfile={c.signal_profile}
+                    resumeSubtitleFallback={c.resume_subtitle_fallback}
                     showYears={false}
                   />
                   <p className="mt-2 text-[13px] text-[#94A3B8]">
-                    {[yearsLabel, `Added ${formatKartaDateAdded(c.applied_at ?? c.created_at)}`]
-                      .filter(Boolean)
+                    {[
+                      yearsLabel,
+                      `Added ${formatKartaDate(c.applied_at ?? c.created_at)}`,
+                    ]
+                      .filter((line) => line && line !== "Added —")
                       .join(" · ")}
                   </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {(() => {
+                      const roleScore = activeBriefId
+                        ? getScoreForRole(c, activeBriefId)
+                        : c.role_scores[0];
+                      if (roleScore) {
+                        return (
+                          <VerdictBadge
+                            verdict={roleScore.verdict}
+                            score={roleScore.overall_score}
+                            compact
+                          />
+                        );
+                      }
+                      return (
+                        <button
+                          type="button"
+                          disabled={scoring}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            requestScoreWithDefaultJob(
+                              c.id,
+                              c.display_name,
+                              activeBriefId,
+                            );
+                          }}
+                          className={`${karta.btnPrimary} px-3 py-1 text-xs`}
+                        >
+                          Score Now
+                        </button>
+                      );
+                    })()}
+                  </div>
                   {jobBadges.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-1">
                       {jobBadges.map((s) => (
@@ -366,6 +419,18 @@ export function TalentPoolWorkspace() {
         </ul>
       )}
 
+      {pickerOpen && pickerCandidate && (
+        <ScoreRolePickerModal
+          candidateName={pickerCandidate.name}
+          preselectedJobId={preselectedJobId}
+          onClose={closePicker}
+          onConfirm={(jobId) => {
+            void confirmPicker(jobId).then(() => {
+              if (panelCandidateId === pickerCandidate.id) refreshPanel();
+            });
+          }}
+        />
+      )}
     </div>
   );
 }

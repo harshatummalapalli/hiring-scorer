@@ -138,13 +138,45 @@ export function cleanDisplayName(name: string): string {
   return words.join(" ").trim();
 }
 
+/** Strip filename digits, glued lowercase tokens, and over-long names for display. */
+export function sanitizeDisplayNameArtifacts(name: string): string {
+  let text = name.trim().replace(/[_-]+/g, " ");
+  if (!text) return "Unknown Candidate";
+
+  const words = text.split(/\s+/).filter(Boolean);
+  const strippedWords = words.map((w) => {
+    if (/\d/.test(w)) return w.replace(/\d+$/g, "").replace(/\d+/g, "");
+  }).filter((w) => w && w.length > 0) as string[];
+  text = (strippedWords.length > 0 ? strippedWords : words).join(" ").trim();
+
+  if (!text) return "Unknown Candidate";
+
+  const isAllLowerGlued =
+    !/\s/.test(text) && text === text.toLowerCase() && text.length >= 4;
+  if (isAllLowerGlued) {
+    const camel = splitCamelCaseToken(text);
+    if (camel) text = camel.join(" ");
+    else {
+      const compound = splitCompoundSurname(text);
+      text = compound ? compound.join(" ") : capitalizeWord(text);
+    }
+  }
+
+  let finalWords = text.split(/\s+/).filter(Boolean);
+  if (text.length > 30 || finalWords.length > 4) {
+    finalWords = finalWords.slice(0, 2);
+  }
+
+  return cleanDisplayName(finalWords.join(" ")) || "Unknown Candidate";
+}
+
 /** True when a stored/display name should not be shown to recruiters. */
 export function isBadDisplayName(name: string | null | undefined): boolean {
   const n = cleanDisplayName(name?.trim() ?? "");
   if (!n || n.length < 2) return true;
   if (BAD_NAME_PATTERNS.test(n)) return true;
   if (/\[REDACTED/i.test(n)) return true;
-  if (/@/.test(n) || /\d{5,}/.test(n)) return true;
+  if (/@/.test(n) || /\d{2,}/.test(n)) return true;
 
   const words = n.split(/\s+/).filter(Boolean);
   if (words.length > 4) return true;

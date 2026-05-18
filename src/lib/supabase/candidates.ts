@@ -21,7 +21,10 @@ import type {
   CandidateStage,
 } from "@/types/candidate";
 import { normalizeSignalProfile } from "@/lib/candidates/build-signal-profile";
-import { getCandidateHeaderName } from "@/lib/candidates/profile-display";
+import {
+  getCandidateHeaderName,
+  getTalentPoolResumeLineFallback,
+} from "@/lib/candidates/profile-display";
 import { scoreToVerdict } from "@/lib/scoring/recruiter-card";
 import {
   assertCanCreateCandidate,
@@ -68,6 +71,18 @@ function rowToCandidate(row: Record<string, unknown>): CandidateRow {
       row.application_location != null ? String(row.application_location) : null,
     applied_at: row.applied_at != null ? String(row.applied_at) : null,
     scoring_status: parseScoringStatus(row.scoring_status),
+    manual_rejection_reason:
+      row.manual_rejection_reason != null
+        ? String(row.manual_rejection_reason)
+        : null,
+    manual_rejection_detail:
+      row.manual_rejection_detail != null
+        ? String(row.manual_rejection_detail)
+        : null,
+    manually_rejected_at:
+      row.manually_rejected_at != null ? String(row.manually_rejected_at) : null,
+    manually_rejected_by:
+      row.manually_rejected_by != null ? String(row.manually_rejected_by) : null,
     linkedin_url: row.linkedin_url != null ? String(row.linkedin_url) : null,
     resume_file_path:
       row.resume_file_path != null ? String(row.resume_file_path) : null,
@@ -214,9 +229,18 @@ function attachScoresToCandidate(
       ? Math.max(...merged.map((s) => s.overall_score))
       : 0;
 
-  const { resume_text: _omit, ...rest } = candidate;
+  const { resume_text, ...rest } = candidate;
+  const hasTitle =
+    Boolean(candidate.current_title?.trim()) ||
+    Boolean(candidate.signal_profile?.current_title?.trim());
+  const resume_subtitle_fallback =
+    !hasTitle && resume_text?.trim()
+      ? getTalentPoolResumeLineFallback(resume_text)
+      : null;
+
   return {
     ...rest,
+    resume_subtitle_fallback,
     role_scores: merged,
     highest_score,
   };

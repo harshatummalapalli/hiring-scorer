@@ -6,6 +6,7 @@ import { extractResumeLinks, isValidLinkedInUrl } from "./parse-resume-links";
 import {
   cleanDisplayName,
   isBadDisplayName,
+  sanitizeDisplayNameArtifacts,
 } from "./resolve-display-name";
 
 const EMAIL_PATTERN =
@@ -305,11 +306,12 @@ export function extractCandidateFields(
       : `https://${linkedinFromLinks!.trim()}`
     : null;
 
-  const full_name = extractFullNameFromResume(
+  const rawName = extractFullNameFromResume(
     resumeText,
     resumeFilename,
     extracted_email,
   );
+  const full_name = sanitizeDisplayNameArtifacts(rawName);
 
   const { current_title, current_company } = extractCurrentTitleAndCompany(resumeText);
   const polished = polishTitleAndCompany(current_title, current_company);

@@ -160,7 +160,11 @@ export async function POST(request: Request) {
         .maybeSingle();
       if (briefRow) {
         const roleBrief = parseRoleBriefRow(briefRow as Record<string, unknown>);
-        scoringStatus = classifyApplicantPrefilter(roleBrief, profile);
+        scoringStatus = classifyApplicantPrefilter(
+          roleBrief,
+          profile,
+          resumeText,
+        );
       } else {
         scoringStatus = "unscored";
       }

@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { buildSignalProfile } from "@/lib/candidates/build-signal-profile";
+import { classifyApplicantPrefilter } from "@/lib/jobs/applicant-prefilter";
+import { parseRoleBriefRow } from "@/types/role-brief";
 import { getCandidateHeaderName } from "@/lib/candidates/profile-display";
 import { createActivity } from "@/lib/candidates/activity";
 import { normalizeResumeText } from "@/lib/resume/normalize-resume-text";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { insertApplicationCandidate } from "@/lib/supabase/candidates";
 import { limitErrorResponse } from "@/lib/workspace/limits";
-import { parseRoleBriefRow } from "@/types/role-brief";
-
 export const maxDuration = 60;
 
 type Params = { params: Promise<{ token: string }> };
@@ -63,7 +63,7 @@ export async function POST(request: Request, { params }: Params) {
     const admin = createSupabaseAdminClient();
     const { data: jobRow, error: jobError } = await admin
       .from("role_briefs")
-      .select("id, title, application_active, created_by, application_count")
+      .select("*")
       .eq("application_token", token.toUpperCase())
       .maybeSingle();
 
@@ -93,6 +93,12 @@ export async function POST(request: Request, { params }: Params) {
     const display_name =
       body.displayName?.trim() || getCandidateHeaderName(signal_profile);
     const profile = { ...signal_profile, display_name };
+    const roleBrief = parseRoleBriefRow(jobRow as Record<string, unknown>);
+    const scoringStatus = classifyApplicantPrefilter(
+      roleBrief,
+      profile,
+      resumeText,
+    );
 
     const { id } = await insertApplicationCandidate(
       {
@@ -105,7 +111,7 @@ export async function POST(request: Request, { params }: Params) {
         ],
         job_id: String(jobRow.id),
         source: "application",
-        scoring_status: "unscored",
+        scoring_status: scoringStatus,
         applied_at: new Date().toISOString(),
         application_email: body.applicationEmail?.trim() || null,
         application_phone: body.applicationPhone?.trim() || null,
