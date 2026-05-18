@@ -2,7 +2,6 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getApiKey } from "@/lib/ai/api-keys";
 import { parseJsonFromModel } from "@/lib/ai/parse-json";
 import { dedupeRoleBriefAnalysis } from "@/lib/role-brief/dedupe-skills";
-import { generateRoleScoringPrompt } from "@/lib/role-brief/generate-scoring-prompt";
 import type { RoleBriefAnalysis, TitleBand } from "@/types/role-brief";
 import { TITLE_BANDS } from "@/types/role-brief";
 
@@ -109,33 +108,4 @@ export async function analyseJobDescription(
 
   const parsed = parseJsonFromModel(textBlock.text);
   return parseRoleBriefAnalysis(parsed);
-}
-
-export type JobDescriptionAnalysisResult = {
-  analysis: RoleBriefAnalysis;
-  scoring_prompt: string;
-  scoring_prompt_generated_at: string;
-  scoring_prompt_version: number;
-};
-
-/**
- * Full JD analyse flow: existing structured extraction, then custom GPT-4o mini scoring prompt.
- * First call unchanged; second call runs immediately after.
- */
-export async function analyseJobDescriptionWithScoringPrompt(
-  jobDescription: string,
-  scoringPromptVersion = 1,
-): Promise<JobDescriptionAnalysisResult> {
-  const analysis = await analyseJobDescription(jobDescription);
-  const scoring_prompt = await generateRoleScoringPrompt(
-    analysis,
-    jobDescription,
-  );
-
-  return {
-    analysis,
-    scoring_prompt,
-    scoring_prompt_generated_at: new Date().toISOString(),
-    scoring_prompt_version: scoringPromptVersion,
-  };
 }

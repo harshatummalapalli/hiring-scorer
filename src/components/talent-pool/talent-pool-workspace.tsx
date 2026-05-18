@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, Search, Upload, X } from "lucide-react";
-import { CandidateSlidePanel } from "@/components/candidates/candidate-slide-panel";
+import { useCandidatePanel } from "@/contexts/candidate-panel-context";
 import { karta } from "@/lib/brand/karta";
 import {
   filterCandidates,
   sortCandidates,
 } from "@/lib/candidates/list-filters";
+import { formatTotalExperienceDisplay } from "@/lib/candidates/format-total-experience";
 import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
 import type {
@@ -20,8 +21,9 @@ import type { CandidateSource } from "@/types/job";
 import { sourceBadgeLabel } from "@/types/job";
 
 function experienceLabel(c: CandidateListItem): string {
-  const t = c.signal_profile.total_years_experience?.trim();
-  return t && t !== "0" ? `${t} yrs` : "—";
+  return formatTotalExperienceDisplay(
+    c.signal_profile.total_years_experience,
+  );
 }
 
 type SourceFilter = "all" | CandidateSource;
@@ -35,23 +37,34 @@ export function TalentPoolWorkspace() {
   const [verdict, setVerdict] = useState<CandidateVerdictFilter>("all");
   const [experience, setExperience] = useState<CandidateExperienceFilter>("all");
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
-  const [panelId, setPanelId] = useState<string | null>(null);
+  const { openPanel, candidateId: panelCandidateId } = useCandidatePanel();
   const [showUpload, setShowUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const openFromUrl = searchParams.get("open");
-  useEffect(() => {
-    if (openFromUrl) setPanelId(openFromUrl);
-  }, [openFromUrl]);
 
-  const setPanel = (id: string | null) => {
-    setPanelId(id);
+  useEffect(() => {
+    if (openFromUrl) openPanel(openFromUrl);
+  }, [openFromUrl, openPanel]);
+
+  useEffect(() => {
     const params = new URLSearchParams(searchParams.toString());
-    if (id) params.set("open", id);
-    else params.delete("open");
-    const qs = params.toString();
-    router.replace(qs ? `/talent-pool?${qs}` : "/talent-pool", { scroll: false });
+    const urlOpen = params.get("open");
+    if (panelCandidateId) {
+      if (urlOpen !== panelCandidateId) {
+        params.set("open", panelCandidateId);
+        router.replace(`/talent-pool?${params.toString()}`, { scroll: false });
+      }
+    } else if (urlOpen) {
+      params.delete("open");
+      const qs = params.toString();
+      router.replace(qs ? `/talent-pool?${qs}` : "/talent-pool", { scroll: false });
+    }
+  }, [panelCandidateId, router, searchParams]);
+
+  const openTalentPoolPanel = (id: string) => {
+    openPanel(id);
   };
 
   const loadCandidates = useCallback(async () => {
@@ -232,7 +245,7 @@ export function TalentPoolWorkspace() {
               <li key={c.id}>
                 <button
                   type="button"
-                  onClick={() => setPanel(c.id)}
+                  onClick={() => openTalentPoolPanel(c.id)}
                   className={`w-full text-left ${karta.card} p-5 transition hover:border-slate-300`}
                 >
                   <div className="flex flex-wrap items-center gap-2">
@@ -270,11 +283,6 @@ export function TalentPoolWorkspace() {
         </ul>
       )}
 
-      <CandidateSlidePanel
-        candidateId={panelId}
-        activeRoleBrief={null}
-        onClose={() => setPanel(null)}
-      />
     </div>
   );
 }

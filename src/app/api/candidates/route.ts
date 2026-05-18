@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { storeUploadedResumeForCandidate } from "@/lib/candidates/store-uploaded-resume";
 import { buildSignalProfile } from "@/lib/candidates/build-signal-profile";
+import { classifyApplicantPrefilter } from "@/lib/jobs/applicant-prefilter";
 import { getCandidateHeaderName } from "@/lib/candidates/profile-display";
 import { createActivity } from "@/lib/candidates/activity";
 import { normalizeResumeText } from "@/lib/resume/normalize-resume-text";
@@ -11,6 +12,8 @@ import {
 } from "@/lib/supabase/candidates";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import { limitErrorResponse } from "@/lib/workspace/limits";
+import { parseRoleBriefRow } from "@/types/role-brief";
+import type { CandidateScoringStatus } from "@/types/job";
 
 export const maxDuration = 60;
 
@@ -110,6 +113,22 @@ export async function POST(request: Request) {
     const jobId = body.jobId?.trim() || null;
     const source = body.source?.trim() || (jobId ? "uploaded" : "uploaded");
 
+    let scoringStatus: CandidateScoringStatus | undefined;
+    if (jobId) {
+      const supabase = await createSupabaseServerClient();
+      const { data: briefRow } = await supabase
+        .from("role_briefs")
+        .select("*")
+        .eq("id", jobId)
+        .maybeSingle();
+      if (briefRow) {
+        const roleBrief = parseRoleBriefRow(briefRow as Record<string, unknown>);
+        scoringStatus = classifyApplicantPrefilter(roleBrief, profile);
+      } else {
+        scoringStatus = "unscored";
+      }
+    }
+
     const { id } = await insertCandidate({
       display_name,
       resume_filename: resumeFilename,
@@ -120,7 +139,7 @@ export async function POST(request: Request) {
         ? {
             job_id: jobId,
             source,
-            scoring_status: "unscored",
+            scoring_status: scoringStatus ?? "unscored",
             applied_at: new Date().toISOString(),
           }
         : {}),

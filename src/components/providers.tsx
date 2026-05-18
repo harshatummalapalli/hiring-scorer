@@ -1,7 +1,12 @@
 "use client";
 
 import { ActiveRoleBriefProvider } from "@/contexts/active-role-brief-context";
+import { CandidatePanelProvider } from "@/contexts/candidate-panel-context";
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  return <ActiveRoleBriefProvider>{children}</ActiveRoleBriefProvider>;
+  return (
+    <ActiveRoleBriefProvider>
+      <CandidatePanelProvider>{children}</CandidatePanelProvider>
+    </ActiveRoleBriefProvider>
+  );
 }

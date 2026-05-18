@@ -30,7 +30,6 @@ import type {
   RoleBrief,
   RoleBriefAnalysis,
   RoleBriefAnalysisMeta,
-  RoleBriefScoringPrompt,
 } from "@/types/role-brief";
 import { parseRoleBriefRow } from "@/types/role-brief";
 
@@ -38,7 +37,6 @@ async function upsertRoleBrief(
   title: string,
   jobDescription: string,
   analysis: RoleBriefAnalysis,
-  scoringPrompt: RoleBriefScoringPrompt,
   analysisMeta: RoleBriefAnalysisMeta,
   editingId: string | null,
 ): Promise<RoleBrief> {
@@ -70,7 +68,6 @@ async function upsertRoleBrief(
     title,
     jobDescription,
     analysis,
-    scoringPrompt,
     !editingId,
     analysisMeta,
   );
@@ -135,8 +132,6 @@ export function RoleBriefManager() {
     null,
   );
   const [editTitle, setEditTitle] = useState("");
-  const [editScoringPrompt, setEditScoringPrompt] =
-    useState<RoleBriefScoringPrompt | null>(null);
   const [editAnalysisMeta, setEditAnalysisMeta] =
     useState<RoleBriefAnalysisMeta | null>(null);
   const [editAnalysedJobDescription, setEditAnalysedJobDescription] =
@@ -190,7 +185,6 @@ export function RoleBriefManager() {
     setEditJobDescription("");
     setEditAnalysis(null);
     setEditTitle("");
-    setEditScoringPrompt(null);
     setEditAnalysisMeta(null);
     setEditAnalysedJobDescription("");
     setCreatorKey((k) => k + 1);
@@ -200,7 +194,6 @@ export function RoleBriefManager() {
     title: string;
     jobDescription: string;
     analysis: RoleBriefAnalysis;
-    scoringPrompt: RoleBriefScoringPrompt;
     analysisMeta: RoleBriefAnalysisMeta;
   }) => {
     setIsSaving(true);
@@ -229,7 +222,6 @@ export function RoleBriefManager() {
           data.title,
           data.jobDescription,
           data.analysis,
-          data.scoringPrompt,
           data.analysisMeta,
           editingId,
         );
@@ -254,7 +246,6 @@ export function RoleBriefManager() {
     setEditJobDescription(state.jobDescription);
     setEditAnalysis(state.analysis);
     setEditTitle(state.title);
-    setEditScoringPrompt(state.scoringPrompt);
     setEditAnalysisMeta(state.analysisMeta);
     setEditAnalysedJobDescription(state.analysedJobDescription);
     setCreatorKey((k) => k + 1);
@@ -318,7 +309,6 @@ export function RoleBriefManager() {
         initialJobDescription={editJobDescription}
         initialAnalysis={editAnalysis}
         initialTitle={editTitle}
-        initialScoringPrompt={editScoringPrompt}
         initialAnalysisMeta={editAnalysisMeta}
         initialAnalysedJobDescription={editAnalysedJobDescription}
         editingId={editingId}

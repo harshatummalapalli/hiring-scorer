@@ -59,9 +59,6 @@ export async function POST(request: Request) {
     return NextResponse.json({
       analysis: result.analysis,
       title,
-      scoring_prompt: result.scoring_prompt,
-      scoring_prompt_generated_at: result.scoring_prompt_generated_at,
-      scoring_prompt_version: result.scoring_prompt_version,
       fromCache: result.fromCache,
       job_description_hash: result.job_description_hash,
       analysis_version: result.analysis_version,

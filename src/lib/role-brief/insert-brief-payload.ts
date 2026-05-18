@@ -76,17 +76,13 @@ export function buildFullBriefPayload(
   title: string,
   jobDescription: string,
   analysis: RoleBriefAnalysis,
-  scoringPrompt?: Parameters<typeof roleBriefToSavePayload>[3],
   isNew = false,
   analysisMeta?: RoleBriefAnalysisMeta,
 ): Record<string, unknown> {
-  return roleBriefToSavePayload(
-    title,
-    jobDescription,
-    analysis,
-    scoringPrompt,
-    { isNew, analysisMeta },
-  );
+  return roleBriefToSavePayload(title, jobDescription, analysis, {
+    isNew,
+    analysisMeta,
+  });
 }
 
 export function stripScoringPromptColumns(

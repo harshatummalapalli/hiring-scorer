@@ -161,7 +161,7 @@ export function getCandidateHeaderName(profile: CandidateSignalProfile): string 
   if (first && !isBadDisplayName(first)) return first;
   const display = profile.display_name?.trim();
   if (display && !isBadDisplayName(display)) return display;
-  return "Candidate";
+  return "Unknown Candidate";
 }
 
 export function formatCandidateHeadline(profile: CandidateSignalProfile): string {

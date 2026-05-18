@@ -4,8 +4,30 @@ import { extractNameFromRawResume } from "./parse-resume-structure";
 const COMPANY_WORD =
   /^(?:microsoft|google|amazon|meta|apple|netflix|flipkart|swiggy|zomato|razorpay|phonepe|paytm|freshworks|infosys|tcs|wipro|cognizant|hcl|accenture|capgemini|deloitte|ibm|oracle|sap|adobe|salesforce|uber|airbnb|stripe|linkedin|naukri|hirist|apna|shine)$/i;
 
+const GENERIC_DISPLAY_NAMES = new Set([
+  "candidate",
+  "profile",
+  "resume",
+  "cv",
+  "document",
+  "file",
+  "upload",
+  "test",
+  "sample",
+  "demo",
+  "unknown",
+]);
+
 const BAD_NAME_PATTERNS =
-  /^(?:candidate|profile|mid-level engineer|not stated|unknown)$/i;
+  /^(?:candidate|profile|resume|cv|document|file|upload|test|sample|demo|mid-level engineer|not stated|unknown)$/i;
+
+function replaceGenericDisplayName(name: string): string {
+  const cleaned = cleanDisplayName(name);
+  if (GENERIC_DISPLAY_NAMES.has(cleaned.toLowerCase())) {
+    return "Unknown Candidate";
+  }
+  return cleaned;
+}
 
 /** Job-title tokens sometimes glued to filenames or header names (stripped after 2+ name words). */
 const TRAILING_TITLE_WORD =
@@ -172,19 +194,21 @@ export function resolveCandidateDisplayName(
     geminiParts?.first_name,
     geminiParts?.last_name,
   );
-  if (fromGemini) return fromGemini;
+  if (fromGemini) return replaceGenericDisplayName(fromGemini);
 
   const fromStored = acceptName(storedColumnName);
-  if (fromStored) return fromStored;
+  if (fromStored) return replaceGenericDisplayName(fromStored);
 
   const fromProfile = acceptName(profileDisplayName);
-  if (fromProfile) return fromProfile;
+  if (fromProfile) return replaceGenericDisplayName(fromProfile);
 
   const fromResume = extractNameFromRawResume(resumeText);
   if (fromResume) {
     const cleaned = cleanDisplayName(fromResume);
-    if (!isBadDisplayName(cleaned)) return cleaned;
+    if (!isBadDisplayName(cleaned)) return replaceGenericDisplayName(cleaned);
   }
 
-  return cleanDisplayName(filenameToDisplayName(resumeFilename));
+  return replaceGenericDisplayName(
+    cleanDisplayName(filenameToDisplayName(resumeFilename)),
+  );
 }

@@ -111,12 +111,29 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
       </div>
 
       {tab === "overview" && (
-        <JobOverviewTab job={job} onJobUpdated={setJob} onRegenerateComplete={loadJob} />
+        <JobOverviewTab
+          job={job}
+          onJobUpdated={setJob}
+          onGoToApplicants={() => setTab("applicants")}
+        />
       )}
-      {tab === "applicants" && <JobApplicantsTab jobId={job.id} jobTitle={job.title} />}
-      {tab === "talent" && <JobTalentPoolTab jobId={job.id} jobTitle={job.title} />}
+      {tab === "applicants" && (
+        <JobApplicantsTab
+          jobId={job.id}
+          jobTitle={job.title}
+          roleBrief={job}
+        />
+      )}
+      {tab === "talent" && (
+        <JobTalentPoolTab jobId={job.id} jobTitle={job.title} roleBrief={job} />
+      )}
       {tab === "shortlist" && (
-        <JobShortlistTab jobId={job.id} jobTitle={job.title} titleBand={job.title_band} />
+        <JobShortlistTab
+          jobId={job.id}
+          jobTitle={job.title}
+          titleBand={job.title_band}
+          roleBrief={job}
+        />
       )}
       {tab === "reach" && <JobReachOutTab jobId={job.id} />}
     </div>

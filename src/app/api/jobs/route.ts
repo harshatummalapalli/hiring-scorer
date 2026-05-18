@@ -3,11 +3,7 @@ import { createJobForUser } from "@/lib/supabase/jobs-mutate";
 import { listJobsWithStats } from "@/lib/supabase/jobs";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import { limitErrorResponse } from "@/lib/workspace/limits";
-import type {
-  RoleBriefAnalysis,
-  RoleBriefAnalysisMeta,
-  RoleBriefScoringPrompt,
-} from "@/types/role-brief";
+import type { RoleBriefAnalysis, RoleBriefAnalysisMeta } from "@/types/role-brief";
 
 export async function GET() {
   try {
@@ -29,7 +25,6 @@ type PostBody = {
   title?: string;
   jobDescription?: string;
   analysis?: RoleBriefAnalysis;
-  scoringPrompt?: RoleBriefScoringPrompt;
   analysisMeta?: RoleBriefAnalysisMeta;
 };
 
@@ -48,11 +43,6 @@ export async function POST(request: Request) {
       title: body.title.trim(),
       jobDescription: body.jobDescription?.trim() ?? "",
       analysis: body.analysis,
-      scoringPrompt: body.scoringPrompt ?? {
-        scoring_prompt: null,
-        scoring_prompt_generated_at: null,
-        scoring_prompt_version: 1,
-      },
       analysisMeta: body.analysisMeta,
     });
 

@@ -1,7 +1,4 @@
-import {
-  analyseJobDescriptionWithScoringPrompt,
-  type JobDescriptionAnalysisResult,
-} from "@/lib/role-brief/analyse-jd";
+import { analyseJobDescription } from "@/lib/role-brief/analyse-jd";
 import {
   computeJobDescriptionHash,
   isAnalysisPopulated,
@@ -11,7 +8,8 @@ import {
 import type { RoleBrief, RoleBriefAnalysis } from "@/types/role-brief";
 import { analysisFromRoleBrief } from "@/types/role-brief";
 
-export type ResolvedJdAnalysis = JobDescriptionAnalysisResult & {
+export type ResolvedJdAnalysis = {
+  analysis: RoleBriefAnalysis;
   fromCache: boolean;
   job_description_hash: string;
   analysis_version: number;
@@ -20,9 +18,6 @@ export type ResolvedJdAnalysis = JobDescriptionAnalysisResult & {
 
 export type JdSessionCache = JdAnalysisCacheSource & {
   analysis: RoleBriefAnalysis;
-  scoring_prompt: string | null;
-  scoring_prompt_generated_at: string | null;
-  scoring_prompt_version: number;
   analysis_version?: number;
   last_analysed_at?: string | null;
   job_description_hash?: string | null;
@@ -49,10 +44,6 @@ function cachedFromBrief(
   return {
     fromCache: true,
     analysis: analysisFromRoleBrief(brief),
-    scoring_prompt: brief.scoring_prompt?.trim() ?? "",
-    scoring_prompt_generated_at:
-      brief.scoring_prompt_generated_at ?? new Date().toISOString(),
-    scoring_prompt_version: brief.scoring_prompt_version ?? 1,
     job_description_hash: computeJobDescriptionHash(newJobDescription),
     analysis_version: brief.analysis_version ?? 1,
     last_analysed_at: brief.last_analysed_at,
@@ -66,16 +57,13 @@ function cachedFromSession(
   return {
     fromCache: true,
     analysis: session.analysis,
-    scoring_prompt: session.scoring_prompt?.trim() ?? "",
-    scoring_prompt_generated_at:
-      session.scoring_prompt_generated_at ?? new Date().toISOString(),
-    scoring_prompt_version: session.scoring_prompt_version ?? 1,
     job_description_hash: computeJobDescriptionHash(newJobDescription),
     analysis_version: session.analysis_version ?? 1,
     last_analysed_at: session.last_analysed_at ?? null,
   };
 }
 
+/** Single Claude call: structured JD extraction (or cache reuse). */
 export async function resolveJobDescriptionAnalysis(
   input: JdAnalysisResolveInput,
 ): Promise<ResolvedJdAnalysis> {
@@ -117,14 +105,11 @@ export async function resolveJobDescriptionAnalysis(
   }
 
   const nextVersion = priorAnalysisVersion(input) + 1;
-  const fresh = await analyseJobDescriptionWithScoringPrompt(
-    newJobDescription,
-    nextVersion,
-  );
+  const analysis = await analyseJobDescription(newJobDescription);
   const now = new Date().toISOString();
 
   return {
-    ...fresh,
+    analysis,
     fromCache: false,
     job_description_hash: computeJobDescriptionHash(newJobDescription),
     analysis_version: nextVersion,

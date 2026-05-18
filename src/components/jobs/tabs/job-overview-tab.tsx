@@ -1,9 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
-import { ApplyLinkPanel } from "@/components/jobs/apply-link-panel";
-import { PromptStatusBadge } from "@/components/role-briefs/prompt-status-badge";
 import { karta } from "@/lib/brand/karta";
 import { getErrorMessage } from "@/lib/errors";
 import type { Job } from "@/types/job";
@@ -12,16 +9,15 @@ import { analysisFromRoleBrief } from "@/types/role-brief";
 type JobOverviewTabProps = {
   job: Job;
   onJobUpdated: (job: Job) => void;
-  onRegenerateComplete: () => void;
+  onGoToApplicants: () => void;
 };
 
 export function JobOverviewTab({
   job,
   onJobUpdated,
-  onRegenerateComplete,
+  onGoToApplicants,
 }: JobOverviewTabProps) {
   const analysis = analysisFromRoleBrief(job);
-  const [regenerating, setRegenerating] = useState(false);
   const [togglingActive, setTogglingActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,39 +44,27 @@ export function JobOverviewTab({
     }
   };
 
-  const handleRegeneratePrompt = async () => {
-    setRegenerating(true);
-    setError(null);
-    try {
-      const res = await fetch(
-        `/api/role-briefs/${job.id}/regenerate-scoring-prompt`,
-        { method: "POST" },
-      );
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Failed to regenerate");
-      onRegenerateComplete();
-    } catch (err) {
-      setError(getErrorMessage(err, "Failed to regenerate prompt"));
-    } finally {
-      setRegenerating(false);
-    }
-  };
-
   return (
     <div className="space-y-8">
-      <ApplyLinkPanel
-        applyLink={job.apply_link}
-        applicationToken={job.application_token}
-      />
-
       <section className={`${karta.card} p-6`}>
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-sm text-[#64748B]">Applications received</p>
-            <p className="text-3xl font-semibold text-[#1E293B]">
-              {job.application_count}
-            </p>
-          </div>
+        <h3 className={karta.sectionHeading}>Candidate Intake</h3>
+        <div className="mt-4 flex flex-wrap items-center gap-4">
+          <button
+            type="button"
+            onClick={onGoToApplicants}
+            className={karta.btnPrimary}
+          >
+            Add Applicants
+          </button>
+          <span className="text-sm text-slate-400">Email intake coming soon</span>
+        </div>
+        <div className="mt-6 border-t border-slate-100 pt-6">
+          <p className="text-sm text-[#64748B]">Applications received</p>
+          <p className="text-3xl font-semibold text-[#1E293B]">
+            {job.application_count}
+          </p>
+        </div>
+        <div className="mt-6 flex flex-wrap items-center justify-end gap-4 border-t border-slate-100 pt-6">
           <label className="flex items-center gap-3 text-sm font-medium text-[#334155]">
             <span>Applications open</span>
             <button
@@ -103,32 +87,11 @@ export function JobOverviewTab({
         </div>
       </section>
 
-      <section className={`${karta.card} p-6 sm:p-8`}>
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className={karta.sectionHeading}>Scoring prompt</h3>
-            <PromptStatusBadge ready={Boolean(job.scoring_prompt?.trim())} />
-          </div>
-          <button
-            type="button"
-            disabled={regenerating}
-            onClick={() => void handleRegeneratePrompt()}
-            className={`inline-flex items-center gap-2 ${karta.btnOutlineTeal}`}
-          >
-            {regenerating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            Regenerate Prompt
-          </button>
-        </div>
-        {error && (
-          <p className="mt-4 text-sm text-red-600" role="alert">
-            {error}
-          </p>
-        )}
-      </section>
+      {error && (
+        <p className="text-sm text-red-600" role="alert">
+          {error}
+        </p>
+      )}
 
       <section className={`${karta.card} p-6 sm:p-8 space-y-8`}>
         <div>

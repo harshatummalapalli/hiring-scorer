@@ -1,33 +1,55 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Loader2, Upload } from "lucide-react";
+import { ClickableCandidateName } from "@/components/candidates/clickable-candidate-name";
 import { VerdictBadge } from "@/components/candidates/profile-shared";
+import { useCandidatePanel } from "@/contexts/candidate-panel-context";
 import { getScoreForRole } from "@/lib/candidates/active-role-score";
+import { formatTotalExperienceDisplay } from "@/lib/candidates/format-total-experience";
 import { karta } from "@/lib/brand/karta";
 import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
+import {
+  ResumeUploadProgress,
+  type ResumeUploadFileItem,
+} from "@/components/jobs/resume-upload-progress";
 import type { CandidateListItem } from "@/types/candidate";
+import type { Job } from "@/types/job";
 import { sourceBadgeLabel } from "@/types/job";
-
-function experienceLabel(c: CandidateListItem): string {
-  const t = c.signal_profile.total_years_experience?.trim();
-  return t && t !== "0" ? t : "—";
-}
 
 type JobApplicantsTabProps = {
   jobId: string;
   jobTitle: string;
+  roleBrief: Job;
 };
 
-export function JobApplicantsTab({ jobId, jobTitle }: JobApplicantsTabProps) {
+type UploadUiState =
+  | { phase: "idle" }
+  | { phase: "processing"; files: ResumeUploadFileItem[] }
+  | { phase: "success"; files: ResumeUploadFileItem[]; count: number };
+
+export function JobApplicantsTab({
+  jobId,
+  jobTitle,
+  roleBrief,
+}: JobApplicantsTabProps) {
   const [candidates, setCandidates] = useState<CandidateListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [scoringId, setScoringId] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [uploadUi, setUploadUi] = useState<UploadUiState>({ phase: "idle" });
   const [unlikelyOpen, setUnlikelyOpen] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const newApplicantsRef = useRef<HTMLElement>(null);
+  const { openPanel, refreshPanel, candidateId: openPanelId } = useCandidatePanel();
+
+  const panelOptions = useMemo(
+    () => ({ contextJobId: jobId, roleBrief }),
+    [jobId, roleBrief],
+  );
+
+  const uploading = uploadUi.phase === "processing";
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,6 +110,7 @@ export function JobApplicantsTab({ jobId, jobTitle }: JobApplicantsTabProps) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Scoring failed");
       await load();
+      if (openPanelId === candidateId) refreshPanel();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Scoring failed");
     } finally {
@@ -97,26 +120,74 @@ export function JobApplicantsTab({ jobId, jobTitle }: JobApplicantsTabProps) {
 
   const uploadFiles = async (files: FileList | null) => {
     if (!files?.length) return;
-    setUploading(true);
+    const fileList = Array.from(files);
     setError(null);
+
+    const initial: ResumeUploadFileItem[] = fileList.map((f) => ({
+      name: f.name,
+      status: "pending",
+    }));
+    setUploadUi({ phase: "processing", files: initial });
+
+    let successCount = 0;
+    const nextFiles = [...initial];
+
     try {
-      for (const file of Array.from(files)) {
-        const resumeText = await parseResumeFile(file);
-        const res = await submitCandidateWithResume({
-          resumeText,
-          resumeFilename: file.name,
-          resumeFile: file,
-          jobId,
-          source: "uploaded",
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error ?? "Upload failed");
+      for (let i = 0; i < fileList.length; i++) {
+        const file = fileList[i];
+        nextFiles[i] = { ...nextFiles[i], status: "processing" };
+        setUploadUi({ phase: "processing", files: [...nextFiles] });
+
+        try {
+          const resumeText = await parseResumeFile(file);
+          const res = await submitCandidateWithResume({
+            resumeText,
+            resumeFilename: file.name,
+            resumeFile: file,
+            jobId,
+            source: "uploaded",
+          });
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.error ?? "Upload failed");
+          nextFiles[i] = { name: file.name, status: "done" };
+          successCount += 1;
+        } catch (err) {
+          nextFiles[i] = {
+            name: file.name,
+            status: "error",
+            error: err instanceof Error ? err.message : "Upload failed",
+          };
+        }
+        setUploadUi({ phase: "processing", files: [...nextFiles] });
       }
+
       await load();
+
+      if (successCount === 0) {
+        setError("No resumes could be processed. Check the files and try again.");
+        setUploadUi({ phase: "idle" });
+        return;
+      }
+
+      setUploadUi({
+        phase: "success",
+        files: nextFiles,
+        count: successCount,
+      });
+
+      requestAnimationFrame(() => {
+        newApplicantsRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+
+      window.setTimeout(() => {
+        setUploadUi({ phase: "idle" });
+      }, 5000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setUploading(false);
+      setUploadUi({ phase: "idle" });
     }
   };
 
@@ -142,11 +213,40 @@ export function JobApplicantsTab({ jobId, jobTitle }: JobApplicantsTabProps) {
   ) => {
     const score = getScoreForRole(c, jobId);
     const isScoring = scoringId === c.id;
+    const rowClickable = mode === "reviewed";
 
     return (
-      <tr key={c.id} className="border-b border-slate-100 last:border-0">
-        <td className="px-4 py-3 font-medium text-slate-900">{c.display_name}</td>
-        <td className="px-4 py-3 text-slate-600">{experienceLabel(c)}</td>
+      <tr
+        key={c.id}
+        className={`border-b border-slate-100 last:border-0 ${
+          rowClickable ? "cursor-pointer hover:bg-slate-50" : ""
+        }`}
+        onClick={
+          rowClickable
+            ? (e) => {
+                if ((e.target as HTMLElement).closest("button, a, input")) {
+                  return;
+                }
+                openPanel(c.id, panelOptions);
+              }
+            : undefined
+        }
+      >
+        <td className="px-4 py-3">
+          {mode === "new" ? (
+            <ClickableCandidateName
+              candidateId={c.id}
+              panelOptions={panelOptions}
+            >
+              {c.display_name}
+            </ClickableCandidateName>
+          ) : (
+            <span className="font-medium text-slate-900">{c.display_name}</span>
+          )}
+        </td>
+        <td className="px-4 py-3 text-slate-600">
+          {formatTotalExperienceDisplay(c.signal_profile.total_years_experience)}
+        </td>
         <td className="px-4 py-3">
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
             {sourceBadgeLabel(c.source)}
@@ -156,7 +256,7 @@ export function JobApplicantsTab({ jobId, jobTitle }: JobApplicantsTabProps) {
           {mode === "new" ? (
             isScoring ? (
               <span className="inline-flex items-center gap-2 text-sm text-slate-500">
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin text-[#0D9488]" />
                 Scoring…
               </span>
             ) : (
@@ -180,46 +280,56 @@ export function JobApplicantsTab({ jobId, jobTitle }: JobApplicantsTabProps) {
     );
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <label
-          className={`inline-flex cursor-pointer items-center gap-2 ${karta.btnSecondary}`}
-        >
-          {uploading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Upload className="h-4 w-4" />
-          )}
-          Upload Resumes
-          <input
-            type="file"
-            accept=".pdf,.doc,.docx,.txt"
-            multiple
-            className="sr-only"
+      <div className="w-full space-y-4">
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <label
+            className={`inline-flex cursor-pointer items-center gap-2 ${karta.btnSecondary} ${
+              uploading ? "pointer-events-none opacity-70" : ""
+            }`}
+          >
+            {uploading ? (
+              <Loader2 className="h-4 w-4 animate-spin text-[#0D9488]" />
+            ) : (
+              <Upload className="h-4 w-4" />
+            )}
+            Upload Resumes
+            <input
+              type="file"
+              accept=".pdf,.doc,.docx,.txt"
+              multiple
+              className="sr-only"
+              disabled={uploading}
+              onChange={(e) => {
+                void uploadFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            className={karta.btnSecondary}
             disabled={uploading}
-            onChange={(e) => void uploadFiles(e.target.files)}
+            onClick={() =>
+              alert(
+                "LinkedIn profile import is coming soon. Paste a profile URL in a future release.",
+              )
+            }
+          >
+            Import LinkedIn Profile
+          </button>
+        </div>
+
+        {uploadUi.phase !== "idle" && (
+          <ResumeUploadProgress
+            files={uploadUi.files}
+            phase={uploadUi.phase}
+            successCount={
+              uploadUi.phase === "success" ? uploadUi.count : undefined
+            }
           />
-        </label>
-        <button
-          type="button"
-          className={karta.btnSecondary}
-          onClick={() =>
-            alert(
-              "LinkedIn profile import is coming soon. Paste a profile URL in a future release.",
-            )
-          }
-        >
-          Import LinkedIn Profile
-        </button>
+        )}
       </div>
 
       {error && (
@@ -228,11 +338,20 @@ export function JobApplicantsTab({ jobId, jobTitle }: JobApplicantsTabProps) {
         </p>
       )}
 
-      <section className={`${karta.card} overflow-hidden`}>
+      <section
+        ref={newApplicantsRef}
+        id="new-applicants"
+        className={`${karta.card} overflow-hidden`}
+      >
         <h3 className="border-b border-slate-200 px-5 py-4 text-base font-semibold text-slate-900">
           New Applicants
         </h3>
-        {newApplicants.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 px-5 py-12 text-sm text-[#64748B]">
+            <Loader2 className="h-5 w-5 animate-spin text-[#0D9488]" />
+            Loading applicants…
+          </div>
+        ) : newApplicants.length === 0 ? (
           <p className="px-5 py-8 text-sm text-slate-500">
             No new applicants for {jobTitle}.
           </p>
@@ -255,7 +374,11 @@ export function JobApplicantsTab({ jobId, jobTitle }: JobApplicantsTabProps) {
         <h3 className="border-b border-slate-200 px-5 py-4 text-base font-semibold text-slate-900">
           Reviewed Applicants
         </h3>
-        {reviewed.length === 0 ? (
+        {loading ? (
+          <div className="flex justify-center px-5 py-12">
+            <Loader2 className="h-5 w-5 animate-spin text-[#0D9488]" />
+          </div>
+        ) : reviewed.length === 0 ? (
           <p className="px-5 py-8 text-sm text-slate-500">No reviewed applicants yet.</p>
         ) : (
           <table className="w-full text-left text-sm">

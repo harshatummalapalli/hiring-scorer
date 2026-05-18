@@ -9,11 +9,7 @@ import { karta } from "@/lib/brand/karta";
 import { getErrorMessage } from "@/lib/errors";
 import type { JobListItem } from "@/types/job";
 import { JOB_STATUS_LABELS } from "@/types/job";
-import type {
-  RoleBriefAnalysis,
-  RoleBriefAnalysisMeta,
-  RoleBriefScoringPrompt,
-} from "@/types/role-brief";
+import type { RoleBriefAnalysis, RoleBriefAnalysisMeta } from "@/types/role-brief";
 import { useRouter } from "next/navigation";
 
 function statusBadgeClass(status: string): string {
@@ -76,7 +72,6 @@ export function JobsPage() {
     title: string;
     jobDescription: string;
     analysis: RoleBriefAnalysis;
-    scoringPrompt: RoleBriefScoringPrompt;
     analysisMeta: RoleBriefAnalysisMeta;
   }) => {
     setIsSaving(true);

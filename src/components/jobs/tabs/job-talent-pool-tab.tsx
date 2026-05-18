@@ -1,8 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { ClickableCandidateName } from "@/components/candidates/clickable-candidate-name";
+import { useCandidatePanel } from "@/contexts/candidate-panel-context";
 import { karta } from "@/lib/brand/karta";
+import type { Job } from "@/types/job";
 
 type TalentMatch = {
   candidateId: string;
@@ -16,9 +19,16 @@ type TalentMatch = {
 type JobTalentPoolTabProps = {
   jobId: string;
   jobTitle: string;
+  roleBrief: Job;
 };
 
-export function JobTalentPoolTab({ jobId }: JobTalentPoolTabProps) {
+export function JobTalentPoolTab({ jobId, roleBrief }: JobTalentPoolTabProps) {
+  const { openPanel, refreshPanel, candidateId: openPanelId } =
+    useCandidatePanel();
+  const panelOptions = useMemo(
+    () => ({ contextJobId: jobId, roleBrief }),
+    [jobId, roleBrief],
+  );
   const [matches, setMatches] = useState<TalentMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [rematchingId, setRematchingId] = useState<string | null>(null);
@@ -54,6 +64,7 @@ export function JobTalentPoolTab({ jobId }: JobTalentPoolTabProps) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Re-match failed");
       await load();
+      if (openPanelId === candidateId) refreshPanel();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Re-match failed");
     } finally {
@@ -93,7 +104,13 @@ export function JobTalentPoolTab({ jobId }: JobTalentPoolTabProps) {
               className={`flex flex-wrap items-center justify-between gap-4 ${karta.card} p-5`}
             >
               <div>
-                <p className="font-semibold text-[#1E293B]">{m.candidateName}</p>
+                <ClickableCandidateName
+                  candidateId={m.candidateId}
+                  panelOptions={panelOptions}
+                  className="font-semibold text-[#1E293B] hover:text-[#0D9488] hover:underline text-left"
+                >
+                  {m.candidateName}
+                </ClickableCandidateName>
                 <p className="mt-1 text-sm text-[#64748B]">
                   {m.yearsExperience} yrs · Previously scored: {m.previousRoleTitle}
                 </p>

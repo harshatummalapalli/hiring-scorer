@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Download, Loader2, X } from "lucide-react";
-import type { CandidateDetail } from "@/types/candidate";
+import type { CandidateDetail, CandidateSignalProfile } from "@/types/candidate";
 import type { RoleBrief } from "@/types/role-brief";
 import type { FitVerdict } from "@/types/score";
 import { buildRoleFitSummary } from "@/lib/scoring/role-fit-summary";
@@ -16,9 +16,16 @@ import {
   profileDepthLabel,
   profileDepthBarPercent,
 } from "@/lib/candidates/signal-labels";
+import {
+  pickDefaultScoreId,
+  scoresWithSnapshots,
+} from "@/lib/candidates/pick-panel-score";
+import { useActiveRoleBrief } from "@/contexts/active-role-brief-context";
 import { karta } from "@/lib/brand/karta";
 import { KartaMatchBreakdown } from "@/components/match/karta-match-breakdown";
+import { snapshotToRoleBrief } from "@/lib/saved-scores/build-save-payload";
 import { downloadKartaAssessmentPdf } from "@/lib/reports/karta-assessment-pdf";
+import type { RoleBriefSnapshot } from "@/types/saved-score";
 import { SignalBar, VerdictBadge } from "./profile-shared";
 
 function formatDate(iso: string): string {
@@ -33,17 +40,52 @@ function formatDate(iso: string): string {
   }
 }
 
+function CandidateInsightsBars({ profile }: { profile: CandidateSignalProfile }) {
+  return (
+    <div className="space-y-3">
+      <SignalBar
+        label="Ownership Drive"
+        rating={ownershipLabel(profile.resume_quality.ownership.ownership_count)}
+        fillPercent={profile.ownership_ratio_percent}
+      />
+      <SignalBar
+        label="Impact Evidence"
+        rating={impactEvidenceLabel(
+          profile.quantification_ratio_percent,
+          profile.quantification_level,
+        )}
+        fillPercent={profile.quantification_ratio_percent}
+      />
+      <SignalBar
+        label="Career Growth"
+        rating={careerGrowthLabel(profile.trajectory_velocity)}
+        fillPercent={careerGrowthBarPercent(profile.trajectory_velocity)}
+      />
+      <SignalBar
+        label="Profile Depth"
+        rating={profileDepthLabel(profile.keyword_stuffing_flagged)}
+        fillPercent={profileDepthBarPercent(profile.keyword_stuffing_flagged)}
+      />
+    </div>
+  );
+}
+
 type CandidateSlidePanelProps = {
   candidateId: string | null;
-  activeRoleBrief: RoleBrief | null;
+  contextJobId?: string | null;
+  roleBrief?: RoleBrief | null;
   onClose: () => void;
+  onScored?: () => void;
 };
 
 export function CandidateSlidePanel({
   candidateId,
-  activeRoleBrief,
+  contextJobId = null,
+  roleBrief = null,
   onClose,
+  onScored,
 }: CandidateSlidePanelProps) {
+  const { activeBriefId } = useActiveRoleBrief();
   const [candidate, setCandidate] = useState<CandidateDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +94,8 @@ export function CandidateSlidePanel({
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [cvDownloadBusy, setCvDownloadBusy] = useState(false);
+  const [scoring, setScoring] = useState(false);
+  const [selectedFitId, setSelectedFitId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!candidateId) {
@@ -75,28 +119,85 @@ export function CandidateSlidePanel({
 
   useEffect(() => {
     void load();
-  }, [load]);
+    setBreakdownOpen(false);
+  }, [load, candidateId]);
 
-  const activeFit = useMemo(() => {
-    if (!candidate || !activeRoleBrief) return null;
-    return (
-      candidate.role_fit_scores.find(
-        (f) => f.role_brief_id === activeRoleBrief.id,
-      ) ?? null
+  useEffect(() => {
+    if (!candidate) {
+      setSelectedFitId(null);
+      return;
+    }
+    setSelectedFitId(
+      pickDefaultScoreId(candidate.role_fit_scores, contextJobId),
     );
-  }, [candidate, activeRoleBrief]);
+  }, [candidateId, candidate, contextJobId]);
 
-  const activeResult = activeFit?.score_snapshot ?? null;
+  const historicalFits = useMemo(
+    () => scoresWithSnapshots(candidate?.role_fit_scores ?? []),
+    [candidate],
+  );
+
+  const selectedFit = useMemo(() => {
+    if (!candidate || !selectedFitId) return null;
+    return (
+      candidate.role_fit_scores.find((f) => f.id === selectedFitId) ?? null
+    );
+  }, [candidate, selectedFitId]);
+
+  const displayResult = selectedFit?.score_snapshot ?? null;
+  const hasScore = Boolean(displayResult && selectedFit);
+
+  const displayRoleBrief = useMemo((): RoleBrief | null => {
+    if (selectedFit?.role_brief_snapshot) {
+      return snapshotToRoleBrief(
+        selectedFit.role_brief_snapshot as RoleBriefSnapshot,
+        selectedFit.role_brief_title,
+        selectedFit.role_brief_id,
+      );
+    }
+    if (roleBrief) return roleBrief;
+    return null;
+  }, [selectedFit, roleBrief]);
+
+  const jobTitleLabel =
+    selectedFit?.role_brief_title ?? roleBrief?.title ?? null;
 
   const mustHaves = useMemo(() => {
-    const intel = activeResult?.skills_intelligence;
+    const intel = displayResult?.skills_intelligence;
     const total =
-      intel?.total_required ??
-      activeRoleBrief?.deal_breakers.length ??
-      0;
+      intel?.total_required ?? displayRoleBrief?.deal_breakers.length ?? 0;
     const met = intel?.matched_count ?? 0;
     return { met, total: Math.max(total, 1) };
-  }, [activeResult, activeRoleBrief]);
+  }, [displayResult, displayRoleBrief]);
+
+  const scoreRoleBriefId = contextJobId ?? roleBrief?.id ?? activeBriefId;
+
+  const handleScoreNow = async () => {
+    if (!candidateId) return;
+    if (!scoreRoleBriefId) {
+      setError(
+        "Select an active job role on the Job Roles page, or open this candidate from a job.",
+      );
+      return;
+    }
+    setScoring(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/candidates/${candidateId}/score`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roleBriefId: scoreRoleBriefId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Scoring failed");
+      await load();
+      onScored?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Scoring failed");
+    } finally {
+      setScoring(false);
+    }
+  };
 
   const addNote = async () => {
     if (!candidateId || !noteText.trim()) return;
@@ -138,16 +239,16 @@ export function CandidateSlidePanel({
 
   const handleDownloadReport = async () => {
     const signalProfile = candidate?.signal_profile;
-    if (!candidate || !activeRoleBrief || !activeResult || !signalProfile) {
+    if (!candidate || !displayRoleBrief || !displayResult || !signalProfile) {
       return;
     }
     setPdfBusy(true);
     try {
       downloadKartaAssessmentPdf({
         candidateName: candidate.display_name,
-        roleBrief: activeRoleBrief,
-        assessedAt: activeFit?.created_at ?? new Date().toISOString(),
-        result: activeResult,
+        roleBrief: displayRoleBrief,
+        assessedAt: selectedFit?.created_at ?? new Date().toISOString(),
+        result: displayResult,
         profile: signalProfile,
       });
     } catch (err) {
@@ -162,11 +263,11 @@ export function CandidateSlidePanel({
   if (!candidateId) return null;
 
   const profile = candidate?.signal_profile;
-  const card = activeResult?.recruiter_card;
-  const verdict = activeResult
-    ? scoreToVerdict(activeResult.overall_score)
+  const card = displayResult?.recruiter_card;
+  const verdict = displayResult
+    ? scoreToVerdict(displayResult.overall_score)
     : null;
-  const intel = activeResult?.skills_intelligence;
+  const intel = displayResult?.skills_intelligence;
 
   return (
     <>
@@ -177,44 +278,20 @@ export function CandidateSlidePanel({
         onClick={onClose}
       />
       <aside
-        className="panel-slide-in fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-[#F1F5F9] bg-white shadow-xl md:w-[85%] min-[1200px]:w-[70%]"
+        className="panel-slide-in fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-[#F1F5F9] bg-white shadow-xl md:w-[70%]"
         role="dialog"
         aria-modal
         aria-label="Candidate insights"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-[#F1F5F9] px-4 py-3">
-          <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-[#1E293B]">
-            {candidate?.display_name ?? "Candidate"}
-          </h2>
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              disabled={
-                pdfBusy ||
-                loading ||
-                !activeResult ||
-                !activeRoleBrief ||
-                !candidate
-              }
-              onClick={() => void handleDownloadReport()}
-              className={`inline-flex items-center gap-1.5 ${karta.btnOutlineTeal} px-2.5 py-1.5 text-xs`}
-            >
-              {pdfBusy ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Download className="h-3.5 w-3.5" />
-              )}
-              Download Report
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md p-1.5 text-[#64748B] hover:bg-slate-100"
-              aria-label="Close"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
+        <div className="flex items-center justify-end border-b border-[#F1F5F9] px-4 py-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md p-1.5 text-[#64748B] hover:bg-slate-100"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
@@ -232,88 +309,112 @@ export function CandidateSlidePanel({
                 </p>
               )}
 
-              <div>
-                <p className="text-lg font-semibold text-[#1E293B]">
-                  {candidate.display_name}
-                </p>
-                {candidate.resume_file_path ? (
-                  <button
-                    type="button"
-                    disabled={cvDownloadBusy}
-                    onClick={() => void handleDownloadOriginalCv()}
-                    className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-[#0D9488] hover:text-[#0B8276] disabled:opacity-50"
-                  >
-                    {cvDownloadBusy ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Download className="h-3.5 w-3.5" />
-                    )}
-                    Download Original CV
-                  </button>
-                ) : null}
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-lg font-semibold text-[#1E293B]">
+                    {candidate.display_name}
+                  </p>
+                  {contextJobId && jobTitleLabel ? (
+                    <p className="mt-1 text-xs font-medium text-[#0D9488]">
+                      {jobTitleLabel}
+                    </p>
+                  ) : null}
+                  {!contextJobId && historicalFits.length > 1 ? (
+                    <div className="mt-2">
+                      <label className="sr-only" htmlFor="panel-job-score-select">
+                        Scored against
+                      </label>
+                      <select
+                        id="panel-job-score-select"
+                        value={selectedFitId ?? ""}
+                        onChange={(e) => setSelectedFitId(e.target.value)}
+                        className={`${karta.input} mt-1 text-sm`}
+                      >
+                        {historicalFits.map((fit) => (
+                          <option key={fit.id} value={fit.id}>
+                            {fit.role_brief_title ?? "Job role"} ·{" "}
+                            {formatDate(fit.created_at)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : !contextJobId && jobTitleLabel && hasScore ? (
+                    <p className="mt-1 text-xs font-medium text-[#0D9488]">
+                      {jobTitleLabel}
+                      {selectedFit
+                        ? ` · ${formatDate(selectedFit.created_at)}`
+                        : ""}
+                    </p>
+                  ) : null}
+                  {candidate.resume_file_path ? (
+                    <button
+                      type="button"
+                      disabled={cvDownloadBusy}
+                      onClick={() => void handleDownloadOriginalCv()}
+                      className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-[#0D9488] hover:text-[#0B8276] disabled:opacity-50"
+                    >
+                      {cvDownloadBusy ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Download className="h-3.5 w-3.5" />
+                      )}
+                      Download Original CV
+                    </button>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  disabled={
+                    pdfBusy ||
+                    loading ||
+                    !hasScore ||
+                    !displayRoleBrief ||
+                    !candidate
+                  }
+                  onClick={() => void handleDownloadReport()}
+                  className={`inline-flex shrink-0 items-center gap-1.5 ${karta.btnOutlineTeal} px-2.5 py-1.5 text-xs`}
+                >
+                  {pdfBusy ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                  Download Report
+                </button>
               </div>
 
-              {activeResult && activeRoleBrief ? (
+              {hasScore && displayResult && displayRoleBrief ? (
                 <>
-                  {activeResult.deal_breaker_warning && (
+                  {displayResult.deal_breaker_warning && (
                     <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                      {activeResult.deal_breaker_warning}
+                      {displayResult.deal_breaker_warning}
                     </p>
                   )}
 
-                  <p className="text-sm text-[#64748B]">
-                    Assessed across{" "}
-                    <span className="font-semibold text-[#0D9488]">5</span>{" "}
-                    dimensions ·{" "}
-                    <span className="font-semibold text-[#0D9488]">
-                      {mustHaves.met}
-                    </span>{" "}
-                    of{" "}
-                    <span className="font-semibold text-[#0D9488]">
-                      {mustHaves.total}
-                    </span>{" "}
-                    must-haves met
-                  </p>
-
                   <section>
                     <h3 className={karta.sectionHeading}>Candidate Insights</h3>
-                    <div className="mt-3 space-y-3">
-                      <SignalBar
-                        label="Ownership Drive"
-                        rating={ownershipLabel(
-                          profile.resume_quality.ownership.ownership_count,
-                        )}
-                        fillPercent={profile.ownership_ratio_percent}
-                      />
-                      <SignalBar
-                        label="Impact Evidence"
-                        rating={impactEvidenceLabel(
-                          profile.quantification_ratio_percent,
-                          profile.quantification_level,
-                        )}
-                        fillPercent={profile.quantification_ratio_percent}
-                      />
-                      <SignalBar
-                        label="Career Growth"
-                        rating={careerGrowthLabel(profile.trajectory_velocity)}
-                        fillPercent={careerGrowthBarPercent(
-                          profile.trajectory_velocity,
-                        )}
-                      />
-                      <SignalBar
-                        label="Profile Depth"
-                        rating={profileDepthLabel(
-                          profile.keyword_stuffing_flagged,
-                        )}
-                        fillPercent={profileDepthBarPercent(
-                          profile.keyword_stuffing_flagged,
-                        )}
-                      />
-                    </div>
-                    <div className="mt-3 flex justify-end">
-                      <VerdictBadge verdict={verdict} />
+                    <div className="mt-3">
+                      <CandidateInsightsBars profile={profile} />
                     </div>
                   </section>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <VerdictBadge
+                      verdict={verdict}
+                      score={displayResult.overall_score}
+                      showScore
+                    />
+                    <p className="text-sm text-[#64748B]">
+                      <span className="font-semibold text-[#0D9488]">
+                        {mustHaves.met}
+                      </span>{" "}
+                      of{" "}
+                      <span className="font-semibold text-[#0D9488]">
+                        {mustHaves.total}
+                      </span>{" "}
+                      must-haves met
+                    </p>
+                  </div>
 
                   {intel && (
                     <section className="space-y-2">
@@ -359,15 +460,16 @@ export function CandidateSlidePanel({
                     </section>
                   )}
 
-                  <p className="text-sm italic text-[#64748B]">
-                    {buildRoleFitSummary(activeResult, activeRoleBrief)}
-                  </p>
-
                   {card && card.what_stands_out.length > 0 && (
                     <section>
                       <h3 className={karta.sectionHeading}>
                         Why This Candidate
                       </h3>
+                      {displayRoleBrief && (
+                        <p className="mt-2 text-sm italic text-[#64748B]">
+                          {buildRoleFitSummary(displayResult, displayRoleBrief)}
+                        </p>
+                      )}
                       <ul className="mt-2 space-y-3">
                         {card.what_stands_out.slice(0, 3).map((item, i) => (
                           <li key={i} className="text-sm text-[#334155]">
@@ -417,25 +519,54 @@ export function CandidateSlidePanel({
                       <ChevronDown className="h-4 w-4" />
                     )}
                   </button>
-                  {breakdownOpen && activeRoleBrief && (
+                  {breakdownOpen && (
                     <KartaMatchBreakdown
-                      result={activeResult}
-                      roleBrief={activeRoleBrief}
+                      result={displayResult}
+                      roleBrief={displayRoleBrief}
                     />
                   )}
                 </>
               ) : (
-                <p className="rounded-lg border border-dashed border-[#F1F5F9] px-4 py-6 text-center text-sm text-[#64748B]">
-                  {activeRoleBrief
-                    ? "Not matched against the active job role yet. Use Match in the table."
-                    : "Set an active job role to view match details."}
-                </p>
+                <>
+                  <section>
+                    <h3 className={karta.sectionHeading}>Candidate Insights</h3>
+                    <div className="mt-3">
+                      <CandidateInsightsBars profile={profile} />
+                    </div>
+                  </section>
+
+                  <div className="rounded-lg border border-dashed border-[#0D9488]/40 bg-teal-50/50 px-4 py-5 text-center">
+                    <p className="text-sm font-medium text-[#1E293B]">
+                      This candidate has not been scored yet
+                    </p>
+                    <button
+                      type="button"
+                      disabled={scoring || !scoreRoleBriefId}
+                      onClick={() => void handleScoreNow()}
+                      className={`mt-4 ${karta.btnPrimary}`}
+                    >
+                      {scoring ? (
+                        <span className="inline-flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Scoring…
+                        </span>
+                      ) : (
+                        "Score Now"
+                      )}
+                    </button>
+                    {!scoreRoleBriefId && (
+                      <p className="mt-2 text-xs text-[#64748B]">
+                        Open from a job or set an active job role to score.
+                      </p>
+                    )}
+                  </div>
+                </>
               )}
 
               <section className={`${karta.card} p-4`}>
                 <h3 className={karta.sectionHeading}>Role Fit History</h3>
                 {candidate.role_fit_scores.length === 0 ? (
-                  <p className="text-sm text-[#64748B]">No matches yet.</p>
+                  <p className="text-sm text-[#64748B]">No scores yet.</p>
                 ) : (
                   <ul className="mt-2 divide-y divide-[#F1F5F9]">
                     {candidate.role_fit_scores.map((fit) => (

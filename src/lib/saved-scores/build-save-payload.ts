@@ -38,9 +38,6 @@ function minimalRoleBrief(
     weight_seniority:
       partial.weight_seniority ?? DEFAULT_SCORING_WEIGHTS.weight_seniority,
     weight_tenure: partial.weight_tenure ?? DEFAULT_SCORING_WEIGHTS.weight_tenure,
-    scoring_prompt: null,
-    scoring_prompt_generated_at: null,
-    scoring_prompt_version: 1,
     application_token: null,
     apply_link: null,
     company_name: null,
@@ -113,7 +110,7 @@ export function buildSavedScoreInsertPayload(
     recruiter_notes: recruiterNotes.trim() || null,
     score_snapshot: { ...result, overall_score },
     role_brief_snapshot,
-    scoring_prompt_version: roleBrief.scoring_prompt_version ?? 1,
+    scoring_prompt_version: 1,
     scoring_cost_usd: estimatedScoreCostUsd(),
     model_used: "gpt-4o-mini",
   };

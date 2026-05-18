@@ -21,7 +21,6 @@ import type {
   RoleBrief,
   RoleBriefAnalysis,
   RoleBriefAnalysisMeta,
-  RoleBriefScoringPrompt,
 } from "@/types/role-brief";
 import { parseRoleBriefRow } from "@/types/role-brief";
 
@@ -29,7 +28,6 @@ export type CreateJobInput = {
   title: string;
   jobDescription: string;
   analysis: RoleBriefAnalysis;
-  scoringPrompt: RoleBriefScoringPrompt;
   analysisMeta?: RoleBriefAnalysisMeta;
 };
 
@@ -89,7 +87,6 @@ export async function createJobForUser(
       input.title,
       input.jobDescription,
       input.analysis,
-      input.scoringPrompt,
       true,
       input.analysisMeta,
     ),

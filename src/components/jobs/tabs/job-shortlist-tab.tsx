@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Download, Loader2 } from "lucide-react";
+import { ClickableCandidateName } from "@/components/candidates/clickable-candidate-name";
 import { VerdictBadge } from "@/components/candidates/profile-shared";
+import type { Job } from "@/types/job";
 import { karta } from "@/lib/brand/karta";
 import { formatInsightsText } from "@/lib/pipeline/insights-from-score";
 import {
@@ -79,13 +80,19 @@ type JobShortlistTabProps = {
   jobId: string;
   jobTitle: string;
   titleBand: TitleBand | null;
+  roleBrief: Job;
 };
 
 export function JobShortlistTab({
   jobId,
   jobTitle,
   titleBand,
+  roleBrief,
 }: JobShortlistTabProps) {
+  const panelOptions = useMemo(
+    () => ({ contextJobId: jobId, roleBrief }),
+    [jobId, roleBrief],
+  );
   const [section, setSection] = useState<PipelineRoleSection | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -216,12 +223,12 @@ export function JobShortlistTab({
               {rows.map((row) => (
                 <tr key={row.id} className="border-b border-slate-100">
                   <td className="px-4 py-3 font-medium">
-                    <Link
-                      href={`/talent-pool?open=${encodeURIComponent(row.candidate_id)}`}
-                      className="hover:underline"
+                    <ClickableCandidateName
+                      candidateId={row.candidate_id}
+                      panelOptions={panelOptions}
                     >
                       {row.candidate_name}
-                    </Link>
+                    </ClickableCandidateName>
                   </td>
                   <td className="px-4 py-3 text-slate-600">{row.email ?? "—"}</td>
                   <td className="px-4 py-3 text-slate-600">{row.phone ?? "—"}</td>

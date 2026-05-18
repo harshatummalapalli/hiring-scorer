@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { GripVertical, Loader2, Plus, RefreshCw, X } from "lucide-react";
-import { PromptStatusBadge } from "@/components/role-briefs/prompt-status-badge";
+import { GripVertical, Plus, X } from "lucide-react";
 import { karta } from "@/lib/brand/karta";
 import type {
   CoreSignal,
@@ -18,10 +17,6 @@ type AnalysisCardsProps = {
   onChange: (next: RoleBriefAnalysis) => void;
   extractedTitle: string;
   onTitleChange: (title: string) => void;
-  scoringPromptReady: boolean;
-  scoringPromptVersion: number;
-  onRegeneratePrompt: () => void | Promise<void>;
-  regeneratingPrompt?: boolean;
 };
 
 type DragItem = {
@@ -35,10 +30,6 @@ export function AnalysisCards({
   onChange,
   extractedTitle,
   onTitleChange,
-  scoringPromptReady,
-  scoringPromptVersion,
-  onRegeneratePrompt,
-  regeneratingPrompt = false,
 }: AnalysisCardsProps) {
   const [tab, setTab] = useState<AnalysisTab>("overview");
   const [dragItem, setDragItem] = useState<DragItem | null>(null);
@@ -142,35 +133,7 @@ export function AnalysisCards({
 
       {tab === "overview" && (
         <section className={`${karta.card} p-6 sm:p-8`}>
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-lg font-semibold text-[#1E293B]">
-                  {extractedTitle || "Job role"}
-                </h3>
-                <PromptStatusBadge ready={scoringPromptReady} />
-              </div>
-              <p className="mt-2 text-sm text-[#64748B]">
-                Custom GPT-4o mini scoring prompt for this role
-                {scoringPromptReady ? ` · version ${scoringPromptVersion}` : ""}.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => void onRegeneratePrompt()}
-              disabled={regeneratingPrompt}
-              className={`inline-flex shrink-0 items-center gap-2 ${karta.btnOutlineTeal}`}
-            >
-              {regeneratingPrompt ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              Regenerate Prompt
-            </button>
-          </div>
-
-          <label className="mt-6 block">
+          <label className="block">
             <span className={karta.sectionHeading}>Role title</span>
             <input
               type="text"

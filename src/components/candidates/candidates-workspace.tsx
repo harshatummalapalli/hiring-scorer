@@ -27,7 +27,7 @@ import type {
 import type { RoleBrief } from "@/types/role-brief";
 import { karta } from "@/lib/brand/karta";
 import { VerdictBadge } from "./profile-shared";
-import { CandidateSlidePanel } from "./candidate-slide-panel";
+import { useCandidatePanel } from "@/contexts/candidate-panel-context";
 
 function experienceLabel(candidate: CandidateListItem): string {
   const t = candidate.signal_profile.total_years_experience?.trim();
@@ -55,8 +55,8 @@ export function CandidatesWorkspace() {
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<CandidatePoolFilter>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [panelId, setPanelId] = useState<string | null>(null);
-  const [panelRefresh, setPanelRefresh] = useState(0);
+  const { openPanel, refreshPanel, candidateId: openPanelId } =
+    useCandidatePanel();
 
   const [showUpload, setShowUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -69,18 +69,17 @@ export function CandidatesWorkspace() {
 
   const openFromUrl = searchParams.get("open");
 
-  useEffect(() => {
-    if (openFromUrl) setPanelId(openFromUrl);
-  }, [openFromUrl]);
+  const panelOptions = useMemo(
+    () =>
+      activeBrief
+        ? { contextJobId: activeBrief.id, roleBrief: activeBrief }
+        : undefined,
+    [activeBrief],
+  );
 
-  const setPanel = (id: string | null) => {
-    setPanelId(id);
-    const params = new URLSearchParams(searchParams.toString());
-    if (id) params.set("open", id);
-    else params.delete("open");
-    const qs = params.toString();
-    router.replace(qs ? `/candidates?${qs}` : "/candidates", { scroll: false });
-  };
+  useEffect(() => {
+    if (openFromUrl) openPanel(openFromUrl, panelOptions);
+  }, [openFromUrl, openPanel, panelOptions]);
 
   const loadCandidates = useCallback(async () => {
     setLoading(true);
@@ -189,7 +188,7 @@ export function CandidatesWorkspace() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Matching failed");
       await loadCandidates();
-      if (panelId === candidateId) setPanelRefresh((k) => k + 1);
+      if (openPanelId === candidateId) refreshPanel();
     } catch (err) {
       setError(getErrorMessage(err, "Matching failed"));
     } finally {
@@ -496,7 +495,7 @@ export function CandidatesWorkspace() {
                   <tr
                     key={c.id}
                     className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50/80"
-                    onClick={() => setPanel(c.id)}
+                    onClick={() => openPanel(c.id, panelOptions)}
                   >
                     <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                       <input
@@ -564,12 +563,6 @@ export function CandidatesWorkspace() {
         </div>
       )}
 
-      <CandidateSlidePanel
-        key={`${panelId ?? ""}-${panelRefresh}`}
-        candidateId={panelId}
-        activeRoleBrief={activeBrief}
-        onClose={() => setPanel(null)}
-      />
     </div>
   );
 }

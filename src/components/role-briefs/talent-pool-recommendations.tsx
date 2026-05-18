@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
+import { ClickableCandidateName } from "@/components/candidates/clickable-candidate-name";
 import { karta } from "@/lib/brand/karta";
 import { fetchCandidatesForRecommendations } from "@/lib/recommendations/fetch-candidates-for-recommendations";
 import {
@@ -27,6 +27,11 @@ export function TalentPoolRecommendations({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rematchingId, setRematchingId] = useState<string | null>(null);
+
+  const panelOptions = useMemo(
+    () => ({ contextJobId: roleBrief.id, roleBrief }),
+    [roleBrief],
+  );
 
   const runRecommendations = useCallback(async () => {
     setLoading(true);
@@ -114,12 +119,13 @@ export function TalentPoolRecommendations({
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Link
-                      href={`/talent-pool?open=${encodeURIComponent(rec.candidateId)}`}
-                      className="font-medium text-[#1E293B] hover:text-[#0D9488] hover:underline"
+                    <ClickableCandidateName
+                      candidateId={rec.candidateId}
+                      panelOptions={panelOptions}
+                      className="font-medium text-[#1E293B] hover:text-[#0D9488] hover:underline text-left"
                     >
                       {rec.candidateName}
-                    </Link>
+                    </ClickableCandidateName>
                     <span className="text-xs text-[#64748B]">
                       {rec.yearsExperience === "0" ||
                       rec.yearsExperience === "—"

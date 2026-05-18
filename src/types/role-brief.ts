@@ -42,12 +42,6 @@ export type RoleBriefAnalysis = {
   suggested_weights?: RoleBriefSuggestedWeights;
 };
 
-export type RoleBriefScoringPrompt = {
-  scoring_prompt: string | null;
-  scoring_prompt_generated_at: string | null;
-  scoring_prompt_version: number;
-};
-
 export type RoleBrief = {
   id: string;
   title: string;
@@ -67,9 +61,6 @@ export type RoleBrief = {
   weight_domain: number;
   weight_seniority: number;
   weight_tenure: number;
-  scoring_prompt: string | null;
-  scoring_prompt_generated_at: string | null;
-  scoring_prompt_version: number;
   application_token: string | null;
   apply_link: string | null;
   company_name: string | null;
@@ -210,13 +201,10 @@ export function roleBriefToSavePayload(
   title: string,
   jobDescription: string,
   analysis: RoleBriefAnalysis,
-  scoringPrompt?: Partial<RoleBriefScoringPrompt> | null,
   options?: { isNew?: boolean; analysisMeta?: RoleBriefAnalysisMeta },
 ) {
   const deduped = dedupeRoleBriefAnalysis(analysis);
   const weights = weightsFromAnalysis({ ...deduped, suggested_weights: analysis.suggested_weights });
-
-  const promptText = scoringPrompt?.scoring_prompt?.trim() || null;
 
   const jd = jobDescription.trim();
 
@@ -241,13 +229,6 @@ export function roleBriefToSavePayload(
     nice_to_have_skills: null,
     experience_years: null,
     ...weights,
-    scoring_prompt: promptText,
-    scoring_prompt_generated_at: promptText
-      ? (scoringPrompt?.scoring_prompt_generated_at ?? new Date().toISOString())
-      : null,
-    scoring_prompt_version: promptText
-      ? (scoringPrompt?.scoring_prompt_version ?? 1)
-      : 1,
     ...(options?.isNew ? jobInsertDefaults() : {}),
   };
 }
@@ -357,15 +338,6 @@ export function parseRoleBriefRow(row: Record<string, unknown>): RoleBrief {
     weight_domain: clamp(row.weight_domain, 5),
     weight_seniority: clamp(row.weight_seniority, 5),
     weight_tenure: clamp(row.weight_tenure, 5),
-    scoring_prompt:
-      row.scoring_prompt != null && String(row.scoring_prompt).trim()
-        ? String(row.scoring_prompt)
-        : null,
-    scoring_prompt_generated_at:
-      row.scoring_prompt_generated_at != null
-        ? String(row.scoring_prompt_generated_at)
-        : null,
-    scoring_prompt_version: clampWeight(row.scoring_prompt_version, 1),
     application_token:
       row.application_token != null ? String(row.application_token) : null,
     apply_link: row.apply_link != null ? String(row.apply_link) : null,
