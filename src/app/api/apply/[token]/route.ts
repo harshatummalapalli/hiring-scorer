@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { buildSignalProfile } from "@/lib/candidates/build-signal-profile";
+import { ingestResumeFromText } from "@/lib/ingestion/ingest-resume";
+import { persistResumeIntelligence } from "@/lib/ingestion/persist-intelligence";
 import { classifyApplicantPrefilter } from "@/lib/jobs/applicant-prefilter";
 import { parseRoleBriefRow } from "@/types/role-brief";
 import { getCandidateHeaderName } from "@/lib/candidates/profile-display";
@@ -89,7 +90,9 @@ export async function POST(request: Request, { params }: Params) {
     }
 
     const resumeFilename = body.resumeFilename?.trim() || "application-resume.pdf";
-    const signal_profile = buildSignalProfile(resumeText, resumeFilename);
+    const ingested = await ingestResumeFromText(resumeText, resumeFilename);
+    const signal_profile = ingested.signalProfile;
+    const resumeTextFinal = ingested.resumeText;
     const display_name =
       body.displayName?.trim() || getCandidateHeaderName(signal_profile);
     const profile = { ...signal_profile, display_name };
@@ -97,14 +100,14 @@ export async function POST(request: Request, { params }: Params) {
     const scoringStatus = classifyApplicantPrefilter(
       roleBrief,
       profile,
-      resumeText,
+      resumeTextFinal,
     );
 
     const { id } = await insertApplicationCandidate(
       {
         display_name,
         resume_filename: resumeFilename,
-        resume_text: resumeText,
+        resume_text: resumeTextFinal,
         signal_profile: profile,
         activity: [
           createActivity("added", `Applied to ${String(jobRow.title)}`),
@@ -119,6 +122,20 @@ export async function POST(request: Request, { params }: Params) {
       },
       ownerUserId,
     );
+
+    if (ingested.structuredResume) {
+      const persisted = await persistResumeIntelligence({
+        candidateId: id,
+        structuredResume: ingested.structuredResume,
+        parseResult: ingested.parseResult,
+      });
+      if (persisted.errors.length) {
+        console.warn(
+          `[apply] ingestion persist warnings for ${id}:`,
+          persisted.errors.join("; "),
+        );
+      }
+    }
 
     await admin
       .from("role_briefs")

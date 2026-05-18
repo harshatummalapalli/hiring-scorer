@@ -10,7 +10,7 @@ export async function POST() {
     const results: { id: string; name: string }[] = [];
 
     for (const row of rows) {
-      const update = reparseCandidateRecord(row);
+      const update = await reparseCandidateRecord(row);
       await updateCandidate(update.id, {
         display_name: update.display_name,
         resume_text: update.resume_text,
@@ -18,6 +18,13 @@ export async function POST() {
         application_email: update.application_email,
         application_phone: update.application_phone,
         linkedin_url: update.linkedin_url,
+        ...(update.structured_resume
+          ? { structured_resume: update.structured_resume }
+          : {}),
+        ...(update.parse_confidence != null
+          ? { parse_confidence: update.parse_confidence }
+          : {}),
+        last_parse_at: new Date().toISOString(),
       });
       results.push({ id: update.id, name: update.display_name });
     }

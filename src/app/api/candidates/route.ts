@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { storeUploadedResumeForCandidate } from "@/lib/candidates/store-uploaded-resume";
-import { buildSignalProfile } from "@/lib/candidates/build-signal-profile";
+import { ingestResumeFromBytes, ingestResumeFromText } from "@/lib/ingestion/ingest-resume";
+import { persistResumeIntelligence } from "@/lib/ingestion/persist-intelligence";
 import {
   findDuplicateCandidates,
   type DuplicateMatch,
@@ -92,31 +93,43 @@ export async function POST(request: Request) {
   try {
     const { body, resumeFile } = await parsePostInput(request);
     const resumeText = normalizeResumeText(coerceResumeText(body.resumeText));
-    if (!resumeText) {
+    if (!resumeText && !resumeFile) {
       return NextResponse.json(
-        { error: "Resume text is required." },
+        { error: "Resume text or file is required." },
         { status: 400 },
       );
     }
-    if (resumeText.length > 50000) {
-      return NextResponse.json(
-        { error: "Resume text exceeds 50,000 characters." },
-        { status: 400 },
-      );
-    }
-
     const resumeFilename =
       body.resumeFilename?.trim() ||
       resumeFile?.name?.trim() ||
       "candidate-resume.pdf";
 
-    const signal_profile = buildSignalProfile(resumeText, resumeFilename);
+    let ingested;
+    if (resumeFile) {
+      const bytes = await resumeFile.arrayBuffer();
+      ingested = await ingestResumeFromBytes(
+        bytes,
+        resumeFilename,
+        resumeFile.type,
+        resumeText,
+      );
+    } else {
+      ingested = await ingestResumeFromText(resumeText, resumeFilename);
+    }
+    const signal_profile = ingested.signalProfile;
+    const resumeTextFinal = ingested.resumeText;
+    if (resumeTextFinal.length > 50000) {
+      return NextResponse.json(
+        { error: "Resume text exceeds 50,000 characters." },
+        { status: 400 },
+      );
+    }
     const display_name =
       body.displayName?.trim() || getCandidateHeaderName(signal_profile);
 
     if (!body.forceUpload) {
       const duplicates = await findDuplicateCandidates({
-        resumeText,
+        resumeText: resumeTextFinal,
         displayName: display_name,
       });
       const primary = duplicates[0];
@@ -163,7 +176,7 @@ export async function POST(request: Request) {
         scoringStatus = classifyApplicantPrefilter(
           roleBrief,
           profile,
-          resumeText,
+          resumeTextFinal,
         );
       } else {
         scoringStatus = "unscored";
@@ -173,7 +186,7 @@ export async function POST(request: Request) {
     const { id } = await insertCandidate({
       display_name,
       resume_filename: resumeFilename,
-      resume_text: resumeText,
+      resume_text: resumeTextFinal,
       signal_profile: profile,
       activity,
       application_email: profile.extracted_email ?? null,
@@ -188,6 +201,20 @@ export async function POST(request: Request) {
           }
         : {}),
     });
+
+    if (ingested.structuredResume) {
+      const persisted = await persistResumeIntelligence({
+        candidateId: id,
+        structuredResume: ingested.structuredResume,
+        parseResult: ingested.parseResult,
+      });
+      if (persisted.errors.length) {
+        console.warn(
+          `[candidates] ingestion persist warnings for ${id}:`,
+          persisted.errors.join("; "),
+        );
+      }
+    }
 
     if (resumeFile) {
       const supabase = await createSupabaseServerClient();
@@ -219,7 +246,7 @@ export async function POST(request: Request) {
       id,
       display_name,
       signal_profile: profile,
-      extractionSource: "code",
+      extractionSource: ingested.ingestionSource,
     });
   } catch (err) {
     const limited = limitErrorResponse(err);

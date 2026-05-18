@@ -1,0 +1,13 @@
+services:
+  resume-parser:
+    build: .
+    ports:
+      - "8090:8090"
+    environment:
+      - ENABLE_DOCLING=true
+      - LOG_LEVEL=INFO
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

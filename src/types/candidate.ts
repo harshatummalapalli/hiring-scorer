@@ -6,6 +6,7 @@ import type { CoreStrengthBreakdown } from "@/lib/intelligence/skill-domains";
 import type { GithubProfileData } from "@/lib/candidates/github-enrichment";
 import type { CompanyType, FitVerdict, ResumeQualitySignals } from "@/types/score";
 import type { CandidateScoreResult } from "@/types/score";
+import type { StructuredResume } from "@/types/structured-resume";
 
 export type CandidateStage =
   | "new"
@@ -123,6 +124,10 @@ export type CandidateRow = {
   resume_stored_at: string | null;
   resume_delete_after: string | null;
   resume_text: string;
+  structured_resume?: StructuredResume | null;
+  parse_confidence?: number | null;
+  last_parse_at?: string | null;
+  ingestion_snapshot?: Record<string, unknown> | null;
   signal_profile: CandidateSignalProfile;
   stage: CandidateStage;
   tag: string | null;

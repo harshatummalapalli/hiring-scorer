@@ -165,6 +165,18 @@ export function buildStoredResumeMeta(
   };
 }
 
+export async function downloadResumeFromStorage(
+  supabase: SupabaseClient,
+  storagePath: string,
+): Promise<ArrayBuffer> {
+  const { data, error } = await supabase.storage
+    .from(RESUMES_BUCKET)
+    .download(storagePath);
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Resume file not found in storage.");
+  return data.arrayBuffer();
+}
+
 export async function createSignedResumeUrl(
   supabase: SupabaseClient,
   storagePath: string,

@@ -31,7 +31,7 @@ export async function POST(request: Request) {
 
     for (const row of batch) {
       const previousName = row.display_name?.trim() ?? "";
-      const update = reparseCandidateRecord(row);
+      const update = await reparseCandidateRecord(row);
       const nameChanged =
         update.display_name.trim() !== previousName ||
         update.signal_profile.display_name?.trim() !==
@@ -44,7 +44,21 @@ export async function POST(request: Request) {
         application_email: update.application_email,
         application_phone: update.application_phone,
         linkedin_url: update.linkedin_url,
+        ...(update.structured_resume
+          ? { structured_resume: update.structured_resume }
+          : {}),
+        ...(update.parse_confidence != null
+          ? { parse_confidence: update.parse_confidence }
+          : {}),
+        last_parse_at: new Date().toISOString(),
       };
+
+      if (update.ingestion_errors?.length) {
+        console.warn(
+          `[reparse] candidate ${update.id} ingestion warnings:`,
+          update.ingestion_errors.join("; "),
+        );
+      }
 
       if (
         row.job_id &&
