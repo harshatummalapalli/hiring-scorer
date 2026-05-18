@@ -156,7 +156,7 @@ export function buildRecruiterCard(
     .filter((text, i, arr) => arr.indexOf(text) === i)
     .slice(0, 2);
 
-  let interview_questions = normalizeInterviewQuestions(
+  const interview_questions = normalizeInterviewQuestions(
     devilsAdvocate.interview_questions,
   );
 

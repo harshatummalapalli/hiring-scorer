@@ -50,6 +50,24 @@ export function TalentPoolWorkspace() {
   const { openPanel, candidateId: panelCandidateId, refreshPanel } =
     useCandidatePanel();
   const { activeBriefId } = useActiveRoleBrief();
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadCandidates = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/candidates");
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to load");
+      setCandidates(json.candidates as CandidateListItem[]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const {
     scoring,
     pickerOpen,
@@ -59,9 +77,6 @@ export function TalentPoolWorkspace() {
     confirmPicker,
     closePicker,
   } = useScoreCandidate(() => void loadCandidates());
-  const [showUpload, setShowUpload] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const openFromUrl = searchParams.get("open");
 
@@ -84,27 +99,13 @@ export function TalentPoolWorkspace() {
     }
   }, [panelCandidateId, router, searchParams]);
 
-  const openTalentPoolPanel = (id: string) => {
-    openPanel(id);
-  };
-
-  const loadCandidates = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/candidates");
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Failed to load");
-      setCandidates(json.candidates as CandidateListItem[]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     void loadCandidates();
   }, [loadCandidates]);
+
+  const openTalentPoolPanel = (id: string) => {
+    openPanel(id);
+  };
 
   const filtered = useMemo(() => {
     const base = filterCandidates(candidates, {

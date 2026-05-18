@@ -325,7 +325,7 @@ export async function getCandidateById(id: string): Promise<CandidateDetail | nu
     throw new Error(scoresError.message);
   }
 
-  let scoreRows = byCandidateId ?? [];
+  const scoreRows = byCandidateId ?? [];
   if (candidate.resume_filename) {
     const { data: byFilename } = await supabase
       .from("saved_scores")

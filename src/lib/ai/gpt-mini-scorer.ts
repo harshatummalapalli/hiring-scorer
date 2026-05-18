@@ -551,7 +551,7 @@ function buildRecruiterCardFromGpt(
     .filter(Boolean)
     .slice(0, 2);
 
-  let interview_questions = normalizeInterviewQuestions(
+  const interview_questions = normalizeInterviewQuestions(
     raw.interview_questions ?? [],
   ).slice(0, 2);
   while (interview_questions.length < 2) {
