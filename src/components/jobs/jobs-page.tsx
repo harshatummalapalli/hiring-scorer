@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, X } from "lucide-react";
 import { RoleBriefCreator } from "@/components/role-briefs/role-brief-creator";
 import { EmptyState } from "@/components/ui/empty-state";
 import { JobLimitModal } from "@/components/workspace/job-limit-modal";
@@ -69,6 +69,21 @@ export function JobsPage() {
   useEffect(() => {
     void loadJobs();
   }, [loadJobs]);
+
+  const closePostJob = useCallback(() => {
+    if (isSaving) return;
+    setShowPost(false);
+    setError(null);
+  }, [isSaving]);
+
+  useEffect(() => {
+    if (!showPost) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closePostJob();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showPost, closePostJob]);
 
   const handleSaveNewJob = async (data: {
     title: string;
@@ -208,22 +223,53 @@ export function JobsPage() {
       )}
 
       {showPost && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-8">
-          <div className={`relative w-full max-w-4xl ${karta.card} p-6 shadow-xl sm:p-10`}>
-            <button
-              type="button"
-              onClick={() => setShowPost(false)}
-              className="absolute right-4 top-4 text-sm font-medium text-slate-500 hover:text-slate-800"
-            >
-              Close
-            </button>
-            <h2 className={`${karta.cardTitle} pr-16`}>Post a job</h2>
-            <p className="mt-1 text-sm text-[#64748B]">
-              Paste the JD — Karta will extract requirements and generate a scoring prompt.
-            </p>
-            <div className="mt-8">
-              <RoleBriefCreator onSave={handleSaveNewJob} isSaving={isSaving} />
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-8"
+          role="presentation"
+          onClick={closePostJob}
+        >
+          <div
+            role="dialog"
+            aria-modal
+            aria-labelledby="post-job-title"
+            className={`relative w-full max-w-4xl ${karta.card} p-6 shadow-xl sm:p-10`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-6 flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
+              <div className="min-w-0 pr-2">
+                <h2 id="post-job-title" className={karta.cardTitle}>
+                  Post a job
+                </h2>
+                <p className="mt-1 text-sm text-[#64748B]">
+                  Paste the JD — Karta will extract requirements and generate a
+                  scoring prompt.
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  disabled={isSaving}
+                  onClick={closePostJob}
+                  className={karta.btnSecondary}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isSaving}
+                  onClick={closePostJob}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                  aria-label="Close"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
+            <RoleBriefCreator
+              onSave={handleSaveNewJob}
+              isSaving={isSaving}
+              onCancel={closePostJob}
+            />
           </div>
         </div>
       )}

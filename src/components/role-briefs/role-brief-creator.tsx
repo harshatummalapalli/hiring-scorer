@@ -32,6 +32,7 @@ type RoleBriefCreatorProps = {
     analysisMeta: RoleBriefAnalysisMeta;
   }) => Promise<void>;
   isSaving: boolean;
+  onCancel?: () => void;
 };
 
 export function RoleBriefCreator({
@@ -43,6 +44,7 @@ export function RoleBriefCreator({
   editingId = null,
   onSave,
   isSaving,
+  onCancel,
 }: RoleBriefCreatorProps) {
   const [jobDescription, setJobDescription] = useState(initialJobDescription);
   const [analysis, setAnalysis] = useState<RoleBriefAnalysis | null>(
@@ -163,7 +165,7 @@ export function RoleBriefCreator({
           disabled={analysing}
         />
 
-        <div className="mt-8">
+        <div className="mt-8 flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={() => void handleAnalyse()}
@@ -182,6 +184,16 @@ export function RoleBriefCreator({
               </>
             )}
           </button>
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={analysing || isSaving}
+              className={karta.btnSecondary}
+            >
+              Cancel
+            </button>
+          )}
 
           <JdAnalysisLoading active={analysing} />
 
@@ -220,15 +232,27 @@ export function RoleBriefCreator({
             <p className="text-sm text-[#64748B]">
               {editingId ? "Update this job role." : "Save as a new job role."}
             </p>
-            <button
-              type="button"
-              onClick={() => void handleSave()}
-              disabled={isSaving}
-              className={`inline-flex items-center gap-2 ${karta.btnPrimary} px-8 py-3 text-base`}
-            >
-              {isSaving && <Loader2 className="h-5 w-5 animate-spin" />}
-              {isSaving ? "Saving…" : "Save Job Role"}
-            </button>
+            <div className="flex flex-wrap gap-3">
+              {onCancel && (
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  disabled={isSaving}
+                  className={karta.btnSecondary}
+                >
+                  Cancel
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => void handleSave()}
+                disabled={isSaving}
+                className={`inline-flex items-center gap-2 ${karta.btnPrimary} px-8 py-3 text-base`}
+              >
+                {isSaving && <Loader2 className="h-5 w-5 animate-spin" />}
+                {isSaving ? "Saving…" : "Save Job Role"}
+              </button>
+            </div>
           </div>
         </>
       )}
