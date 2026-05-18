@@ -320,6 +320,9 @@ export function mapParsedProfileToSignal(
     core_strength_primary: null,
     core_strength_secondary: null,
     core_strength_breakdown: {},
+    extracted_email: null,
+    extracted_phone: null,
+    experience_years: null,
   };
 }
 

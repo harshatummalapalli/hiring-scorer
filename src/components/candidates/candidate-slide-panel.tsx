@@ -28,6 +28,7 @@ import { downloadKartaAssessmentPdf } from "@/lib/reports/karta-assessment-pdf";
 import type { RoleBriefSnapshot } from "@/types/saved-score";
 import { formatCoreStrengthLabel } from "@/lib/intelligence/skill-domains";
 import { CandidateDetailsSection } from "./candidate-details-section";
+import { CandidatePanelHeader } from "./candidate-panel-header";
 import { SignalBar, VerdictBadge } from "./profile-shared";
 
 function formatDate(iso: string): string {
@@ -389,11 +390,9 @@ export function CandidateSlidePanel({
                 </p>
               )}
 
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-lg font-semibold text-[#1E293B]">
-                    {candidate.display_name}
-                  </p>
+              <CandidatePanelHeader candidate={candidate} />
+
+              <div className="space-y-2">
                   {contextJobId && jobTitleLabel ? (
                     <p className="mt-1 text-xs font-medium text-[#0D9488]">
                       {jobTitleLabel}
@@ -426,10 +425,6 @@ export function CandidateSlidePanel({
                         : ""}
                     </p>
                   ) : null}
-                  <p className="mt-1 text-sm text-[#64748B]">
-                    {profile.total_years_experience}
-                    {profile.location ? ` · ${profile.location}` : ""}
-                  </p>
                   {formatCoreStrengthLabel(
                     profile.core_strength_primary,
                     profile.core_strength_secondary,
@@ -443,22 +438,24 @@ export function CandidateSlidePanel({
                         ?.replace(" + ", " · ")}
                     </p>
                   )}
-                  {candidate.resume_file_path ? (
-                    <button
-                      type="button"
-                      disabled={cvDownloadBusy}
-                      onClick={() => void handleDownloadOriginalCv()}
-                      className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-[#0D9488] hover:text-[#0B8276] disabled:opacity-50"
-                    >
-                      {cvDownloadBusy ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Download className="h-3.5 w-3.5" />
-                      )}
-                      Download Original CV
-                    </button>
-                  ) : null}
-                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {candidate.resume_file_path ? (
+                  <button
+                    type="button"
+                    disabled={cvDownloadBusy}
+                    onClick={() => void handleDownloadOriginalCv()}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-[#0D9488] hover:text-[#0B8276] disabled:opacity-50"
+                  >
+                    {cvDownloadBusy ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" />
+                    )}
+                    Download Original CV
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   disabled={

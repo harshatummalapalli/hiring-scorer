@@ -23,10 +23,8 @@ import {
   parseSkillsFromSection,
   splitResumeSections,
 } from "./parse-resume-structure";
-import {
-  extractCurrentTitleAndCompany,
-  polishTitleAndCompany,
-} from "./extract-resume-header";
+import { extractCandidateFields } from "./extract-resume-fields";
+import { polishTitleAndCompany } from "./extract-resume-header";
 import { prepareSignalQuote, toStrippedResumeText } from "./resume-text";
 import { computeCoreStrengthFromVerifiedSkills } from "@/lib/intelligence/skill-domains";
 import { hashResumeContentPrefix } from "@/lib/candidates/resume-content-hash";
@@ -189,12 +187,15 @@ export function buildSignalProfile(
       ? career_types_sequence.join(" → ")
       : "Not available";
 
+  const extracted = extractCandidateFields(resumeText, resumeFilename);
   const identity = parseResumeIdentity(resumeText, resumeFilename);
-  const { linkedin_url, portfolio_links } = extractResumeLinks(resumeText);
-  const display_name = identity.display_name;
+  const { linkedin_url: linksLinkedin, portfolio_links } =
+    extractResumeLinks(resumeText);
+  const linkedin_url = extracted.linkedin_url ?? linksLinkedin;
+  const display_name = extracted.full_name || identity.display_name;
 
-  const { current_title: headerTitle, current_company: headerCompany } =
-    extractCurrentTitleAndCompany(resumeText);
+  const headerTitle = extracted.current_title;
+  const headerCompany = extracted.current_company;
   const recentRole = experience.find((e) => isValidExperienceEntry(e));
   const experienceTitle = recentRole?.title.trim();
   const experienceCompany = recentRole?.company.trim();
@@ -212,15 +213,18 @@ export function buildSignalProfile(
   const current_title = polished.current_title;
   const most_recent_title = polished.current_title ?? "";
   const current_company = polished.current_company;
-  const location = extractLocation(resumeText);
+  const location =
+    extracted.location ?? extractLocation(resumeText);
   const explicitYears = extractExplicitYearsOfExperience(resumeText, rawSections);
   const fromRoles = estimateYearsExperience(experience);
   const total_years_experience =
     fromRoles !== "Not stated"
       ? fromRoles
-      : explicitYears != null
-        ? `${Math.round(explicitYears)} years`
-        : "Not stated";
+      : extracted.experience_years != null
+        ? `${Math.round(extracted.experience_years)} years`
+        : explicitYears != null
+          ? `${Math.round(explicitYears)} years`
+          : extracted.total_years_experience;
 
   const professional_summary = resolveProfessionalSummary(
     resumeText,
@@ -279,6 +283,9 @@ export function buildSignalProfile(
     core_strength_secondary: coreStrength.core_strength_secondary,
     core_strength_breakdown: coreStrength.core_strength_breakdown,
     resume_content_hash: hashResumeContentPrefix(resumeText),
+    extracted_email: extracted.extracted_email,
+    extracted_phone: extracted.extracted_phone,
+    experience_years: extracted.experience_years,
   };
 }
 

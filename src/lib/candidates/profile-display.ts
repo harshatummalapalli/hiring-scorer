@@ -71,6 +71,63 @@ export function formatYearsExperience(
   return years;
 }
 
+const RESUME_BULLET_PREFIX = /^[\s•\-\*▪◦‣⁃]+/;
+
+/** Remove leading bullet markers from resume line text before display. */
+export function stripResumeBulletPrefix(text: string): string {
+  return text.replace(RESUME_BULLET_PREFIX, "").trim();
+}
+
+export function truncateWithEllipsis(text: string, maxLen: number): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxLen) return trimmed;
+  return `${trimmed.slice(0, maxLen - 1).trimEnd()}…`;
+}
+
+/** Format resume bullet fallback for list cards (strip marker, cap length). */
+export function formatResumeBulletFallbackText(
+  raw: string,
+  maxLen = 60,
+): string {
+  const cleaned = stripResumeBulletPrefix(raw);
+  if (!cleaned) return "";
+  return truncateWithEllipsis(cleaned, maxLen);
+}
+
+function firstSubstantialBullet(profile: CandidateSignalProfile): string | null {
+  for (const exp of profile.experience) {
+    for (const bullet of exp.bullets) {
+      const cleaned = stripResumeBulletPrefix(bullet);
+      if (cleaned.length >= 15) return bullet;
+    }
+  }
+
+  const raw = profile.experience_fallback_raw?.trim();
+  if (raw) {
+    for (const line of raw.split(/\r?\n/)) {
+      const cleaned = stripResumeBulletPrefix(line);
+      if (cleaned.length >= 15) return line;
+    }
+  }
+
+  return null;
+}
+
+/** Supplementary talent-pool line when title/company are missing — from resume bullets. */
+export function getTalentPoolBulletFallbackDisplay(
+  profile: CandidateSignalProfile,
+): string | null {
+  if (formatTitleAtCompanySubtitle(profile.current_title, profile.current_company)) {
+    return null;
+  }
+
+  const raw = firstSubstantialBullet(profile);
+  if (!raw) return null;
+
+  const formatted = formatResumeBulletFallbackText(raw, 60);
+  return formatted || null;
+}
+
 /** Secondary line on talent pool cards — silent when nothing parsed. */
 export function formatListCardSubtitle(profile: CandidateSignalProfile): string {
   return formatCandidateHeadline(profile) || formatYearsExperience(profile) || "";

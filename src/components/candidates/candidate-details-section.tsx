@@ -15,6 +15,22 @@ function dash(value: string | null | undefined): string {
   return v ? v : "—";
 }
 
+function resolveEmail(candidate: CandidateDetail): string {
+  return (
+    candidate.application_email?.trim() ||
+    candidate.signal_profile.extracted_email?.trim() ||
+    ""
+  );
+}
+
+function resolvePhone(candidate: CandidateDetail): string {
+  return (
+    candidate.application_phone?.trim() ||
+    candidate.signal_profile.extracted_phone?.trim() ||
+    ""
+  );
+}
+
 export function CandidateDetailsSection({
   candidate,
   onSaved,
@@ -29,8 +45,8 @@ export function CandidateDetailsSection({
     current_company: profile.current_company ?? "",
     experience_years: "",
     location: profile.location ?? "",
-    email: candidate.application_email ?? "",
-    phone: candidate.application_phone ?? "",
+    email: resolveEmail(candidate),
+    phone: resolvePhone(candidate),
     linkedin_url: candidate.linkedin_url ?? profile.linkedin_url ?? "",
     github_url: "",
     skills: [
@@ -141,11 +157,11 @@ export function CandidateDetailsSection({
           </div>
           <div>
             <dt className="text-xs text-[#64748B]">Email</dt>
-            <dd className="text-[#1E293B]">{dash(candidate.application_email)}</dd>
+            <dd className="text-[#1E293B]">{dash(resolveEmail(candidate))}</dd>
           </div>
           <div>
             <dt className="text-xs text-[#64748B]">Phone</dt>
-            <dd className="text-[#1E293B]">{dash(candidate.application_phone)}</dd>
+            <dd className="text-[#1E293B]">{dash(resolvePhone(candidate))}</dd>
           </div>
           <div>
             <dt className="text-xs text-[#64748B]">LinkedIn</dt>

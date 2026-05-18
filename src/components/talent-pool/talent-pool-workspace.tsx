@@ -310,6 +310,7 @@ export function TalentPoolWorkspace() {
                     currentTitle={c.current_title}
                     currentCompany={c.current_company}
                     yearsExperience={c.signal_profile.total_years_experience}
+                    signalProfile={c.signal_profile}
                   />
                   <CoreStrengthLabel
                     primary={c.signal_profile.core_strength_primary}

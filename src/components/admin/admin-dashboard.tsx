@@ -63,6 +63,77 @@ function MetricCard({
   );
 }
 
+function ReparseAllCandidatesCard() {
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async () => {
+    setRunning(true);
+    setError(null);
+    setProgress("Starting…");
+    try {
+      let offset = 0;
+      let total = 0;
+      let done = false;
+      while (!done) {
+        const res = await fetch(
+          `/api/admin/reparse-candidates?offset=${offset}&limit=25`,
+          { method: "POST" },
+        );
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "Reparse failed");
+        total = Number(json.total ?? 0);
+        const processed = Number(json.processed ?? 0);
+        done = Boolean(json.done);
+        offset = processed;
+        setProgress(`Reparsed ${processed} of ${total} candidates…`);
+        if (!done && (json.batchSize ?? 0) === 0) break;
+      }
+      setProgress(`Done. Reparsed ${total} candidates.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Reparse failed");
+      setProgress(null);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <section className={`${karta.card} p-6`}>
+      <h2 className={karta.sectionHeading}>Candidate data</h2>
+      <p className="mt-2 text-sm text-[#64748B]">
+        Re-run resume extraction (name, email, phone, title, location, LinkedIn) on
+        all stored candidates. Use after improving parsers for LinkedIn PDFs and
+        other formats.
+      </p>
+      {progress && (
+        <p className="mt-3 text-sm font-medium text-[#0D9488]">{progress}</p>
+      )}
+      {error && (
+        <p className="mt-2 text-sm text-red-600" role="alert">
+          {error}
+        </p>
+      )}
+      <button
+        type="button"
+        disabled={running}
+        onClick={() => void run()}
+        className={`mt-4 ${karta.btnPrimary}`}
+      >
+        {running ? (
+          <span className="inline-flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Reparsing…
+          </span>
+        ) : (
+          "Reparse All Candidates"
+        )}
+      </button>
+    </section>
+  );
+}
+
 export function AdminDashboard() {
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [workspaces, setWorkspaces] = useState<AdminWorkspaceRow[]>([]);
@@ -161,6 +232,8 @@ export function AdminDashboard() {
       </section>
 
       <AdminCostDashboard />
+
+      <ReparseAllCandidatesCard />
 
       <section>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

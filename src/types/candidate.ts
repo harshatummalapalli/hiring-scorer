@@ -80,6 +80,9 @@ export type CandidateSignalProfile = {
   core_strength_breakdown: CoreStrengthBreakdown;
   github?: GithubProfileData | null;
   resume_content_hash?: string | null;
+  extracted_email?: string | null;
+  extracted_phone?: string | null;
+  experience_years?: number | null;
 };
 
 export type CandidateActivityType =

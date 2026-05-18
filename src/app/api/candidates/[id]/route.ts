@@ -105,6 +105,12 @@ export async function PATCH(request: Request, { params }: Params) {
     const display_name =
       body.display_name?.trim() || candidate.display_name;
     profile.display_name = display_name;
+    if (body.application_email !== undefined) {
+      profile.extracted_email = body.application_email;
+    }
+    if (body.application_phone !== undefined) {
+      profile.extracted_phone = body.application_phone;
+    }
 
     await updateCandidate(id, {
       display_name,

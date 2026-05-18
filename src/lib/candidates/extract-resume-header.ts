@@ -12,7 +12,7 @@ const SECTION_WORD =
   /\b(?:summary|experience|education|skills|profile|objective|contact|work|employment|projects|certifications|references|about|career|professional|qualifications|highlights|expertise|competencies|activities|interests|hobbies|languages|awards|achievements)\b/i;
 
 const TITLE_KEYWORD =
-  /\b(?:engineer|engineering|manager|management|director|analyst|analysis|consultant|consulting|developer|development|architect|architecture|lead|senior|sr|junior|jr|staff|principal|head|vp|vice|president|scientist|designer|design|specialist|administrator|coordinator|associate|executive|programmer|tester|intern|trainee|founder|co[- ]?founder|cto|ceo|cfo|coo|product|data|ml|ai|software|hardware|devops|sre|qa|technologist|professional)\b/i;
+  /\b(?:engineer|engineering|manager|management|director|analyst|analysis|consultant|consulting|developer|development|architect|architecture|lead|senior|sr|junior|jr|staff|principal|head|vp|vice|president|scientist|designer|design|specialist|administrator|coordinator|associate|executive|programmer|tester|intern|trainee|founder|co[- ]?founder|cto|ceo|cfo|coo|product|data|ml|ai|software|hardware|devops|sre|qa|technologist|professional|recruiter|recruitment|partner|advisor|strategist|operations|marketing|sales|finance|human\s+resources|talent|acquisition|business|project|program|account|client|customer)\b/i;
 
 const ORG_SUFFIX =
   /\b(?:labs?|technologies|technology|solutions|systems|software|services|inc|ltd|llc|corp|corporation|company|group|bank|studio|media|health|pay|finance|consulting)\b/i;
@@ -347,7 +347,7 @@ export function extractCurrentTitleAndCompany(resumeText: string): {
 } {
   const lines = resumeLines(resumeText);
 
-  for (let i = 0; i < Math.min(12, lines.length); i++) {
+  for (let i = 0; i < Math.min(20, lines.length); i++) {
     const raw = (lines[i] ?? "").trim();
     if (!raw) continue;
     if (/@/.test(raw) || PHONE_PATTERN.test(raw)) continue;

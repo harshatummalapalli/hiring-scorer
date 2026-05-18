@@ -1,4 +1,4 @@
-import { resolveDisplayNameFromResume } from "./extract-resume-header";
+import { extractFullNameFromResume, extractEmailFromResumeText } from "./extract-resume-fields";
 import { cleanDisplayName } from "./resolve-display-name";
 
 export type ParsedIdentity = {
@@ -31,5 +31,8 @@ export function parseResumeIdentity(
   resumeText: string,
   resumeFilename: string,
 ): ParsedIdentity {
-  return splitFullName(resolveDisplayNameFromResume(resumeText, resumeFilename));
+  const email = extractEmailFromResumeText(resumeText);
+  return splitFullName(
+    extractFullNameFromResume(resumeText, resumeFilename, email),
+  );
 }

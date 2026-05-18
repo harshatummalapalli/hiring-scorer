@@ -1,3 +1,4 @@
+import { extractEmailFromResumeText } from "@/lib/candidates/extract-resume-fields";
 import { hashResumeContentPrefix } from "@/lib/candidates/resume-content-hash";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import { getAuthenticatedUserId } from "@/lib/supabase/created-by";
@@ -35,13 +36,6 @@ export function nameSimilarity(a: string, b: string): number {
   return maxLen === 0 ? 1 : 1 - dist / maxLen;
 }
 
-function extractEmailFromText(text: string): string | null {
-  const match = text.match(
-    /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/,
-  );
-  return match?.[0]?.toLowerCase() ?? null;
-}
-
 export async function findDuplicateCandidates(input: {
   resumeText: string;
   displayName: string;
@@ -61,7 +55,7 @@ export async function findDuplicateCandidates(input: {
   const contentHash = hashResumeContentPrefix(input.resumeText);
   const email =
     input.email?.trim().toLowerCase() ??
-    extractEmailFromText(input.resumeText.slice(0, 2000));
+    extractEmailFromResumeText(input.resumeText);
 
   for (const row of rows ?? []) {
     const id = String(row.id);
@@ -85,7 +79,7 @@ export async function findDuplicateCandidates(input: {
 
     const rowEmail =
       String(row.application_email ?? "").toLowerCase() ||
-      extractEmailFromText(String(row.resume_text ?? "").slice(0, 2000));
+      extractEmailFromResumeText(String(row.resume_text ?? ""));
     if (email && rowEmail && email === rowEmail) {
       matches.push({
         level: "email",

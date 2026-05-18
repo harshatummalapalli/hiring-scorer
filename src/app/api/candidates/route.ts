@@ -172,6 +172,9 @@ export async function POST(request: Request) {
       resume_text: resumeText,
       signal_profile: profile,
       activity,
+      application_email: profile.extracted_email ?? null,
+      application_phone: profile.extracted_phone ?? null,
+      linkedin_url: profile.linkedin_url ?? null,
       ...(jobId
         ? {
             job_id: jobId,
