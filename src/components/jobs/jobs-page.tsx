@@ -9,6 +9,7 @@ import { JobLimitModal } from "@/components/workspace/job-limit-modal";
 import { karta } from "@/lib/brand/karta";
 import { formatKartaDate } from "@/lib/dates/format-karta-date";
 import { getErrorMessage } from "@/lib/errors";
+import { isUnlimitedWorkspaceCap } from "@/lib/workspace/limits";
 import type { JobListItem } from "@/types/job";
 import { JOB_STATUS_LABELS } from "@/types/job";
 import type { RoleBriefAnalysis, RoleBriefAnalysisMeta } from "@/types/role-brief";
@@ -125,8 +126,9 @@ export function JobsPage() {
           <h1 className={karta.pageTitle}>Jobs</h1>
           {usage && (
             <p className="mt-1 text-xs text-[#94A3B8]">
-              {usage.jobs.current} of {usage.jobs.max} jobs ·{" "}
-              {usage.candidates.current} of {usage.candidates.max} candidates
+              {isUnlimitedWorkspaceCap(usage.jobs.max)
+                ? `${usage.jobs.current} jobs · ${usage.candidates.current} candidates`
+                : `${usage.jobs.current} of ${usage.jobs.max} jobs · ${usage.candidates.current} of ${usage.candidates.max} candidates`}
             </p>
           )}
           <p className="mt-1 text-sm text-[#64748B]">
