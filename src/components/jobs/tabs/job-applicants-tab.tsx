@@ -201,21 +201,58 @@ export function JobApplicantsTab({
     if (ids.length === 0) return;
     setBatchScoring(true);
     setError(null);
+    const failures: { id: string; message: string }[] = [];
+    let succeeded = 0;
+
     try {
-      for (const id of ids) {
-        const res = await fetch(`/api/candidates/${id}/score`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ roleBriefId: jobId }),
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error ?? "Scoring failed");
+      for (let i = 0; i < ids.length; i++) {
+        const id = ids[i];
+        setScoringId(id);
+        try {
+          const res = await fetch(`/api/candidates/${id}/score`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ roleBriefId: jobId }),
+          });
+          const json = await res.json();
+          if (!res.ok) {
+            failures.push({ id, message: json.error ?? "Scoring failed" });
+            continue;
+          }
+          succeeded += 1;
+        } catch (err) {
+          failures.push({
+            id,
+            message: err instanceof Error ? err.message : "Scoring failed",
+          });
+        }
+        if (i < ids.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
       }
+
       setSelected(new Set());
       await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Batch scoring failed");
+      await loadMatches();
+      if (openPanelId && ids.includes(openPanelId)) refreshPanel();
+
+      if (failures.length > 0) {
+        const detail = failures
+          .slice(0, 3)
+          .map((f) => {
+            const n =
+              candidates.find((c) => c.id === f.id)?.display_name ?? "Candidate";
+            return `${n}: ${f.message}`;
+          })
+          .join(" · ");
+        setError(
+          succeeded > 0
+            ? `Scored ${succeeded} of ${ids.length}. Failed: ${detail}${failures.length > 3 ? "…" : ""}`
+            : `Scoring failed: ${detail}`,
+        );
+      }
     } finally {
+      setScoringId(null);
       setBatchScoring(false);
     }
   };
@@ -539,7 +576,7 @@ export function JobApplicantsTab({
                         <div className="flex justify-end gap-2">
                           <button
                             type="button"
-                            disabled={rejecting}
+                            disabled={rejecting || batchScoring}
                             onClick={() => setRejectTarget(c)}
                             className={`inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50`}
                           >
@@ -548,8 +585,9 @@ export function JobApplicantsTab({
                           </button>
                           <button
                             type="button"
+                            disabled={batchScoring || rejecting}
                             onClick={() => void scoreOne(c.id)}
-                            className={`btn-press inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-600`}
+                            className={`btn-press inline-flex items-center gap-2 rounded-full bg-amber-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50`}
                           >
                             <span
                               className="review-dot-pulse inline-block h-2 w-2 rounded-full bg-amber-200"

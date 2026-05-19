@@ -55,10 +55,14 @@ export async function POST(request: Request, { params }: Params) {
       candidate.resume_filename ?? `${candidate.display_name}.pdf`;
 
     const { stripped } = stripPII(candidate.resume_text);
-    const scoringText = stripped.trim();
+    const rawText = candidate.resume_text?.trim() ?? "";
+    let scoringText = stripped.trim();
+    if (scoringText.length < 80 && rawText.length >= 80) {
+      scoringText = rawText;
+    }
     if (!scoringText) {
       return NextResponse.json(
-        { error: "Resume text is empty after PII stripping." },
+        { error: "Resume text is empty — re-upload the resume or run Reparse in admin." },
         { status: 400 },
       );
     }

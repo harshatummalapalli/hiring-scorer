@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { classifyApplicantPrefilter } from "@/lib/jobs/applicant-prefilter";
+import { isPostScoreStatus } from "@/lib/jobs/scoring-status";
 import { getJobById } from "@/lib/supabase/jobs";
 import { listCandidatesByJob, updateCandidate } from "@/lib/supabase/candidates";
 
@@ -19,11 +20,7 @@ export async function POST(_request: Request, { params }: Params) {
 
     for (const row of rows) {
       if (!row.resume_text?.trim()) continue;
-      if (
-        row.scoring_status === "scored" ||
-        row.scoring_status === "skipped" ||
-        row.scoring_status === "manually_rejected"
-      ) {
+      if (isPostScoreStatus(row.scoring_status)) {
         continue;
       }
       const status = classifyApplicantPrefilter(

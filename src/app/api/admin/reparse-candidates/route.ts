@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdmin } from "@/lib/admin/auth";
 import { classifyApplicantPrefilter } from "@/lib/jobs/applicant-prefilter";
+import { isPostScoreStatus } from "@/lib/jobs/scoring-status";
 import {
   sanitizeDisplayCompany,
   sanitizeDisplayTitle,
@@ -71,12 +72,7 @@ export async function POST(request: Request) {
         );
       }
 
-      if (
-        row.job_id &&
-        row.scoring_status !== "scored" &&
-        row.scoring_status !== "skipped" &&
-        row.scoring_status !== "manually_rejected"
-      ) {
+      if (row.job_id && !isPostScoreStatus(row.scoring_status)) {
         const roleBrief = await getJobById(row.job_id);
         if (roleBrief) {
           patch.scoring_status = classifyApplicantPrefilter(
