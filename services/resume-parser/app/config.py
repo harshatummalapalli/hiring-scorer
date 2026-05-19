@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     spacy_model: str = "en_core_web_trf"
     spacy_fallback_model: str = "en_core_web_sm"
     sentence_transformer_model: str = "all-MiniLM-L6-v2"
-    enable_docling: bool = True
+    enable_docling: bool = False
     presidio_language: str = "en"
 
 

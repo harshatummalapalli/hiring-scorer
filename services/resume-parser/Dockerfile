@@ -15,6 +15,7 @@ RUN python -m spacy download en_core_web_sm || true
 COPY app ./app
 
 ENV ENABLE_DOCLING=true
+ENV KARTA_SKIP_PRESIDIO=0
 ENV LOG_LEVEL=INFO
 
 EXPOSE 8090

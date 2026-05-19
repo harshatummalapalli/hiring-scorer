@@ -23,8 +23,11 @@ jobs:
           python-version: "3.11"
       - name: Install dependencies
         run: pip install -r requirements-minimal.txt
+      - name: Smoke import
+        env:
+          KARTA_SKIP_PRESIDIO: "1"
+        run: python -c "from app.pipeline.ingestion import ingest_from_text; print('import ok')"
       - name: Run tests
         env:
           KARTA_SKIP_PRESIDIO: "1"
-          ENABLE_DOCLING: "false"
-        run: python -m pytest -v
+        run: python -m pytest -v --tb=short
