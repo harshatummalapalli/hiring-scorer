@@ -11,7 +11,6 @@ from app.models.canonical import (
     ResumeBasics,
     ResumeEducation,
     ResumeExperience,
-    ResumeProject,
     ResumeSkill,
     StructuredResume,
 )
@@ -141,10 +140,22 @@ def _extract_basics(text: str, sections: dict[str, list[str]]) -> ResumeBasics:
     return basics
 
 
+def _parse_title_company_line(line: str) -> tuple[str, str]:
+    stripped = line.strip()
+    if "|" in stripped:
+        parts = [p.strip() for p in stripped.split("|", 1)]
+        return parts[0], parts[1] if len(parts) > 1 else ""
+    if re.search(r"\s+at\s+", stripped, re.I):
+        parts = re.split(r"\s+at\s+", stripped, maxsplit=1, flags=re.I)
+        return parts[0].strip(), parts[-1].strip()
+    return stripped, ""
+
+
 def _parse_experience_block(lines: list[str]) -> list[ResumeExperience]:
     entries: list[ResumeExperience] = []
     current: ResumeExperience | None = None
     bullets: list[str] = []
+    pending_role_line = ""
 
     def flush_role() -> None:
         nonlocal current, bullets
@@ -161,7 +172,9 @@ def _parse_experience_block(lines: list[str]) -> list[ResumeExperience]:
             title_part = DATE_RANGE_STRIP.sub("", line).strip(" -–—|,")
             company = ""
             title = title_part
-            if " at " in title_part.lower():
+            if not title and pending_role_line:
+                title, company = _parse_title_company_line(pending_role_line)
+            elif " at " in title_part.lower():
                 parts = re.split(r"\s+at\s+", title_part, maxsplit=1, flags=re.I)
                 title, company = parts[0].strip(), parts[-1].strip()
             elif " | " in title_part:
@@ -180,6 +193,7 @@ def _parse_experience_block(lines: list[str]) -> list[ResumeExperience]:
                 confidence=min(0.95, (t_conf + (c_conf or 0.7)) / 2),
                 evidence=[line[:200]],
             )
+            pending_role_line = ""
             continue
 
         if line.startswith(("•", "-", "*", "·")) or re.match(r"^\d+\.\s", line):
@@ -189,6 +203,9 @@ def _parse_experience_block(lines: list[str]) -> list[ResumeExperience]:
             continue
 
         if JOB_TITLE_HINT.search(line) and len(line) < 120:
+            if "|" in line or re.search(r"\s+at\s+", line, re.I):
+                pending_role_line = line
+                continue
             flush_role()
             norm_title, t_conf = normalize_title(line)
             current = ResumeExperience(

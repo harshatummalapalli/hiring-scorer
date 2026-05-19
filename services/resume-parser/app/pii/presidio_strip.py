@@ -44,6 +44,10 @@ def _init_presidio():
 def strip_pii(text: str) -> str:
     if not text.strip():
         return text
+    import os
+
+    if os.environ.get("KARTA_SKIP_PRESIDIO", "").lower() in ("1", "true", "yes"):
+        return _regex_strip(text)
     if _init_presidio():
         try:
             from presidio_anonymizer.entities import OperatorConfig

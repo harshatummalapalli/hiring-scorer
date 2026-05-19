@@ -5,12 +5,15 @@ from __future__ import annotations
 import re
 
 COMPANY_SUFFIXES = re.compile(
-    r"\b(?:inc|inc\.|corp|corporation|ltd|limited|llc|plc|gmbh|pvt|private)\.?\s*$",
+    r"\b(?:inc|inc\.|corp|corporation|llc|plc|gmbh|"
+    r"pvt\.?\s*ltd\.?|private\s+limited|ltd\.?|limited|pvt)\.?\s*$",
     re.I,
 )
 
 COMPANY_ALIASES: dict[str, str] = {
     "ibm india": "IBM",
+    "ibm india pvt": "IBM",
+    "ibm india pvt ltd": "IBM",
     "ibm corp": "IBM",
     "ibm corporation": "IBM",
     "international business machines": "IBM",
@@ -29,8 +32,12 @@ def normalize_company(raw: str) -> tuple[str, float]:
     key = c.lower()
     if key in COMPANY_ALIASES:
         return COMPANY_ALIASES[key], 0.95
-    cleaned = COMPANY_SUFFIXES.sub("", c).strip()
-    cleaned = cleaned.rstrip(",").strip()
+    cleaned = c
+    for _ in range(3):
+        next_cleaned = COMPANY_SUFFIXES.sub("", cleaned).strip().rstrip(",").strip()
+        if next_cleaned == cleaned:
+            break
+        cleaned = next_cleaned
     if cleaned.lower() in COMPANY_ALIASES:
         return COMPANY_ALIASES[cleaned.lower()], 0.9
     return cleaned, 0.85

@@ -31,6 +31,8 @@ def parse_date_token(token: str) -> str | None:
         return None
     if PRESENT.search(t):
         return "present"
+    if re.fullmatch(r"(?:19|20)\d{2}", t):
+        return t
     try:
         dt = date_parser.parse(t, default=datetime(2000, 1, 1))
         return dt.strftime("%Y-%m")

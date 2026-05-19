@@ -8,6 +8,7 @@ on:
   pull_request:
     paths:
       - "services/resume-parser/**"
+      - ".github/workflows/resume-parser.yml"
 
 jobs:
   pytest:
@@ -23,4 +24,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-minimal.txt
       - name: Run tests
-        run: python -m pytest -q
+        env:
+          KARTA_SKIP_PRESIDIO: "1"
+          ENABLE_DOCLING: "false"
+        run: python -m pytest -v
