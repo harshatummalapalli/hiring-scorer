@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { KARTA, karta } from "@/lib/brand/karta";
+import { SuperAdminViewToggle } from "@/components/admin/super-admin-view-toggle";
 import { UserMenu } from "@/components/user-menu";
 
 const NAV = [
@@ -43,6 +44,7 @@ export function AppHeader() {
               );
             })}
           </nav>
+          <SuperAdminViewToggle variant="dark" />
           <UserMenu />
         </div>
       </div>
