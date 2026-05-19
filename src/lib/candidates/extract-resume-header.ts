@@ -143,14 +143,89 @@ function personNameScore(name: string): number {
   return score;
 }
 
-/** Scan first 8 lines for a person-name line (incl. single-word names). */
-export function extractDisplayNameFromResumeText(resumeText: string): string | null {
-  const lines = resumeLines(resumeText).filter(Boolean).slice(0, 8);
-  for (const line of lines) {
+const BAD_EXACT_DISPLAY_NAMES = new Set([
+  "profile summary",
+  "professional summary",
+  "summary",
+  "about",
+  "profile",
+  "curriculum vitae",
+  "cv",
+  "resume",
+  "candidate",
+]);
+
+function isSectionLikeDisplayName(name: string): boolean {
+  const cleaned = stripNamePunctuation(cleanDisplayName(name));
+  if (!cleaned) return true;
+  const lower = cleaned.toLowerCase();
+  if (BAD_EXACT_DISPLAY_NAMES.has(lower)) return true;
+  if (isBadDisplayName(cleaned)) return true;
+  if (SECTION_WORD.test(cleaned) && cleaned.split(/\s+/).length <= 4) {
+    return true;
+  }
+  return false;
+}
+
+function extractEmailFromResumeText(resumeText: string): string | null {
+  const match = resumeText.match(
+    /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+/,
+  );
+  return match?.[0]?.toLowerCase() ?? null;
+}
+
+function displayNameFromEmail(email: string): string | null {
+  const local = email.split("@")[0]?.trim();
+  if (!local || local.length < 2) return null;
+  const parts = local
+    .split(/[._-]+/)
+    .filter((p) => p.length >= 2 && !/^\d+$/.test(p));
+  if (parts.length === 0) {
+    const word = capitalizeWord(local.replace(/\d+/g, ""));
+    return word.length >= 2 ? word : null;
+  }
+  const words = parts.map(capitalizeWord).slice(0, 2);
+  const joined = stripNamePunctuation(words.join(" "));
+  return joined && !isSectionLikeDisplayName(joined) ? joined : null;
+}
+
+/** Deep scan lines 5–20 for a person-name line. */
+function deepScanPersonName(resumeText: string): string | null {
+  const lines = resumeLines(resumeText).filter(Boolean);
+  for (let i = 4; i < Math.min(20, lines.length); i++) {
+    const line = lines[i] ?? "";
     if (!isPersonNameLine(line)) continue;
-    return stripNamePunctuation(cleanDisplayName(firstSegment(line)));
+    const name = stripNamePunctuation(cleanDisplayName(firstSegment(line)));
+    if (!isSectionLikeDisplayName(name)) return name;
   }
   return null;
+}
+
+/** Scan first 15 lines for a person-name line (incl. single-word names). */
+export function extractDisplayNameFromResumeText(resumeText: string): string | null {
+  const lines = resumeLines(resumeText).filter(Boolean).slice(0, 15);
+  for (const line of lines) {
+    if (!isPersonNameLine(line)) continue;
+    const name = stripNamePunctuation(cleanDisplayName(firstSegment(line)));
+    if (isSectionLikeDisplayName(name)) continue;
+    return name;
+  }
+  return null;
+}
+
+function resolveAfterBadNameFallback(
+  resumeText: string,
+  candidate: string,
+): string {
+  if (!isSectionLikeDisplayName(candidate)) return candidate;
+  const deep = deepScanPersonName(resumeText);
+  if (deep) return deep;
+  const email = extractEmailFromResumeText(resumeText);
+  if (email) {
+    const fromEmail = displayNameFromEmail(email);
+    if (fromEmail) return fromEmail;
+  }
+  return candidate;
 }
 
 export function resolveDisplayNameFromResume(
@@ -162,23 +237,29 @@ export function resolveDisplayNameFromResume(
   );
   const fromResume = extractDisplayNameFromResumeText(resumeText);
 
+  let resolved: string;
+
   if (fromResume && !isBadDisplayName(fromResume)) {
     const resumeScore = personNameScore(fromResume);
     const filenameScore = personNameScore(fromFilename);
     if (resumeScore >= filenameScore || filenameScore < 8) {
-      return fromResume;
+      resolved = fromResume;
+    } else if (fromFilename && !isBadDisplayName(fromFilename)) {
+      resolved = fromFilename;
+    } else {
+      resolved = fromResume;
     }
+  } else if (fromFilename && !isBadDisplayName(fromFilename)) {
+    resolved = fromFilename;
+  } else if (fromResume && !isBadDisplayName(fromResume)) {
+    resolved = fromResume;
+  } else {
+    resolved =
+      stripNamePunctuation(cleanDisplayName(displayNameFromFilename(resumeFilename))) ||
+      "Candidate";
   }
 
-  if (fromFilename && !isBadDisplayName(fromFilename)) {
-    return fromFilename;
-  }
-
-  if (fromResume && !isBadDisplayName(fromResume)) {
-    return fromResume;
-  }
-
-  return stripNamePunctuation(cleanDisplayName(displayNameFromFilename(resumeFilename))) || "Candidate";
+  return resolveAfterBadNameFallback(resumeText, resolved);
 }
 
 function isSectionHeaderLine(line: string): boolean {

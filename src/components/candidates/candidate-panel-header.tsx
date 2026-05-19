@@ -1,5 +1,6 @@
 "use client";
 
+import { sanitizeDisplayTitle } from "@/lib/candidates/candidate-identity-display";
 import { initialsFromName } from "@/lib/candidates/list-filters";
 import {
   resolvePanelDisplayName,
@@ -22,9 +23,13 @@ function LinkedInBadge() {
 
 type CandidatePanelHeaderProps = {
   candidate: CandidateDetail;
+  roleBriefTitle?: string | null;
 };
 
-export function CandidatePanelHeader({ candidate }: CandidatePanelHeaderProps) {
+export function CandidatePanelHeader({
+  candidate,
+  roleBriefTitle,
+}: CandidatePanelHeaderProps) {
   const profile = candidate.signal_profile;
   const name = resolvePanelDisplayName(
     candidate.display_name,
@@ -36,9 +41,14 @@ export function CandidatePanelHeader({ candidate }: CandidatePanelHeaderProps) {
   );
   const initials = initialsFromName(name);
 
-  const titleLine = [profile.current_title, profile.current_company]
-    .filter(Boolean)
-    .join(" at ");
+  const displayTitle = sanitizeDisplayTitle(profile.current_title, {
+    roleBriefTitle,
+  });
+  const displayCompany = profile.current_company?.trim() || null;
+  const titleLine =
+    displayTitle && displayCompany
+      ? `${displayTitle} at ${displayCompany}`
+      : displayTitle || displayCompany || null;
 
   const email =
     candidate.application_email?.trim() ||

@@ -170,11 +170,11 @@ export function JobsPage() {
           }
         />
       ) : (
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {jobs.map((job) => (
             <li
               key={job.id}
-              className={`flex flex-col ${karta.card} ${karta.cardHover} p-5 ${
+              className={`flex h-full min-h-[280px] flex-col ${karta.card} ${karta.cardHover} p-5 ${
                 job.status === "active" ? karta.jobCardActive : ""
               }`}
             >
@@ -213,7 +213,7 @@ export function JobsPage() {
               </dl>
               <Link
                 href={`/jobs/${job.id}`}
-                className={`mt-6 inline-flex w-full justify-center ${karta.btnPrimary}`}
+                className={`mt-auto inline-flex w-full justify-center pt-6 ${karta.btnPrimary}`}
               >
                 Open Job
               </Link>

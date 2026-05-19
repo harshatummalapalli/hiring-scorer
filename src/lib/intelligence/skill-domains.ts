@@ -247,6 +247,35 @@ export function coreStrengthOverlapsRole(
   return candidateIds.some((id) => roleDomainIds.includes(id));
 }
 
+const NON_TECH_STRENGTH_PATTERN =
+  /\b(?:recruit(?:ing|ment)?|hr\b|human\s+resources|sales|marketing|finance|accounting|operations)\b/i;
+
+export function isSoftwareEngineeringRole(roleBrief: {
+  title?: string | null;
+  deal_breakers?: string[];
+  core_signals?: { skill: string; equivalents?: string[] }[];
+}): boolean {
+  const domains = primaryRoleDomains({
+    deal_breakers: roleBrief.deal_breakers ?? [],
+    core_signals: roleBrief.core_signals ?? [],
+  });
+  if (domains.length > 0) return true;
+  const title = roleBrief.title?.trim().toLowerCase() ?? "";
+  return /\b(?:engineer|developer|software|sre|devops|platform|backend|frontend|full[- ]?stack|data|ml|ai)\b/.test(
+    title,
+  );
+}
+
+export function hasNonTechnicalCoreStrength(profile: {
+  core_strength_primary: string | null;
+  core_strength_secondary: string | null;
+}): boolean {
+  const blob = [profile.core_strength_primary, profile.core_strength_secondary]
+    .filter(Boolean)
+    .join(" ");
+  return NON_TECH_STRENGTH_PATTERN.test(blob);
+}
+
 export function formatCoreStrengthLabel(
   primary: string | null | undefined,
   secondary: string | null | undefined,

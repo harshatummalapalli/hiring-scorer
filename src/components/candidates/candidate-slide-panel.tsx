@@ -439,7 +439,10 @@ export function CandidateSlidePanel({
                 </p>
               )}
 
-              <CandidatePanelHeader candidate={candidate} />
+              <CandidatePanelHeader
+                candidate={candidate}
+                roleBriefTitle={jobTitleLabel ?? displayRoleBrief?.title ?? null}
+              />
 
               <div className="space-y-2">
                   {contextJobId && jobTitleLabel ? (

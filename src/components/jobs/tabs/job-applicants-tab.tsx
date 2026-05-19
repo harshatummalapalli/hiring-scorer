@@ -6,7 +6,7 @@ import { NotAFitModal } from "@/components/candidates/not-a-fit-modal";
 import { ClickableCandidateName } from "@/components/candidates/clickable-candidate-name";
 import { CoreStrengthLabel } from "@/components/candidates/core-strength-label";
 import { DuplicateWarningModal } from "@/components/candidates/duplicate-warning-modal";
-import { CandidateListMeta } from "@/components/candidates/candidate-list-meta";
+import { CandidateIdentityCard } from "@/components/candidates/candidate-identity-card";
 import { useCandidatePanel } from "@/contexts/candidate-panel-context";
 import { formatTotalExperienceDisplay } from "@/lib/candidates/format-total-experience";
 import type { DuplicateMatch } from "@/lib/candidates/duplicate-messages";
@@ -502,18 +502,17 @@ export function JobApplicantsTab({
                       />
                     </td>
                     <td className="px-4 py-3">
-                      <ClickableCandidateName
+                      <CandidateIdentityCard
+                        displayName={c.display_name}
                         candidateId={c.id}
                         panelOptions={panelOptions}
-                      >
-                        {c.display_name}
-                      </ClickableCandidateName>
-                      <CandidateListMeta
                         currentTitle={c.current_title}
                         currentCompany={c.current_company}
-                        yearsExperience={
-                          c.signal_profile.total_years_experience
-                        }
+                        yearsExperience={c.signal_profile.total_years_experience}
+                        experienceYears={c.signal_profile.experience_years}
+                        location={c.signal_profile.location}
+                        scoredJobTitle={jobTitle}
+                        showMetaRow={false}
                       />
                       <CoreStrengthLabel
                         primary={c.signal_profile.core_strength_primary}

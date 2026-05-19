@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
-import { ClickableCandidateName } from "@/components/candidates/clickable-candidate-name";
+import { CandidateIdentityCard } from "@/components/candidates/candidate-identity-card";
+import { topSkillsForDisplay } from "@/lib/candidates/candidate-identity-display";
 import { karta } from "@/lib/brand/karta";
 import { fetchCandidatesForRecommendations } from "@/lib/recommendations/fetch-candidates-for-recommendations";
+import type { RecommendationCandidateInput } from "@/lib/recommendations/local-recommendation";
 import {
   countRecommendationsAbove,
   scoreAllTalentRecommendations,
@@ -23,6 +25,9 @@ export function TalentPoolRecommendations({
   refreshToken = 0,
 }: TalentPoolRecommendationsProps) {
   const [topFive, setTopFive] = useState<TalentRecommendation[]>([]);
+  const [candidateById, setCandidateById] = useState<
+    Map<string, RecommendationCandidateInput>
+  >(new Map());
   const [aboveThreshold, setAboveThreshold] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +43,7 @@ export function TalentPoolRecommendations({
     setError(null);
     try {
       const candidates = await fetchCandidatesForRecommendations();
+      setCandidateById(new Map(candidates.map((c) => [c.id, c])));
       const start = performance.now();
       const allScored = scoreAllTalentRecommendations(roleBrief, candidates);
       const elapsed = performance.now() - start;
@@ -118,33 +124,39 @@ export function TalentPoolRecommendations({
                 className="flex flex-col gap-2 rounded-md border border-[#F1F5F9] bg-[#F8FAFC] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <ClickableCandidateName
-                      candidateId={rec.candidateId}
-                      panelOptions={panelOptions}
-                      className="font-medium text-[#1E293B] hover:text-[#0D9488] hover:underline text-left"
-                    >
-                      {rec.candidateName}
-                    </ClickableCandidateName>
-                    <span className="text-xs text-[#64748B]">
-                      {rec.yearsExperience === "0" ||
-                      rec.yearsExperience === "—"
-                        ? "—"
-                        : `${rec.yearsExperience} yrs`}
-                    </span>
-                  </div>
-                  {rec.matchedSkills.length > 0 && (
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {rec.matchedSkills.slice(0, 2).map((skill) => (
-                        <span
-                          key={skill}
-                          className="inline-flex rounded-full border border-[#0D9488]/40 bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-[#0D9488]"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <CandidateIdentityCard
+                    displayName={rec.candidateName}
+                    candidateId={rec.candidateId}
+                    panelOptions={panelOptions}
+                    currentTitle={
+                      candidateById.get(rec.candidateId)?.signal_profile
+                        .current_title
+                    }
+                    currentCompany={
+                      candidateById.get(rec.candidateId)?.signal_profile
+                        .current_company
+                    }
+                    yearsExperience={
+                      candidateById.get(rec.candidateId)?.signal_profile
+                        .total_years_experience
+                    }
+                    experienceYears={
+                      candidateById.get(rec.candidateId)?.signal_profile
+                        .experience_years
+                    }
+                    location={
+                      candidateById.get(rec.candidateId)?.signal_profile.location
+                    }
+                    topSkills={topSkillsForDisplay(
+                      rec.matchedSkills,
+                      candidateById.get(rec.candidateId)?.signal_profile
+                        .skills_verified,
+                      candidateById.get(rec.candidateId)?.signal_profile
+                        .skills_listed_only,
+                      5,
+                    )}
+                    scoredJobTitle={roleBrief.title}
+                  />
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
                   <span className="text-sm font-semibold tabular-nums text-[#0D9488]">

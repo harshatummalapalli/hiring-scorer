@@ -10,6 +10,8 @@ type ScoreRolePickerModalProps = {
   preselectedJobId?: string | null;
   onClose: () => void;
   onConfirm: (jobId: string) => void;
+  title?: string;
+  confirmLabel?: string;
 };
 
 export function ScoreRolePickerModal({
@@ -17,6 +19,8 @@ export function ScoreRolePickerModal({
   preselectedJobId,
   onClose,
   onConfirm,
+  title = "Score this candidate against a role",
+  confirmLabel = "Score",
 }: ScoreRolePickerModalProps) {
   const [jobs, setJobs] = useState<JobListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,7 +65,7 @@ export function ScoreRolePickerModal({
           id="score-role-title"
           className="text-lg font-semibold text-[#1E293B]"
         >
-          Score this candidate against a role
+          {title}
         </h2>
         <p className="mt-1 text-sm text-[#64748B]">{candidateName}</p>
 
@@ -109,7 +113,7 @@ export function ScoreRolePickerModal({
             onClick={() => onConfirm(selectedId)}
             className={karta.btnPrimary}
           >
-            Score
+            {confirmLabel}
           </button>
         </div>
       </div>

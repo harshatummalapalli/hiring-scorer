@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Download, Loader2 } from "lucide-react";
-import { ClickableCandidateName } from "@/components/candidates/clickable-candidate-name";
+import { CandidateIdentityCard } from "@/components/candidates/candidate-identity-card";
 import { VerdictBadge } from "@/components/candidates/profile-shared";
 import type { Job } from "@/types/job";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -224,13 +224,13 @@ export function JobShortlistTab({
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id} className="border-b border-slate-100">
-                  <td className="px-4 py-3 font-medium">
-                    <ClickableCandidateName
+                  <td className="px-4 py-3">
+                    <CandidateIdentityCard
+                      displayName={row.candidate_name}
                       candidateId={row.candidate_id}
                       panelOptions={panelOptions}
-                    >
-                      {row.candidate_name}
-                    </ClickableCandidateName>
+                      showMetaRow={false}
+                    />
                   </td>
                   <td className="px-4 py-3 text-slate-600">{row.email ?? "—"}</td>
                   <td className="px-4 py-3 text-slate-600">{row.phone ?? "—"}</td>

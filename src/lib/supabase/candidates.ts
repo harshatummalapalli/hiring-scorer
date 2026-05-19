@@ -25,6 +25,7 @@ import {
   getCandidateHeaderName,
   getTalentPoolResumeLineFallback,
 } from "@/lib/candidates/profile-display";
+import { isBadDisplayName } from "@/lib/candidates/resolve-display-name";
 import { scoreToVerdict } from "@/lib/scoring/recruiter-card";
 import {
   assertCanCreateCandidate,
@@ -47,7 +48,12 @@ function rowToCandidate(row: Record<string, unknown>): CandidateRow {
     resumeText,
     filename,
   );
-  const display_name = getCandidateHeaderName(signal_profile);
+  const storedDisplayName = String(row.display_name ?? "").trim();
+  const profileName = getCandidateHeaderName(signal_profile);
+  const display_name =
+    storedDisplayName && !isBadDisplayName(storedDisplayName)
+      ? storedDisplayName
+      : profileName;
   return {
     id: String(row.id),
     display_name,

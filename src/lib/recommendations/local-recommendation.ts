@@ -4,6 +4,9 @@ import {
 } from "@/lib/candidates/signal-labels";
 import {
   coreStrengthOverlapsRole,
+  domainIdFromLabel,
+  hasNonTechnicalCoreStrength,
+  isSoftwareEngineeringRole,
   primaryRoleDomains,
 } from "@/lib/intelligence/skill-domains";
 import type { CandidateSignalProfile } from "@/types/candidate";
@@ -66,7 +69,7 @@ export function passesSeniorityFilter(
   const candRank = titleBandRank(candidateBand);
   if (jobRank == null || candRank == null) return true;
   const gap = Math.abs(candRank - jobRank);
-  if (gap >= 2) return false;
+  if (gap > 1) return false;
   if (
     (jobRank <= 2 && candRank >= 4) ||
     (jobRank >= 4 && candRank <= 1)
@@ -90,9 +93,38 @@ export function passesCoreStrengthFilter(
   profile: CandidateSignalProfile,
 ): boolean {
   const roleDomains = primaryRoleDomains(roleBrief);
-  if (roleDomains.length === 0) return true;
-  if (!profileHasSkillSignals(profile)) return true;
-  return coreStrengthOverlapsRole(profile, roleDomains);
+  const isEngRole = isSoftwareEngineeringRole(roleBrief);
+
+  if (isEngRole && hasNonTechnicalCoreStrength(profile)) {
+    if (
+      roleDomains.length === 0 ||
+      !coreStrengthOverlapsRole(profile, roleDomains)
+    ) {
+      return false;
+    }
+  }
+
+  if (roleDomains.length === 0) {
+    return !isEngRole || !hasNonTechnicalCoreStrength(profile);
+  }
+
+  if (!profileHasSkillSignals(profile)) {
+    return !isEngRole;
+  }
+
+  if (!coreStrengthOverlapsRole(profile, roleDomains)) {
+    return false;
+  }
+
+  if (isEngRole) {
+    const candidateIds = [
+      domainIdFromLabel(profile.core_strength_primary),
+      domainIdFromLabel(profile.core_strength_secondary),
+    ].filter(Boolean);
+    if (candidateIds.length === 0) return false;
+  }
+
+  return true;
 }
 
 const MAX_MUST_HAVE_POINTS = 60;

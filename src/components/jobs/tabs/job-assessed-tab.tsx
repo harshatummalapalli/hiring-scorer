@@ -2,10 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
-import { ClickableCandidateName } from "@/components/candidates/clickable-candidate-name";
+import { CandidateIdentityCard } from "@/components/candidates/candidate-identity-card";
 import { CoreStrengthLabel } from "@/components/candidates/core-strength-label";
-import { CandidateListMeta } from "@/components/candidates/candidate-list-meta";
-import { ShortlistReasonModal } from "@/components/candidates/shortlist-reason-modal";
 import { SkipReasonModal } from "@/components/candidates/skip-reason-modal";
 import { VerdictBadge } from "@/components/candidates/profile-shared";
 import { useCandidatePanel } from "@/contexts/candidate-panel-context";
@@ -26,13 +24,13 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
   const [candidates, setCandidates] = useState<CandidateListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [shortlistTarget, setShortlistTarget] = useState<CandidateListItem | null>(
-    null,
-  );
   const [skipTarget, setSkipTarget] = useState<CandidateListItem | null>(null);
   const [shortlisting, setShortlisting] = useState(false);
   const [skipping, setSkipping] = useState(false);
   const [pipelineIds, setPipelineIds] = useState<Set<string>>(new Set());
+  const [optimisticShortlistedIds, setOptimisticShortlistedIds] = useState<
+    Set<string>
+  >(new Set());
   const [skippedOpen, setSkippedOpen] = useState(false);
   const { openPanel } = useCandidatePanel();
 
@@ -59,6 +57,7 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
         }
       }
       setPipelineIds(ids);
+      setOptimisticShortlistedIds(new Set());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
     } finally {
@@ -72,7 +71,10 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
 
   const assessed = useMemo(() => {
     const scored = candidates.filter(
-      (c) => c.scoring_status === "scored",
+      (c) =>
+        c.scoring_status === "scored" &&
+        !pipelineIds.has(c.id) &&
+        !optimisticShortlistedIds.has(c.id),
     );
     return scored.sort((a, b) => {
       const sa = getScoreForRole(a, jobId);
@@ -84,15 +86,15 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
       if (orderA !== orderB) return orderA - orderB;
       return (sb?.overall_score ?? 0) - (sa?.overall_score ?? 0);
     });
-  }, [candidates, jobId]);
+  }, [candidates, jobId, pipelineIds, optimisticShortlistedIds]);
 
   const skipped = useMemo(
     () => candidates.filter((c) => c.scoring_status === "skipped"),
     [candidates],
   );
 
-  const confirmShortlist = async (reason: string | null) => {
-    if (!shortlistTarget) return;
+  const shortlistCandidate = async (target: CandidateListItem) => {
+    setOptimisticShortlistedIds((prev) => new Set(prev).add(target.id));
     setShortlisting(true);
     setError(null);
     try {
@@ -101,17 +103,23 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           role_brief_id: jobId,
-          candidate_ids: [shortlistTarget.id],
-          shortlist_reason: reason,
+          candidate_ids: [target.id],
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Shortlist failed");
-      setPipelineIds((prev) => new Set(prev).add(shortlistTarget.id));
-      setShortlistTarget(null);
-      await load();
+      setPipelineIds((prev) => new Set(prev).add(target.id));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Shortlist failed");
+      setOptimisticShortlistedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(target.id);
+        return next;
+      });
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Shortlist failed — candidate restored to Assessed",
+      );
     } finally {
       setShortlisting(false);
     }
@@ -180,7 +188,6 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
             <tbody>
               {assessed.map((c) => {
                 const score = getScoreForRole(c, jobId);
-                const inPipeline = pipelineIds.has(c.id);
                 return (
                   <tr
                     key={c.id}
@@ -191,16 +198,18 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
                     }}
                   >
                     <td className="px-4 py-3">
-                      <ClickableCandidateName
+                      <CandidateIdentityCard
+                        displayName={c.display_name}
                         candidateId={c.id}
                         panelOptions={panelOpts}
-                      >
-                        {c.display_name}
-                      </ClickableCandidateName>
-                      <CandidateListMeta
                         currentTitle={c.current_title}
                         currentCompany={c.current_company}
-                        showYears={false}
+                        yearsExperience={c.signal_profile.total_years_experience}
+                        experienceYears={c.signal_profile.experience_years}
+                        location={c.signal_profile.location}
+                        scoredJobTitle={roleBrief.title}
+                        showExperienceWhenNoTitle
+                        showMetaRow={false}
                       />
                       <CoreStrengthLabel
                         primary={c.signal_profile.core_strength_primary}
@@ -222,30 +231,24 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {inPipeline ? (
-                        <span className="text-xs font-medium text-[#64748B]">
-                          Shortlisted
-                        </span>
-                      ) : (
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            disabled={shortlisting || skipping}
-                            onClick={() => setShortlistTarget(c)}
-                            className={karta.btnPrimary}
-                          >
-                            Shortlist
-                          </button>
-                          <button
-                            type="button"
-                            disabled={shortlisting || skipping}
-                            onClick={() => setSkipTarget(c)}
-                            className={karta.btnSecondary}
-                          >
-                            Skip
-                          </button>
-                        </div>
-                      )}
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          disabled={shortlisting || skipping}
+                          onClick={() => void shortlistCandidate(c)}
+                          className={karta.btnPrimary}
+                        >
+                          Shortlist
+                        </button>
+                        <button
+                          type="button"
+                          disabled={shortlisting || skipping}
+                          onClick={() => setSkipTarget(c)}
+                          className={karta.btnSecondary}
+                        >
+                          Skip
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -297,14 +300,6 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
             </div>
           )}
         </section>
-      )}
-
-      {shortlistTarget && (
-        <ShortlistReasonModal
-          candidateName={shortlistTarget.display_name}
-          onClose={() => setShortlistTarget(null)}
-          onConfirm={(reason) => void confirmShortlist(reason)}
-        />
       )}
 
       {skipTarget && (

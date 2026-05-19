@@ -59,6 +59,7 @@ export async function PATCH(request: Request, { params }: Params) {
       profile.location = body.location;
     }
     if (body.experience_years != null && Number.isFinite(body.experience_years)) {
+      profile.experience_years = Math.round(body.experience_years);
       profile.total_years_experience = `${Math.round(body.experience_years)} years`;
     }
     if (body.linkedin_url !== undefined) {
@@ -84,6 +85,8 @@ export async function PATCH(request: Request, { params }: Params) {
       }
       profile.skills_verified = verified;
       profile.skills_listed_only = listedOnly;
+      (profile as CandidateSignalProfile & { top_skills?: string[] }).top_skills =
+        body.skills.slice(0, 10);
       const core = computeCoreStrengthFromVerifiedSkills(verified);
       profile.core_strength_primary = core.core_strength_primary;
       profile.core_strength_secondary = core.core_strength_secondary;

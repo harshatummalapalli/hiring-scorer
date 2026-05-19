@@ -4,11 +4,16 @@ import { useState } from "react";
 import { karta } from "@/lib/brand/karta";
 
 const REASONS = [
-  { id: "skills_mismatch", label: "Skills mismatch" },
-  { id: "seniority", label: "Seniority not right" },
-  { id: "domain", label: "Domain not relevant" },
-  { id: "overqualified", label: "Overqualified" },
-  { id: "must_haves", label: "Does not meet must-haves" },
+  { id: "missing_requirement", label: "Missing critical requirement" },
+  { id: "too_junior", label: "Experience too junior" },
+  { id: "too_senior", label: "Experience too senior" },
+  { id: "domain_mismatch", label: "Domain mismatch" },
+  { id: "weak_ownership", label: "Weak ownership evidence" },
+  { id: "vague_resume", label: "Resume too vague to assess" },
+  { id: "compensation", label: "Compensation mismatch" },
+  { id: "location", label: "Location or relocation constraints" },
+  { id: "better_pipeline", label: "Better candidates already in pipeline" },
+  { id: "not_relevant", label: "Not relevant to this role" },
   { id: "other", label: "Other" },
 ] as const;
 
@@ -47,7 +52,7 @@ export function SkipReasonModal({
           Why are you skipping this candidate?
         </h2>
         <p className="mt-1 text-sm text-[#64748B]">{candidateName}</p>
-        <fieldset className="mt-4 space-y-2">
+        <fieldset className="mt-4 max-h-72 space-y-2 overflow-y-auto">
           {REASONS.map((r) => (
             <label
               key={r.id}

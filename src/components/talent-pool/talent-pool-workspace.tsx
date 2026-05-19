@@ -2,9 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2, Search, Upload, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2, Search, Upload, X } from "lucide-react";
+import { CandidateIdentityCard } from "@/components/candidates/candidate-identity-card";
+import { CoreStrengthLabel } from "@/components/candidates/core-strength-label";
+import { ScoreRolePickerModal } from "@/components/candidates/score-role-picker-modal";
+import { VerdictBadge } from "@/components/candidates/profile-shared";
+import {
+  ResumeUploadProgress,
+  type ResumeUploadFileItem,
+} from "@/components/jobs/resume-upload-progress";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useCandidatePanel } from "@/contexts/candidate-panel-context";
-import { karta } from "@/lib/brand/karta";
+import { useActiveRoleBrief } from "@/contexts/active-role-brief-context";
+import { topSkillsForDisplay } from "@/lib/candidates/candidate-identity-display";
 import {
   candidateHasGithub,
   filterCandidates,
@@ -12,27 +22,47 @@ import {
   matchesSourceFilter,
   sortCandidates,
 } from "@/lib/candidates/list-filters";
-import { CandidateListMeta } from "@/components/candidates/candidate-list-meta";
-import { CoreStrengthLabel } from "@/components/candidates/core-strength-label";
-import { EmptyState } from "@/components/ui/empty-state";
-import { formatTotalExperienceDisplay } from "@/lib/candidates/format-total-experience";
-import { formatKartaDate } from "@/lib/dates/format-karta-date";
-import { ScoreRolePickerModal } from "@/components/candidates/score-role-picker-modal";
-import { useScoreCandidate } from "@/lib/candidates/use-score-candidate";
-import { useActiveRoleBrief } from "@/contexts/active-role-brief-context";
-import { VerdictBadge } from "@/components/candidates/profile-shared";
 import { getScoreForRole } from "@/lib/candidates/active-role-score";
 import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
+import { karta } from "@/lib/brand/karta";
 import type {
   CandidateCoreStrengthFilter,
   CandidateExperienceFilter,
   CandidateListItem,
+  CandidateSignalProfile,
   CandidateSortOption,
   CandidateSourceFilter,
   CandidateVerdictFilter,
 } from "@/types/candidate";
 import { sourceBadgeLabel } from "@/types/job";
+
+type UploadUiState =
+  | { phase: "idle" }
+  | { phase: "processing"; files: ResumeUploadFileItem[] }
+  | { phase: "success"; files: ResumeUploadFileItem[]; count: number };
+
+type PendingUpload = {
+  resumeText: string;
+  resumeFilename: string;
+  resumeFile: File;
+};
+
+function profileTopSkills(profile: CandidateSignalProfile): string[] {
+  const extended = profile as CandidateSignalProfile & { top_skills?: string[] };
+  return topSkillsForDisplay(
+    extended.top_skills,
+    profile.skills_verified,
+    profile.skills_listed_only,
+  );
+}
+
+function uniqueScoredJobTitles(candidate: CandidateListItem): string[] {
+  const titles = candidate.role_scores
+    .map((s) => s.role_brief_title?.trim())
+    .filter((t): t is string => Boolean(t));
+  return [...new Set(titles)];
+}
 
 export function TalentPoolWorkspace() {
   const router = useRouter();
@@ -47,12 +77,22 @@ export function TalentPoolWorkspace() {
   const [coreStrength, setCoreStrength] =
     useState<CandidateCoreStrengthFilter>("all");
   const [hasGithubOnly, setHasGithubOnly] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [unscoredOpen, setUnscoredOpen] = useState(false);
+  const [evaluateOpen, setEvaluateOpen] = useState(false);
+  const [batchScoring, setBatchScoring] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
+  const [uploadUi, setUploadUi] = useState<UploadUiState>({ phase: "idle" });
   const { openPanel, candidateId: panelCandidateId, refreshPanel } =
     useCandidatePanel();
   const { activeBriefId } = useActiveRoleBrief();
   const [showUpload, setShowUpload] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const uploading = uploadUi.phase === "processing";
 
   const loadCandidates = useCallback(async () => {
     setLoading(true);
@@ -67,16 +107,6 @@ export function TalentPoolWorkspace() {
       setLoading(false);
     }
   }, []);
-
-  const {
-    scoring,
-    pickerOpen,
-    pickerCandidate,
-    preselectedJobId,
-    requestScoreWithDefaultJob,
-    confirmPicker,
-    closePicker,
-  } = useScoreCandidate(() => void loadCandidates());
 
   const openFromUrl = searchParams.get("open");
 
@@ -103,10 +133,6 @@ export function TalentPoolWorkspace() {
     void loadCandidates();
   }, [loadCandidates]);
 
-  const openTalentPoolPanel = (id: string) => {
-    openPanel(id);
-  };
-
   const filtered = useMemo(() => {
     const base = filterCandidates(candidates, {
       search,
@@ -132,33 +158,126 @@ export function TalentPoolWorkspace() {
     hasGithubOnly,
   ]);
 
+  const scoredFiltered = useMemo(
+    () => filtered.filter((c) => c.role_scores.length > 0),
+    [filtered],
+  );
+
+  const unscoredFiltered = useMemo(
+    () => filtered.filter((c) => c.role_scores.length === 0),
+    [filtered],
+  );
+
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const uploadOne = async (pending: PendingUpload) => {
+    const res = await submitCandidateWithResume({
+      ...pending,
+      source: "uploaded",
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error ?? "Upload failed");
+  };
+
   const handleFiles = async (files: FileList | null) => {
     if (!files?.length) return;
-    setUploading(true);
+    const fileList = Array.from(files);
     setError(null);
+
+    const initial: ResumeUploadFileItem[] = fileList.map((f) => ({
+      name: f.name,
+      status: "pending",
+    }));
+    setUploadUi({ phase: "processing", files: initial });
+
+    let successCount = 0;
+    const nextFiles = [...initial];
+
     try {
-      for (const file of Array.from(files)) {
-        const resumeText = await parseResumeFile(file);
-        const res = await submitCandidateWithResume({
-          resumeText,
-          resumeFilename: file.name,
-          resumeFile: file,
-          source: "uploaded",
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error ?? "Upload failed");
+      for (let i = 0; i < fileList.length; i++) {
+        const file = fileList[i];
+        nextFiles[i] = { ...nextFiles[i], status: "processing" };
+        setUploadUi({ phase: "processing", files: [...nextFiles] });
+
+        try {
+          const resumeText = await parseResumeFile(file);
+          await uploadOne({
+            resumeText,
+            resumeFilename: file.name,
+            resumeFile: file,
+          });
+          nextFiles[i] = { name: file.name, status: "done" };
+          successCount += 1;
+        } catch (err) {
+          nextFiles[i] = {
+            name: file.name,
+            status: "error",
+            error: err instanceof Error ? err.message : "Upload failed",
+          };
+        }
+        setUploadUi({ phase: "processing", files: [...nextFiles] });
       }
-      setShowUpload(false);
-      await loadCandidates();
+
+      if (successCount > 0) {
+        await loadCandidates();
+        setUploadUi({
+          phase: "success",
+          files: nextFiles,
+          count: successCount,
+        });
+        window.setTimeout(() => setUploadUi({ phase: "idle" }), 5000);
+      } else {
+        setError("No resumes could be processed. Check the files and try again.");
+        setUploadUi({ phase: "idle" });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setUploading(false);
+      setUploadUi({ phase: "idle" });
     }
   };
 
+  const evaluateSelected = async (jobId: string) => {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    setEvaluateOpen(false);
+    setBatchScoring(true);
+    setBatchProgress({ current: 0, total: ids.length });
+    setError(null);
+    try {
+      for (let i = 0; i < ids.length; i++) {
+        setBatchProgress({ current: i + 1, total: ids.length });
+        const res = await fetch(`/api/candidates/${ids[i]}/score`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ roleBriefId: jobId }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "Scoring failed");
+      }
+      setSelected(new Set());
+      await loadCandidates();
+      if (panelCandidateId && ids.includes(panelCandidateId)) {
+        refreshPanel();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Batch scoring failed");
+    } finally {
+      setBatchScoring(false);
+      setBatchProgress(null);
+    }
+  };
+
+  const selectedCount = selected.size;
+
   return (
-    <div className="pb-12">
+    <div className={`pb-12 ${selectedCount > 0 ? "pb-24" : ""}`}>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className={karta.pageTitle}>Talent Pool</h1>
@@ -193,11 +312,29 @@ export function TalentPoolWorkspace() {
               multiple
               className="sr-only"
               disabled={uploading}
-              onChange={(e) => void handleFiles(e.target.files)}
+              onChange={(e) => {
+                void handleFiles(e.target.files);
+                e.target.value = "";
+              }}
             />
             Drop resumes or click to browse
           </label>
+          {uploadUi.phase !== "idle" && (
+            <ResumeUploadProgress
+              files={uploadUi.files}
+              phase={uploadUi.phase}
+              successCount={
+                uploadUi.phase === "success" ? uploadUi.count : undefined
+              }
+            />
+          )}
         </div>
+      )}
+
+      {batchProgress && (
+        <p className="mb-4 text-sm font-medium text-[#0D9488]" role="status">
+          Scoring {batchProgress.current} of {batchProgress.total}…
+        </p>
       )}
 
       {error && (
@@ -320,116 +457,214 @@ export function TalentPoolWorkspace() {
           subtitle="Try adjusting your search or filters to find candidates."
         />
       ) : (
-        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {filtered.map((c) => {
-            const jobBadges = c.role_scores
-              .filter((s) => s.role_brief_title)
-              .slice(0, 4);
-            const years = formatTotalExperienceDisplay(
-              c.signal_profile.total_years_experience,
-            );
-            const yearsLabel =
-              years && years !== "—" ? years : null;
-            return (
-              <li key={c.id}>
-                <button
-                  type="button"
-                  onClick={() => openTalentPoolPanel(c.id)}
-                  className={`w-full text-left ${karta.cardClickable} p-5`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-[16px] font-semibold leading-[1.2] text-[#1E293B]">
-                      {c.display_name}
-                    </span>
-                    <span
-                      className={`shrink-0 rounded-full bg-slate-100 px-2 py-0.5 ${karta.badge} text-slate-700`}
-                    >
-                      {sourceBadgeLabel(c.source)}
-                    </span>
-                  </div>
-                  <CoreStrengthLabel
-                    primary={c.signal_profile.core_strength_primary}
-                    secondary={c.signal_profile.core_strength_secondary}
-                    prefix=""
-                    className="mt-1.5 text-xs font-medium text-[#0D9488]"
-                  />
-                  <CandidateListMeta
-                    currentTitle={c.current_title}
-                    currentCompany={c.current_company}
-                    signalProfile={c.signal_profile}
-                    resumeSubtitleFallback={c.resume_subtitle_fallback}
-                    showYears={false}
-                  />
-                  <p className="mt-2 text-[13px] text-[#94A3B8]">
-                    {[
-                      yearsLabel,
-                      `Added ${formatKartaDate(c.applied_at ?? c.created_at)}`,
-                    ]
-                      .filter((line) => line && line !== "Added —")
-                      .join(" · ")}
-                  </p>
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {(() => {
-                      const roleScore = activeBriefId
-                        ? getScoreForRole(c, activeBriefId)
-                        : c.role_scores[0];
-                      if (roleScore) {
-                        return (
-                          <VerdictBadge
-                            verdict={roleScore.verdict}
-                            score={roleScore.overall_score}
-                            compact
+        <div className="space-y-6">
+          {scoredFiltered.length > 0 && (
+            <div className={`${karta.card} overflow-hidden`}>
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className={karta.tableHeadRow}>
+                    <th className="w-10 px-3 py-3" aria-label="Select" />
+                    <th className="px-4 py-3">Name</th>
+                    <th className="px-4 py-3">Core Strength</th>
+                    <th className="px-4 py-3">Experience</th>
+                    <th className="px-4 py-3">Last Scored Job</th>
+                    <th className="px-4 py-3">Verdict</th>
+                    <th className="px-4 py-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scoredFiltered.map((c) => {
+                    const roleScore = activeBriefId
+                      ? getScoreForRole(c, activeBriefId)
+                      : c.role_scores[0];
+                    const jobTitles = uniqueScoredJobTitles(c);
+                    return (
+                      <tr
+                        key={c.id}
+                        className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50"
+                        onClick={(e) => {
+                          if (
+                            (e.target as HTMLElement).closest(
+                              "input,button,a",
+                            )
+                          ) {
+                            return;
+                          }
+                          openPanel(c.id);
+                        }}
+                      >
+                        <td className="px-3 py-3">
+                          <input
+                            type="checkbox"
+                            checked={selected.has(c.id)}
+                            onChange={() => toggleOne(c.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label={`Select ${c.display_name}`}
                           />
-                        );
-                      }
-                      return (
-                        <button
-                          type="button"
-                          disabled={scoring}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            requestScoreWithDefaultJob(
-                              c.id,
-                              c.display_name,
-                              activeBriefId,
-                            );
-                          }}
-                          className={`${karta.btnPrimary} px-3 py-1 text-xs`}
+                        </td>
+                        <td className="px-4 py-3">
+                          <CandidateIdentityCard
+                            displayName={c.display_name}
+                            candidateId={c.id}
+                            currentTitle={c.current_title}
+                            currentCompany={c.current_company}
+                            yearsExperience={
+                              c.signal_profile.total_years_experience
+                            }
+                            experienceYears={c.signal_profile.experience_years}
+                            location={c.signal_profile.location}
+                            topSkills={profileTopSkills(c.signal_profile)}
+                            sourceLabel={sourceBadgeLabel(c.source)}
+                          />
+                        </td>
+                        <td className="px-4 py-3 align-top">
+                          <CoreStrengthLabel
+                            primary={c.signal_profile.core_strength_primary}
+                            secondary={c.signal_profile.core_strength_secondary}
+                            prefix=""
+                            className="text-xs font-medium text-[#0D9488]"
+                          />
+                        </td>
+                        <td className="px-4 py-3 align-top text-[#64748B]">
+                          {c.signal_profile.total_years_experience?.trim() ||
+                            "—"}
+                        </td>
+                        <td className="px-4 py-3 align-top">
+                          <div className="flex flex-wrap gap-1">
+                            {jobTitles.map((title) => (
+                              <span
+                                key={title}
+                                className="rounded-full bg-[#0D9488]/10 px-2 py-0.5 text-[11px] font-medium text-[#0D9488]"
+                              >
+                                {title}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 align-top">
+                          {roleScore ? (
+                            <VerdictBadge
+                              verdict={roleScore.verdict}
+                              score={roleScore.overall_score}
+                              compact
+                            />
+                          ) : (
+                            <span className="text-xs text-[#94A3B8]">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right align-top">
+                          <button
+                            type="button"
+                            className="text-sm font-medium text-[#0D9488] hover:underline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openPanel(c.id);
+                            }}
+                          >
+                            View
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {unscoredFiltered.length > 0 && (
+            <section className={`${karta.card} overflow-hidden`}>
+              <button
+                type="button"
+                onClick={() => setUnscoredOpen((o) => !o)}
+                className="flex w-full items-center justify-between px-5 py-4 text-left hover:bg-slate-50"
+              >
+                <span className="text-base font-semibold text-slate-900">
+                  Unscored Candidates ({unscoredFiltered.length})
+                </span>
+                {unscoredOpen ? (
+                  <ChevronDown className="h-5 w-5 text-slate-500" />
+                ) : (
+                  <ChevronRight className="h-5 w-5 text-slate-500" />
+                )}
+              </button>
+              {unscoredOpen && (
+                <div className="border-t border-slate-200">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className={karta.tableHeadRow}>
+                        <th className="w-10 px-3 py-3" aria-label="Select" />
+                        <th className="px-4 py-3">Name</th>
+                        <th className="px-4 py-3">Source</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {unscoredFiltered.map((c) => (
+                        <tr
+                          key={c.id}
+                          className="border-b border-slate-100 last:border-0 hover:bg-slate-50"
                         >
-                          Score Now
-                        </button>
-                      );
-                    })()}
-                  </div>
-                  {jobBadges.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-1">
-                      {jobBadges.map((s) => (
-                        <span
-                          key={s.id}
-                          className={`rounded-full bg-[#0D9488]/10 px-2 py-0.5 ${karta.badge} text-[#0D9488]`}
-                        >
-                          {s.role_brief_title}
-                        </span>
+                          <td className="px-3 py-3">
+                            <input
+                              type="checkbox"
+                              checked={selected.has(c.id)}
+                              onChange={() => toggleOne(c.id)}
+                              aria-label={`Select ${c.display_name}`}
+                            />
+                          </td>
+                          <td className="px-4 py-3">
+                            <CandidateIdentityCard
+                              displayName={c.display_name}
+                              candidateId={c.id}
+                              currentTitle={c.current_title}
+                              currentCompany={c.current_company}
+                              yearsExperience={
+                                c.signal_profile.total_years_experience
+                              }
+                              experienceYears={c.signal_profile.experience_years}
+                              location={c.signal_profile.location}
+                              topSkills={profileTopSkills(c.signal_profile)}
+                            />
+                          </td>
+                          <td className="px-4 py-3 text-[#64748B]">
+                            {sourceBadgeLabel(c.source)}
+                          </td>
+                        </tr>
                       ))}
-                    </div>
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
+        </div>
       )}
 
-      {pickerOpen && pickerCandidate && (
+      {selectedCount > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#E2E8F0] bg-white px-4 py-3 shadow-[0_-4px_24px_rgba(0,0,0,0.08)]">
+          <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
+            <p className="text-sm font-medium text-[#334155]">
+              {selectedCount} candidate{selectedCount === 1 ? "" : "s"} selected
+            </p>
+            <button
+              type="button"
+              disabled={batchScoring}
+              onClick={() => setEvaluateOpen(true)}
+              className={karta.btnPrimary}
+            >
+              Evaluate for Role
+            </button>
+          </div>
+        </div>
+      )}
+
+      {evaluateOpen && (
         <ScoreRolePickerModal
-          candidateName={pickerCandidate.name}
-          preselectedJobId={preselectedJobId}
-          onClose={closePicker}
-          onConfirm={(jobId) => {
-            void confirmPicker(jobId).then(() => {
-              if (panelCandidateId === pickerCandidate.id) refreshPanel();
-            });
-          }}
+          candidateName={`${selectedCount} selected candidate${selectedCount === 1 ? "" : "s"}`}
+          title="Evaluate candidates against a role"
+          confirmLabel="Evaluate"
+          onClose={() => setEvaluateOpen(false)}
+          onConfirm={(jobId) => void evaluateSelected(jobId)}
         />
       )}
     </div>
