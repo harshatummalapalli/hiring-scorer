@@ -16,7 +16,17 @@ const GENERIC_DISPLAY_NAMES = new Set([
   "sample",
   "demo",
   "unknown",
+  "profile summary",
+  "professional summary",
+  "summary",
+  "about",
+  "about me",
+  "curriculum vitae",
+  "unknown candidate",
 ]);
+
+const SECTION_NAME_PHRASE =
+  /\b(?:profile\s+summary|professional\s+summary|work\s+experience|technical\s+skills|personal\s+details|career\s+objective)\b/i;
 
 const BAD_NAME_PATTERNS =
   /^(?:candidate|profile|resume|cv|document|file|upload|test|sample|demo|mid-level engineer|not stated|unknown)$/i;
@@ -172,15 +182,25 @@ export function sanitizeDisplayNameArtifacts(name: string): string {
 
 /** True when a stored/display name should not be shown to recruiters. */
 export function isBadDisplayName(name: string | null | undefined): boolean {
-  const n = cleanDisplayName(name?.trim() ?? "");
+  const raw = name?.trim() ?? "";
+  const lower = raw.toLowerCase();
+  if (GENERIC_DISPLAY_NAMES.has(lower)) return true;
+  if (SECTION_NAME_PHRASE.test(lower)) return true;
+  if (/\bresume\b/i.test(lower) && lower.split(/\s+/).length <= 4) return true;
+  if (/^projects?\s+/i.test(lower)) return true;
+
+  const n = cleanDisplayName(raw);
   if (!n || n.length < 2) return true;
   if (BAD_NAME_PATTERNS.test(n)) return true;
+  if (GENERIC_DISPLAY_NAMES.has(n.toLowerCase())) return true;
+  if (SECTION_NAME_PHRASE.test(n)) return true;
   if (/\[REDACTED/i.test(n)) return true;
   if (/@/.test(n) || /\d{2,}/.test(n)) return true;
 
   const words = n.split(/\s+/).filter(Boolean);
   if (words.length > 4) return true;
   if (words.some((w) => COMPANY_WORD.test(w))) return true;
+  if (/^projects?$/i.test(words[0] ?? "")) return true;
 
   return false;
 }

@@ -1,7 +1,12 @@
 import {
   extractCurrentTitleAndCompany,
   polishTitleAndCompany,
+  resolveDisplayNameFromResume,
 } from "./extract-resume-header";
+import {
+  sanitizeDisplayCompany,
+  sanitizeDisplayTitle,
+} from "./candidate-identity-display";
 import { extractResumeLinks, isValidLinkedInUrl } from "./parse-resume-links";
 import {
   cleanDisplayName,
@@ -35,7 +40,7 @@ const GENERIC_FILENAME_WORDS = new Set([
 ]);
 
 const SECTION_HEADERS =
-  /^(?:summary|experience|education|skills|contact|work\s+history|employment|projects|certifications|references|about|career|professional|qualifications|highlights|expertise|competencies|activities|interests|languages|awards|achievements|objective|profile)$/i;
+  /^(?:summary|experience|education|skills|contact|work\s+history|employment|projects?|certifications|references|about|career|professional|qualifications|highlights|expertise|competencies|activities|interests|languages|awards|achievements|objective|profile)(?:\s+\w+)?$/i;
 
 const TITLE_WORD =
   /\b(?:engineer|engineering|manager|management|director|analyst|analysis|consultant|consulting|developer|development|architect|architecture|lead|senior|sr|junior|jr|staff|principal|head|vp|vice|president|scientist|designer|design|specialist|administrator|coordinator|associate|executive|programmer|tester|intern|trainee|founder|recruiter|recruitment|partner|advisor|strategist|operations|marketing|sales|finance|human\s+resources|talent|acquisition|business|product|project|program|account|client|customer|technologist|professional|data|ml|ai|software|hardware|devops|sre|qa)\b/i;
@@ -178,7 +183,9 @@ function isNameCandidateLine(line: string): boolean {
   if (/\d/.test(t)) return false;
   if (/@/.test(t)) return false;
   if (/https?:\/\//i.test(t)) return false;
-  if (SECTION_HEADERS.test(t.replace(/[#*_]/g, "").trim())) return false;
+  const stripped = t.replace(/[#*_]/g, "").trim();
+  if (SECTION_HEADERS.test(stripped)) return false;
+  if (/^projects?\s+[A-Za-z]/i.test(stripped)) return false;
 
   const words = t.split(/\s+/).filter(Boolean);
   if (words.length < 2 || words.length > 4) return false;
@@ -253,6 +260,9 @@ export function extractFullNameFromResume(
   resumeFilename: string,
   extractedEmail: string | null,
 ): string {
+  const resolved = resolveDisplayNameFromResume(resumeText, resumeFilename);
+  if (resolved && !isBadDisplayName(resolved)) return resolved;
+
   const lines = resumeLines(resumeText);
 
   const s1 = extractNameStrategyOne(lines);
@@ -272,7 +282,7 @@ export function extractFullNameFromResume(
     if (fromFile && !isBadDisplayName(fromFile)) return fromFile;
   }
 
-  return "Unknown Candidate";
+  return resolved && !isBadDisplayName(resolved) ? resolved : "Unknown Candidate";
 }
 
 function parseExperienceYears(resumeText: string): number | null {
@@ -315,6 +325,8 @@ export function extractCandidateFields(
 
   const { current_title, current_company } = extractCurrentTitleAndCompany(resumeText);
   const polished = polishTitleAndCompany(current_title, current_company);
+  const safeTitle = sanitizeDisplayTitle(polished.current_title);
+  const safeCompany = sanitizeDisplayCompany(polished.current_company);
 
   const location = extractLocationFromResumeText(resumeText);
   const experience_years = parseExperienceYears(resumeText);
@@ -329,8 +341,8 @@ export function extractCandidateFields(
     extracted_phone,
     linkedin_url,
     location,
-    current_title: polished.current_title,
-    current_company: polished.current_company,
+    current_title: safeTitle,
+    current_company: safeCompany,
     experience_years,
     total_years_experience,
   };

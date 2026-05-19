@@ -21,10 +21,12 @@ import type {
   CandidateStage,
 } from "@/types/candidate";
 import { normalizeSignalProfile } from "@/lib/candidates/build-signal-profile";
+import { getCandidateHeaderName } from "@/lib/candidates/profile-display";
 import {
-  getCandidateHeaderName,
-  getTalentPoolResumeLineFallback,
-} from "@/lib/candidates/profile-display";
+  sanitizeDisplayCompany,
+  sanitizeDisplayTitle,
+} from "@/lib/candidates/candidate-identity-display";
+import { resolveDisplayNameFromResume } from "@/lib/candidates/extract-resume-header";
 import { isBadDisplayName } from "@/lib/candidates/resolve-display-name";
 import { scoreToVerdict } from "@/lib/scoring/recruiter-card";
 import {
@@ -50,18 +52,35 @@ function rowToCandidate(row: Record<string, unknown>): CandidateRow {
   );
   const storedDisplayName = String(row.display_name ?? "").trim();
   const profileName = getCandidateHeaderName(signal_profile);
-  const display_name =
+  let display_name =
     storedDisplayName && !isBadDisplayName(storedDisplayName)
       ? storedDisplayName
-      : profileName;
+      : resolveDisplayNameFromResume(resumeText, filename);
+  if (isBadDisplayName(display_name)) {
+    display_name = profileName;
+  }
+  if (isBadDisplayName(display_name)) {
+    display_name = "Unknown Candidate";
+  }
+
+  const current_title = sanitizeDisplayTitle(signal_profile.current_title);
+  const current_company = sanitizeDisplayCompany(signal_profile.current_company);
+  const normalizedProfile = {
+    ...signal_profile,
+    display_name,
+    current_title,
+    current_company,
+    most_recent_title: current_title ?? signal_profile.most_recent_title ?? "",
+  };
+
   return {
     id: String(row.id),
     display_name,
-    current_title: signal_profile.current_title ?? null,
-    current_company: signal_profile.current_company ?? null,
+    current_title,
+    current_company,
     resume_filename: row.resume_filename != null ? String(row.resume_filename) : null,
     resume_text: resumeText,
-    signal_profile: { ...signal_profile, display_name },
+    signal_profile: normalizedProfile,
     stage: (row.stage as CandidateStage) ?? "new",
     tag: row.tag != null ? String(row.tag) : null,
     activity: Array.isArray(row.activity)
@@ -236,13 +255,11 @@ function attachScoresToCandidate(
       : 0;
 
   const { resume_text, ...rest } = candidate;
-  const hasTitle =
-    Boolean(candidate.current_title?.trim()) ||
-    Boolean(candidate.signal_profile?.current_title?.trim());
-  const resume_subtitle_fallback =
-    !hasTitle && resume_text?.trim()
-      ? getTalentPoolResumeLineFallback(resume_text)
-      : null;
+  const hasTitle = Boolean(
+    sanitizeDisplayTitle(candidate.signal_profile?.current_title) ||
+      sanitizeDisplayTitle(candidate.current_title),
+  );
+  const resume_subtitle_fallback = null;
 
   return {
     ...rest,

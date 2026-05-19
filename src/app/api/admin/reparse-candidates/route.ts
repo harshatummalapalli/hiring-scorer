@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdmin } from "@/lib/admin/auth";
 import { classifyApplicantPrefilter } from "@/lib/jobs/applicant-prefilter";
+import {
+  sanitizeDisplayCompany,
+  sanitizeDisplayTitle,
+} from "@/lib/candidates/candidate-identity-display";
 import { reparseCandidateRecord } from "@/lib/candidates/reparse-candidate-record";
 import { getJobById } from "@/lib/supabase/jobs";
 import { listCandidates, updateCandidate } from "@/lib/supabase/candidates";
@@ -32,10 +36,17 @@ export async function POST(request: Request) {
     for (const row of batch) {
       const previousName = row.display_name?.trim() ?? "";
       const update = await reparseCandidateRecord(row);
+      const prevTitle = sanitizeDisplayTitle(row.signal_profile?.current_title);
+      const prevCompany = sanitizeDisplayCompany(row.signal_profile?.current_company);
+      const nextTitle = sanitizeDisplayTitle(update.signal_profile.current_title);
+      const nextCompany = sanitizeDisplayCompany(update.signal_profile.current_company);
+
       const nameChanged =
         update.display_name.trim() !== previousName ||
         update.signal_profile.display_name?.trim() !==
-          row.signal_profile?.display_name?.trim();
+          row.signal_profile?.display_name?.trim() ||
+        prevTitle !== nextTitle ||
+        prevCompany !== nextCompany;
 
       const patch: Record<string, unknown> = {
         display_name: update.display_name,

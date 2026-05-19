@@ -22,7 +22,7 @@ import {
   matchesSourceFilter,
   sortCandidates,
 } from "@/lib/candidates/list-filters";
-import { getScoreForRole } from "@/lib/candidates/active-role-score";
+import { getPrimaryRoleScore } from "@/lib/candidates/active-role-score";
 import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
 import { karta } from "@/lib/brand/karta";
@@ -474,9 +474,7 @@ export function TalentPoolWorkspace() {
                 </thead>
                 <tbody>
                   {scoredFiltered.map((c) => {
-                    const roleScore = activeBriefId
-                      ? getScoreForRole(c, activeBriefId)
-                      : c.role_scores[0];
+                    const roleScore = getPrimaryRoleScore(c, activeBriefId);
                     const jobTitles = uniqueScoredJobTitles(c);
                     return (
                       <tr

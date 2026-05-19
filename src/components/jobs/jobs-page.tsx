@@ -213,7 +213,7 @@ export function JobsPage() {
               </dl>
               <Link
                 href={`/jobs/${job.id}`}
-                className={`mt-auto inline-flex w-full justify-center pt-6 ${karta.btnPrimary}`}
+                className="mt-auto block w-full rounded-lg border border-[#0D9488] bg-white py-2.5 text-center text-sm font-semibold text-[#0D9488] transition hover:bg-[#F0FDFA]"
               >
                 Open Job
               </Link>

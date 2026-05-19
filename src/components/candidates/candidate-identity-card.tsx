@@ -5,6 +5,7 @@ import { ClickableCandidateName } from "@/components/candidates/clickable-candid
 import type { OpenCandidatePanelOptions } from "@/contexts/candidate-panel-context";
 import {
   formatIdentityExperienceYears,
+  sanitizeDisplayCompany,
   sanitizeDisplayTitle,
   topSkillsForDisplay,
 } from "@/lib/candidates/candidate-identity-display";
@@ -47,7 +48,7 @@ export function CandidateIdentityCard({
   const title = sanitizeDisplayTitle(currentTitle, {
     roleBriefTitle: scoredJobTitle,
   });
-  const company = currentCompany?.trim() || null;
+  const company = sanitizeDisplayCompany(currentCompany);
 
   const roleLine =
     title && company
