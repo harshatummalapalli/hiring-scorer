@@ -70,13 +70,17 @@ def classify_document(
         layout = "high"
         warnings_quality = min(warnings_quality, 0.5)
 
-    if image_ratio > 0.4 or (page_count > 0 and len(text) / max(page_count, 1) < 120):
+    # Low chars/page is normal for TXT/DOCX; only flag sparse PDFs as image-heavy.
+    if ext == ".pdf" and (
+        image_ratio > 0.4
+        or (page_count > 0 and len(text) / max(page_count, 1) < 120)
+    ):
         doc_type = "image_heavy"
         needs_ocr = True
         layout = "high"
         warnings_quality = min(warnings_quality, 0.4)
 
-    if text.count("|") > 25 or text.count("\t") > 40:
+    if ext == ".pdf" and (text.count("|") > 25 or text.count("\t") > 40):
         doc_type = "table_heavy"
         layout = "high"
         warnings_quality = min(warnings_quality, 0.55)
