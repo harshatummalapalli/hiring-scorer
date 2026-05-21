@@ -1,3 +1,4 @@
+import { computeBriefContentHash } from "@/lib/role-brief/jd-cache";
 import { estimatedScoreCostUsd } from "@/lib/scoring/cost";
 import { ensureIntegerOverallScore } from "@/lib/saved-scores/normalize-score";
 import type { CandidateScoreResult } from "@/types/score";
@@ -20,6 +21,13 @@ function minimalRoleBrief(
 ): RoleBrief {
   return {
     ...partial,
+    job_location: null,
+    seniority_override: null,
+    department: null,
+    client_company_name: null,
+    client_company_brief: null,
+    client_company_size: null,
+    client_company_website: null,
     job_description: null,
     job_description_hash: null,
     analysis_version: 1,
@@ -113,5 +121,6 @@ export function buildSavedScoreInsertPayload(
     scoring_prompt_version: 1,
     scoring_cost_usd: estimatedScoreCostUsd(),
     model_used: "gpt-4o-mini",
+    brief_content_hash: computeBriefContentHash(roleBrief),
   };
 }

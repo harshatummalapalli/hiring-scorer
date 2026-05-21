@@ -2,10 +2,36 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getApiKey } from "@/lib/ai/api-keys";
 import { parseJsonFromModel } from "@/lib/ai/parse-json";
 import { dedupeRoleBriefAnalysis } from "@/lib/role-brief/dedupe-skills";
+import type { JdRecruiterContext } from "@/types/job-posting";
 import type { RoleBriefAnalysis, TitleBand } from "@/types/role-brief";
 import { TITLE_BANDS } from "@/types/role-brief";
 
-const ANALYSE_JD_SYSTEM = `You are an expert recruiter with 18 years of enterprise technology hiring experience. Analyse this job description and return a JSON object with these exact fields. deal_breakers as an array of strings — the absolute must-have requirements where absence disqualifies a candidate. core_signals as an array of objects each with skill name and equivalents array — the important skills that drive the score heavily. preferred_signals as an array of strings — nice to have items that boost score but absence does not penalise. cannot_assess as an array of strings — soft skills or qualities that cannot be evaluated from a resume alone. equivalent_titles as an array of strings — all job titles that should be considered equivalent to the target role. title_band as a string — one of Entry Mid Senior Staff Principal. semantic_clusters as an object where each key is a required skill and value is an array of technologies that imply proficiency in that skill. suggested_weights as an object with integer fields weight_skills weight_trajectory weight_domain weight_seniority weight_tenure each from 1 to 10 reflecting how much the JD emphasises each dimension — if the JD heavily emphasises technical skills set weight_skills high; if it emphasises leadership set weight_trajectory and weight_seniority high; balance all five to sum roughly 25–40. Return JSON only, no explanation.`;
+function buildRecruiterContextBlock(context?: JdRecruiterContext | null): string {
+  if (!context) return "";
+  const lines: string[] = [];
+  if (context.job_title) lines.push(`- Job title: ${context.job_title}`);
+  if (context.job_location) lines.push(`- Location: ${context.job_location}`);
+  if (context.seniority_override) {
+    lines.push(`- Seniority: ${context.seniority_override}`);
+  }
+  if (context.department) lines.push(`- Department: ${context.department}`);
+  if (context.client_company_name) {
+    lines.push(`- Company: ${context.client_company_name}`);
+  }
+  if (context.client_company_size) {
+    lines.push(`- Company size: ${context.client_company_size}`);
+  }
+  if (context.client_company_brief) {
+    lines.push(`- About the company: ${context.client_company_brief}`);
+  }
+  if (context.client_company_website) {
+    lines.push(`- Company website: ${context.client_company_website}`);
+  }
+  if (lines.length === 0) return "";
+  return `\n\nAdditional context provided by the recruiter:\n${lines.join("\n")}\n\nUse this context to calibrate your extraction. Seniority and company size should influence what you extract as must-haves versus preferred signals.`;
+}
+
+const ANALYSE_JD_SYSTEM = `You are an expert recruiter with 18 years of enterprise technology hiring experience. Analyse this job description and return a JSON object with these exact fields. deal_breakers as an array of strings — the absolute must-have requirements where absence disqualifies a candidate. core_signals as an array of objects each with skill name and equivalents array — the important skills that drive the score heavily. preferred_signals as an array of strings — nice to have items that boost score but absence does not penalise. cannot_assess as an array of strings — soft skills or qualities that cannot be evaluated from a resume alone. equivalent_titles as an array of strings — all job titles that should be considered equivalent to the target role. title_band as a string — one of Intern Entry Mid Senior Lead Staff Principal Manager Senior Manager Director Senior Director VP C-Suite — choose the band that best matches the seniority implied by the job description. semantic_clusters as an object where each key is a required skill and value is an array of technologies that imply proficiency in that skill. suggested_weights as an object with integer fields weight_skills weight_trajectory weight_domain weight_seniority weight_tenure each from 1 to 10 reflecting how much the JD emphasises each dimension — if the JD heavily emphasises technical skills set weight_skills high; if it emphasises leadership set weight_trajectory and weight_seniority high; balance all five to sum roughly 25–40. Return JSON only, no explanation.`;
 
 function parseStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -86,17 +112,19 @@ export function parseRoleBriefAnalysis(raw: unknown): RoleBriefAnalysis {
 
 export async function analyseJobDescription(
   jobDescription: string,
+  recruiterContext?: JdRecruiterContext | null,
 ): Promise<RoleBriefAnalysis> {
   const client = new Anthropic({ apiKey: getApiKey("anthropic") });
+  const contextBlock = buildRecruiterContextBlock(recruiterContext);
 
   const message = await client.messages.create({
     model: "claude-sonnet-4-20250514",
-    max_tokens: 4096,
+    max_tokens: 1000,
     system: ANALYSE_JD_SYSTEM,
     messages: [
       {
         role: "user",
-        content: jobDescription.trim(),
+        content: `${jobDescription.trim()}${contextBlock}`,
       },
     ],
   });

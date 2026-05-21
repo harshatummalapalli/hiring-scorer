@@ -6,7 +6,7 @@ export function scoringStatusFromOverall(
   overallScore: number,
 ): CandidateScoringStatus {
   const verdict = scoreToVerdict(overallScore);
-  if (verdict === "NOT SUITABLE" || verdict === "WEAK FIT") {
+  if (verdict === "NOT A MATCH" || verdict === "WEAK MATCH") {
     return "low_relevance";
   }
   return "scored";
@@ -16,6 +16,7 @@ export function scoringStatusFromOverall(
 export function isPostScoreStatus(status: string | null | undefined): boolean {
   return (
     status === "scored" ||
+    status === "needs_scoring" ||
     status === "low_relevance" ||
     status === "skipped" ||
     status === "manually_rejected"

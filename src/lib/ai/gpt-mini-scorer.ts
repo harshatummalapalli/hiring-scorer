@@ -37,15 +37,30 @@ const DIMENSION_KEYS: DimensionKey[] = [
 ];
 
 const TITLE_BAND_DESCRIPTIONS: Record<TitleBand, string> = {
+  Intern:
+    "Learning role: limited scope; supervised delivery; building fundamentals rather than owning outcomes.",
   Entry:
     "Early-career scope: executes defined tasks with guidance; limited ownership of architecture or team outcomes.",
   Mid: "Independent contributor: owns features end-to-end; partners across functions; growing scope without org-wide leadership.",
   Senior:
-    "Experienced IC or lead: owns complex systems or domains; mentors others; drives decisions with limited oversight.",
+    "Experienced IC: owns complex systems or domains; mentors others; drives decisions with limited oversight.",
+  Lead:
+    "Technical or team lead: guides a small group; balances hands-on work with coordination and unblocking others.",
   Staff:
-    "Org-level impact: sets technical direction across teams; solves ambiguous problems; influences roadmap beyond one squad.",
+    "Org-level IC impact: sets technical direction across teams; solves ambiguous problems beyond one squad.",
   Principal:
     "Company-wide technical leadership: defines strategy; multi-year bets; recognized authority across the organization.",
+  Manager:
+    "People manager: owns team delivery, hiring, and performance; may be less hands-on in day-to-day implementation.",
+  "Senior Manager":
+    "Leads multiple teams or a larger org slice; accountable for roadmaps, budgets, and cross-functional alignment.",
+  Director:
+    "Department-level leader: shapes strategy and operating model; owns outcomes across several teams.",
+  "Senior Director":
+    "Senior functional leader: broad scope across departments; heavy stakeholder and executive alignment.",
+  VP: "Executive leader: owns a major function or product area; sets multi-year direction and org design.",
+  "C-Suite":
+    "Top executive: company-wide accountability; strategy, capital allocation, and external representation.",
 };
 
 type GptConfidence = "high" | "medium" | "low";
@@ -126,7 +141,8 @@ Tenure:
 21–40: Multiple short stints suggesting instability.
 41–60: Mixed tenure with some concern.
 61–80: Generally stable with reasonable transitions.
-81–100: Strong tenure showing commitment and seeing work through to completion.`;
+81–100: Strong tenure showing commitment and seeing work through to completion.
+Era note: For roles held between January 2020 and December 2023, discount short tenures as potentially restructuring-related or pandemic-driven. A pattern of short stints across multiple employers in this period is not automatically a stability flag unless it continues beyond 2023.`;
 
 const CONTRADICTION_CHECKS_SECTION = `CONTRADICTION CHECKS:
 Before finalising scores, check the following. List any implausibilities or inconsistencies in the contradictions array (empty array if none).
@@ -137,11 +153,11 @@ Check two — timeline coherence: Do the dates add up? Are there unexplained gap
 
 Check three — metric realism: Are quantified outcomes suspiciously round or generic (e.g. improved efficiency by 50 percent with no context)? Flag metrics that lack specificity as lower-confidence evidence.`;
 
-const CONFIDENCE_DERIVATION_SECTION = `CONFIDENCE (evidence-derived, not estimated):
-Derive confidence from verified evidence only. If the contradictions array is non-empty, confidence must be medium or low — never high.
-High confidence requires: three or more supporting quotes verified in the resume, no contradictions found, consistent chronology, and owned skills appearing in multiple roles.
-Medium confidence requires: one or two supporting quotes, no major contradictions, or minor chronology questions.
-Low confidence requires: fewer than two verifiable quotes, contradictions present, sparse resume, or significant ambiguity about individual contribution.`;
+const CONFIDENCE_DERIVATION_SECTION =
+  `CONFIDENCE: Set to high, medium, or low based ` +
+  `on verified quote count and contradictions. ` +
+  `Non-empty contradictions array caps confidence ` +
+  `at medium or lower.`;
 
 export function profileDepthFromProfile(
   profile: CandidateSignalProfile,
@@ -287,8 +303,6 @@ ${CONFIDENCE_DERIVATION_SECTION}
 OUTPUT FORMAT:
 Return this exact JSON schema with no preamble and no text outside the JSON:
 {
-  "overall_score": integer 0-100,
-  "verdict": "strong_match" | "potential_match" | "low_match" | "no_match",
   "confidence": "high" | "medium" | "low",
   "confidence_reason": "one sentence explaining confidence from evidence (quote count, contradictions, chronology)",
   "dimension_scores": {
@@ -510,7 +524,7 @@ function buildDimensionConsensus(
     return {
       key,
       label: DIMENSION_LABELS[key],
-      model_scores: { claude: score, gpt4o: score, gemini: score },
+      model_scores: { gpt4o: score },
       model_details: {
         gpt4o: {
           score,
@@ -519,8 +533,6 @@ function buildDimensionConsensus(
             ? `Quote: ${row.supporting_quote.slice(0, 80)}`
             : row.assessment_note,
         },
-        claude: { score, reason: row.assessment_note, dimension_flag: "" },
-        gemini: { score, reason: row.assessment_note, dimension_flag: "" },
       },
       spread: 0,
       agreement: "unanimous" as const,
@@ -553,12 +565,13 @@ function buildRecruiterCardFromGpt(
 
   const interview_questions = normalizeInterviewQuestions(
     raw.interview_questions ?? [],
-  ).slice(0, 2);
-  while (interview_questions.length < 2) {
-    interview_questions.push(
-      "Walk me through a project from your resume where your contribution was hardest to infer from the written profile alone.",
-    );
-  }
+  );
+  // Do not pad with generic questions.
+  // If GPT returned fewer than 2 specific questions,
+  // show only what was returned.
+  // A generic fallback violates Rule four of the
+  // scoring prompt — every question must reference
+  // this specific candidate's resume.
 
   return {
     candidate_header: {
@@ -598,9 +611,7 @@ function mapToCandidateScoreResult(
       rationale: row.assessment_note,
       agreement: "unanimous",
       model_scores: {
-        claude: row.score,
         gpt4o: row.score,
-        gemini: row.score,
       },
     };
   }
@@ -628,7 +639,11 @@ function mapToCandidateScoreResult(
 
   return {
     overall_score: overallScore,
-    deal_breaker_warning: null,
+    deal_breaker_warning: (raw.must_haves_check ?? []).some(
+      (m) => m.status === "absent",
+    )
+      ? "One or more must-have requirements were not found in this resume."
+      : null,
     overall_provisional: false,
     ...confidence,
     dimension_scores,
@@ -641,16 +656,9 @@ function mapToCandidateScoreResult(
     dissent_signals: [],
     model_raw_responses: {
       gpt4o: raw,
-      claude: {},
-      gemini: {},
     },
     model_flags: {
-      claude: { risks: [], gaps: [] },
       gpt4o: { insufficient: [] },
-      gemini: {
-        green_flags: green_flags.map((f) => f.text),
-        watch_signals: watch_signals.map((f) => f.text),
-      },
     },
     recruiter_card: buildRecruiterCardFromGpt(strippedResume, raw),
     resume_quality_signals: signals,
@@ -701,7 +709,17 @@ export async function scoreCandidate(
     DIMENSION_KEYS.map((k) => [k, dimensions[k].score]),
   ) as Record<DimensionKey, number>;
 
-  const overallScore = computeWeightedOverall(scoreByDim, roleBrief);
+  let overallScore = computeWeightedOverall(scoreByDim, roleBrief);
+
+  const absentMustHaves = (parsed.must_haves_check ?? []).filter(
+    (m) =>
+      m.status === "absent" &&
+      (m.confidence === "high" || m.confidence === "medium"),
+  );
+
+  if (absentMustHaves.length > 0 && overallScore > 54) {
+    overallScore = 54;
+  }
 
   return mapToCandidateScoreResult(
     stripped,

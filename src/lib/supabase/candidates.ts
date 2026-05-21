@@ -397,6 +397,7 @@ export async function getCandidateById(id: string): Promise<CandidateDetail | nu
         candidate_id: String(row.candidate_id),
         body: String(row.body),
         created_at: String(row.created_at),
+        job_id: row.job_id != null ? String(row.job_id) : null,
       } satisfies CandidateNote;
     }),
     role_fit_scores,
@@ -542,12 +543,18 @@ export async function updateCandidate(
 export async function insertCandidateNote(
   candidateId: string,
   body: string,
+  jobId?: string | null,
 ): Promise<CandidateNote> {
   const supabase = await getServerSupabase();
   const userId = await getAuthenticatedUserId(supabase);
   const { data, error } = await supabase
     .from("candidate_notes")
-    .insert(withCreatedBy({ candidate_id: candidateId, body }, userId))
+    .insert(
+      withCreatedBy(
+        { candidate_id: candidateId, body, job_id: jobId ?? null },
+        userId,
+      ),
+    )
     .select("*")
     .single();
 
@@ -558,5 +565,6 @@ export async function insertCandidateNote(
     candidate_id: String(row.candidate_id),
     body: String(row.body),
     created_at: String(row.created_at),
+    job_id: row.job_id != null ? String(row.job_id) : null,
   };
 }

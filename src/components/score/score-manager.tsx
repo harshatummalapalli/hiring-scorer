@@ -331,7 +331,7 @@ export function ScoreManager() {
         <AlertCircle className="mx-auto mb-3 h-8 w-8 text-amber-600" />
         <p className="font-medium text-amber-900">No role briefs yet</p>
         <p className="mt-1 text-sm text-amber-800">
-          Create a role brief first, then return here to score candidates.
+          Create a role brief first, then return here to evaluate candidates.
         </p>
         <Link
           href="/role-briefs"
@@ -463,7 +463,7 @@ export function ScoreManager() {
           actionBusy={saving}
           savedLabel={
             selected.savedId
-              ? savedMessage ?? "Score saved to pipeline."
+              ? savedMessage ?? "Evaluation saved to pipeline."
               : savedMessage
           }
         />

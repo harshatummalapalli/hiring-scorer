@@ -19,8 +19,8 @@ export function ScoreRolePickerModal({
   preselectedJobId,
   onClose,
   onConfirm,
-  title = "Score this candidate against a role",
-  confirmLabel = "Score",
+  title = "Evaluate this candidate against a role",
+  confirmLabel = "Evaluate",
 }: ScoreRolePickerModalProps) {
   const [jobs, setJobs] = useState<JobListItem[]>([]);
   const [loading, setLoading] = useState(true);

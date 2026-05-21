@@ -19,6 +19,7 @@ type ModelRawResponsesPanelProps = {
 
 export function ModelRawResponsesPanel({ raw }: ModelRawResponsesPanelProps) {
   const [expanded, setExpanded] = useState(false);
+  const availableTabs = TABS.filter((t) => raw[t.id] != null);
   const [tab, setTab] = useState<TabId>("gpt4o");
 
   return (
@@ -44,7 +45,7 @@ export function ModelRawResponsesPanel({ raw }: ModelRawResponsesPanelProps) {
             Parsed JSON returned by each model for this scoring run.
           </p>
           <div className="mt-3 flex flex-wrap gap-1 border-b border-slate-200 pb-2">
-            {TABS.map((t) => (
+            {(availableTabs.length > 0 ? availableTabs : TABS.filter((t) => t.id === "gpt4o")).map((t) => (
               <button
                 key={t.id}
                 type="button"

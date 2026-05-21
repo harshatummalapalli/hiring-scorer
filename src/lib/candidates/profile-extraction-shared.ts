@@ -1,6 +1,7 @@
 import {
   cleanDisplayName,
   composeNameFromParts,
+  isBadDisplayName,
 } from "@/lib/candidates/resolve-display-name";
 import { splitFullName } from "@/lib/candidates/parse-resume-identity";
 import { parseJsonFromModel } from "@/lib/ai/parse-json";
@@ -278,9 +279,11 @@ export function mapParsedProfileToSignal(
     );
   }
 
+  const composed = composeNameFromParts(g.display_name, g.first_name, g.last_name);
+  const rawFallback = cleanDisplayName(g.display_name?.trim() ?? "");
   const display_name =
-    composeNameFromParts(g.display_name, g.first_name, g.last_name) ??
-    (cleanDisplayName(g.display_name?.trim() ?? "") || "Candidate");
+    composed ??
+    (rawFallback && !isBadDisplayName(rawFallback) ? rawFallback : "Unknown Candidate");
   const identity = splitFullName(display_name);
 
   return {

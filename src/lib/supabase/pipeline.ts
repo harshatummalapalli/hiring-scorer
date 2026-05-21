@@ -89,8 +89,8 @@ function sortPipelineCandidates(
   rows: PipelineCandidateRow[],
 ): PipelineCandidateRow[] {
   return [...rows].sort((a, b) => {
-    const va = (a.fit_verdict ?? "NOT SUITABLE") as FitVerdict;
-    const vb = (b.fit_verdict ?? "NOT SUITABLE") as FitVerdict;
+    const va = (a.fit_verdict ?? "NOT A MATCH") as FitVerdict;
+    const vb = (b.fit_verdict ?? "NOT A MATCH") as FitVerdict;
     const order =
       (VERDICT_SORT_ORDER[va] ?? 9) - (VERDICT_SORT_ORDER[vb] ?? 9);
     if (order !== 0) return order;

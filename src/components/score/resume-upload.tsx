@@ -76,7 +76,7 @@ export function ResumeUpload({
       {candidates.length > 0 && (
         <p className="mt-3 text-sm font-medium text-slate-700">
           {candidates.length} resume{candidates.length === 1 ? "" : "s"} loaded
-          — click one to select, then score it or use &quot;Score all ready&quot;.
+          — click one to select, then evaluate it or use &quot;Evaluate all ready&quot;.
         </p>
       )}
 
@@ -161,9 +161,9 @@ function statusLabel(c: UploadedCandidate): string {
     case "ready":
       return "Ready to score";
     case "scoring":
-      return "Scoring…";
+      return "Evaluating…";
     case "scored":
-      return "Scored";
+      return "Evaluated";
     case "error":
       return c.error ?? "Error";
     default:

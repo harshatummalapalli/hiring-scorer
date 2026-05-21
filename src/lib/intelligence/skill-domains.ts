@@ -248,7 +248,7 @@ export function coreStrengthOverlapsRole(
 }
 
 const NON_TECH_STRENGTH_PATTERN =
-  /\b(?:recruit(?:ing|ment)?|hr\b|human\s+resources|sales|marketing|finance|accounting|operations)\b/i;
+  /\b(?:recruit(?:ing|ment|er)?|talent\s+acquisition|hr\b|human\s+resources|sales|marketing|finance|accounting|operations|sourcing|staffing)\b/i;
 
 export function isSoftwareEngineeringRole(roleBrief: {
   title?: string | null;
@@ -274,6 +274,24 @@ export function hasNonTechnicalCoreStrength(profile: {
     .filter(Boolean)
     .join(" ");
   return NON_TECH_STRENGTH_PATTERN.test(blob);
+}
+
+/**
+ * Broader non-technical signal check that also looks at job title history.
+ * Used to catch candidates like recruiters/HR whose core_strength may be null
+ * but whose most recent title reveals they are non-technical.
+ */
+export function hasNonTechnicalSignals(profile: {
+  core_strength_primary: string | null;
+  core_strength_secondary: string | null;
+  most_recent_title?: string | null;
+  current_title?: string | null;
+}): boolean {
+  if (hasNonTechnicalCoreStrength(profile)) return true;
+  const titleBlob = [profile.most_recent_title, profile.current_title]
+    .filter(Boolean)
+    .join(" ");
+  return NON_TECH_STRENGTH_PATTERN.test(titleBlob);
 }
 
 export function formatCoreStrengthLabel(

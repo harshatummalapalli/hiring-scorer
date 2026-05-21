@@ -12,6 +12,7 @@ import { getErrorMessage } from "@/lib/errors";
 import { isUnlimitedWorkspaceCap } from "@/lib/workspace/limits";
 import type { JobListItem } from "@/types/job";
 import { JOB_STATUS_LABELS } from "@/types/job";
+import type { JobPostingFields } from "@/types/job-posting";
 import type { RoleBriefAnalysis, RoleBriefAnalysisMeta } from "@/types/role-brief";
 import { useRouter } from "next/navigation";
 
@@ -91,6 +92,7 @@ export function JobsPage() {
     jobDescription: string;
     analysis: RoleBriefAnalysis;
     analysisMeta: RoleBriefAnalysisMeta;
+    jobPosting: JobPostingFields;
   }) => {
     setIsSaving(true);
     setError(null);
@@ -180,18 +182,20 @@ export function JobsPage() {
                 job.status === "active" ? karta.jobCardActive : ""
               }`}
             >
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className={karta.cardTitle}>{job.title}</h2>
-                {job.title_band && (
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-[#64748B]">
-                    {job.title_band}
+              <div className="flex min-h-[3rem] flex-wrap items-start gap-2">
+                <h2 className={`${karta.cardTitle} leading-snug`}>{job.title}</h2>
+                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                  {job.title_band && (
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-[#64748B]">
+                      {job.title_band}
+                    </span>
+                  )}
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(job.status)}`}
+                  >
+                    {JOB_STATUS_LABELS[job.status]}
                   </span>
-                )}
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(job.status)}`}
-                >
-                  {JOB_STATUS_LABELS[job.status]}
-                </span>
+                </div>
               </div>
               <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                 <div>

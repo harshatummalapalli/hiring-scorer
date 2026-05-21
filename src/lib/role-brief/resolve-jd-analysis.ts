@@ -5,6 +5,7 @@ import {
   shouldReuseCachedJdAnalysis,
   type JdAnalysisCacheSource,
 } from "@/lib/role-brief/jd-cache";
+import type { JdRecruiterContext } from "@/types/job-posting";
 import type { RoleBrief, RoleBriefAnalysis } from "@/types/role-brief";
 import { analysisFromRoleBrief } from "@/types/role-brief";
 
@@ -27,6 +28,7 @@ export type JdAnalysisResolveInput = {
   jobDescription: string;
   existingBrief?: RoleBrief | null;
   sessionCache?: JdSessionCache | null;
+  recruiterContext?: JdRecruiterContext | null;
 };
 
 function priorAnalysisVersion(input: JdAnalysisResolveInput): number {
@@ -105,7 +107,10 @@ export async function resolveJobDescriptionAnalysis(
   }
 
   const nextVersion = priorAnalysisVersion(input) + 1;
-  const analysis = await analyseJobDescription(newJobDescription);
+  const analysis = await analyseJobDescription(
+    newJobDescription,
+    input.recruiterContext,
+  );
   const now = new Date().toISOString();
 
   return {

@@ -30,7 +30,7 @@ export function gapToInterviewQuestion(gap: string): string {
 
 export function normalizeInterviewQuestion(raw: string): string {
   let q = raw.trim();
-  if (!q) return gapToInterviewQuestion("");
+  if (!q) return "";
 
   q = q.replace(/\s+/g, " ");
 
@@ -49,6 +49,6 @@ export function normalizeInterviewQuestion(raw: string): string {
 export function normalizeInterviewQuestions(questions: string[]): string[] {
   return questions
     .map((q) => normalizeInterviewQuestion(q))
-    .filter(Boolean)
+    .filter((q) => Boolean(q) && q.trim().length > 10)
     .slice(0, 2);
 }

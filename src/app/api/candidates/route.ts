@@ -11,6 +11,7 @@ import {
   extractGithubUsername,
 } from "@/lib/candidates/github-enrichment";
 import { classifyApplicantPrefilter } from "@/lib/jobs/applicant-prefilter";
+import { triggerAutoEvaluation } from "@/lib/scoring/evaluation-queue";
 import { getCandidateHeaderName } from "@/lib/candidates/profile-display";
 import { createActivity } from "@/lib/candidates/activity";
 import { normalizeResumeText } from "@/lib/resume/normalize-resume-text";
@@ -240,6 +241,10 @@ export async function POST(request: Request) {
           { status: 500 },
         );
       }
+    }
+
+    if (scoringStatus === "unscored" && jobId) {
+      void triggerAutoEvaluation(id, jobId, request);
     }
 
     return NextResponse.json({

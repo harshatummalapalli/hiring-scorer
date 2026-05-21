@@ -32,36 +32,43 @@ function buildConsensusFallback(
 ): DimensionConsensusDetail[] {
   return DIMENSION_KEYS.map((key) => {
     const dim = dimensionScores[key];
-    const modelScores = dim.model_scores ?? {
-      claude: dim.score,
-      gpt4o: dim.score,
-      gemini: dim.score,
+    const modelScores = {
+      gpt4o: dim.model_scores?.gpt4o ?? dim.score,
+      ...(dim.model_scores?.claude != null
+        ? { claude: dim.model_scores.claude }
+        : {}),
+      ...(dim.model_scores?.gemini != null
+        ? { gemini: dim.model_scores.gemini }
+        : {}),
     };
+    const scoreValues = [
+      modelScores.gpt4o,
+      modelScores.claude,
+      modelScores.gemini,
+    ].filter((s): s is number => s != null);
     const spread =
-      Math.max(modelScores.claude, modelScores.gpt4o, modelScores.gemini) -
-      Math.min(modelScores.claude, modelScores.gpt4o, modelScores.gemini);
+      scoreValues.length > 1
+        ? Math.max(...scoreValues) - Math.min(...scoreValues)
+        : 0;
     const agreement = dim.agreement ?? agreementFromSpread(spread);
+    const cell = {
+      score: modelScores.gpt4o,
+      reason: dim.rationale,
+      dimension_flag: dim.rationale,
+    };
 
     return {
       key,
       label: DIMENSION_LABELS[key],
       model_scores: modelScores,
       model_details: {
-        gpt4o: {
-          score: modelScores.gpt4o,
-          reason: dim.rationale,
-          dimension_flag: dim.rationale,
-        },
-        claude: {
-          score: modelScores.claude,
-          reason: dim.rationale,
-          dimension_flag: dim.rationale,
-        },
-        gemini: {
-          score: modelScores.gemini,
-          reason: dim.rationale,
-          dimension_flag: dim.rationale,
-        },
+        gpt4o: cell,
+        ...(modelScores.claude != null
+          ? { claude: { ...cell, score: modelScores.claude } }
+          : {}),
+        ...(modelScores.gemini != null
+          ? { gemini: { ...cell, score: modelScores.gemini } }
+          : {}),
       },
       spread,
       agreement,
@@ -127,11 +134,9 @@ export function reconstructCandidateResult(
     risks: [],
     gaps: [],
     dissent_signals: [],
-    model_raw_responses: { gpt4o: null, claude: null, gemini: null },
+    model_raw_responses: { gpt4o: null },
     model_flags: {
-      claude: { risks: [], gaps: [] },
       gpt4o: { insufficient: [] },
-      gemini: { green_flags: [], watch_signals: [] },
     },
     recruiter_card: buildFallbackRecruiterCard(
       row.candidate_filename ?? "candidate.pdf",

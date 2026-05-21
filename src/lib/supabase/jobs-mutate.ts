@@ -1,14 +1,17 @@
 import {
   buildFullBriefPayload,
   buildLegacyBriefPayload,
+  isMissingClientContextColumnError,
   isMissingJobArchitectureColumnError,
   isMissingJdAnalysisMetaColumnError,
   isMissingScoringPromptColumnError,
   isMissingV2ColumnError,
+  stripClientContextColumns,
   stripJdAnalysisMetaColumns,
   stripJobArchitectureColumns,
   stripScoringPromptColumns,
 } from "@/lib/role-brief/insert-brief-payload";
+import type { JobPostingFields } from "@/types/job-posting";
 import { getAuthenticatedUserId, withCreatedBy } from "@/lib/supabase/created-by";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -29,6 +32,7 @@ export type CreateJobInput = {
   jobDescription: string;
   analysis: RoleBriefAnalysis;
   analysisMeta?: RoleBriefAnalysisMeta;
+  jobPosting?: JobPostingFields;
 };
 
 async function insertRoleBriefRow(
@@ -53,6 +57,11 @@ async function insertRoleBriefRow(
     }
     if (result.error && isMissingJdAnalysisMetaColumnError(msg)) {
       payload = stripJdAnalysisMetaColumns(payload);
+      result = await supabase.from("role_briefs").insert(payload).select().single();
+      msg = result.error?.message ?? "";
+    }
+    if (result.error && isMissingClientContextColumnError(msg)) {
+      payload = stripClientContextColumns(payload);
       result = await supabase.from("role_briefs").insert(payload).select().single();
     }
     if (result.error && isMissingV2ColumnError(result.error.message)) {
@@ -89,6 +98,7 @@ export async function createJobForUser(
       input.analysis,
       true,
       input.analysisMeta,
+      input.jobPosting,
     ),
     userId,
   );

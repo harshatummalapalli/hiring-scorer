@@ -63,7 +63,9 @@ export function buildConsensusCalculationSteps(
     const detail = result.dimension_consensus.find((d) => d.key === key);
     if (!detail) continue;
 
-    const { claude, gpt4o, gemini } = detail.model_scores;
+    const { gpt4o } = detail.model_scores;
+    const claude = detail.model_scores.claude ?? gpt4o;
+    const gemini = detail.model_scores.gemini ?? gpt4o;
     const w = weights[key];
     const contribution = dim.score * w;
     weightedSum += contribution;

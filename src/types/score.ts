@@ -28,9 +28,9 @@ export type DimensionScore = {
   /** True when models diverged; score is a provisional average. */
   provisional?: boolean;
   model_scores?: {
-    claude: number;
     gpt4o: number;
-    gemini: number;
+    claude?: number;
+    gemini?: number;
   };
   agreement?: "unanimous" | "majority" | "divergent";
   dissent?: {
@@ -51,14 +51,14 @@ export type DimensionConsensusDetail = {
   key: DimensionKey;
   label: string;
   model_scores: {
-    claude: number;
     gpt4o: number;
-    gemini: number;
+    claude?: number;
+    gemini?: number;
   };
   model_details: {
     gpt4o: DimensionModelCell;
-    claude: DimensionModelCell;
-    gemini: DimensionModelCell;
+    claude?: DimensionModelCell;
+    gemini?: DimensionModelCell;
   };
   spread: number;
   agreement: "unanimous" | "majority" | "divergent";
@@ -77,8 +77,8 @@ export type DimensionConsensusDetail = {
 
 export type ModelRawResponses = {
   gpt4o: unknown;
-  claude: unknown;
-  gemini: unknown;
+  claude?: Record<string, unknown>;
+  gemini?: Record<string, unknown>;
 };
 
 export type CompanyType = "Services" | "Product" | "GCC" | "Startup";
@@ -101,10 +101,11 @@ export type StandoutBullet = {
 };
 
 export type FitVerdict =
-  | "STRONG FIT"
-  | "POSSIBLE FIT"
-  | "WEAK FIT"
-  | "NOT SUITABLE";
+  | "EXCEPTIONAL MATCH"
+  | "STRONG MATCH"
+  | "POTENTIAL MATCH"
+  | "WEAK MATCH"
+  | "NOT A MATCH";
 
 export type RecruiterCard = {
   candidate_header: CandidateHeader;
@@ -146,9 +147,9 @@ export type CandidateScoreResult = {
   dissent_signals: string[];
   model_raw_responses: ModelRawResponses;
   model_flags: {
-    claude: { risks: string[]; gaps: string[] };
     gpt4o: { insufficient: string[] };
-    gemini: { green_flags: string[]; watch_signals: string[] };
+    claude?: { risks: string[]; gaps: string[] };
+    gemini?: { green_flags: string[]; watch_signals: string[] };
   };
   recruiter_card: RecruiterCard;
   resume_quality_signals: ResumeQualitySignals | null;
@@ -172,11 +173,11 @@ export type SavedScore = {
 };
 
 export const DIMENSION_LABELS: Record<DimensionKey, string> = {
-  skills: "Skills match",
-  trajectory: "Career trajectory",
-  domain: "Domain expertise",
-  seniority: "Seniority fit",
-  tenure: "Tenure stability",
+  skills: "Technical Skills Match",
+  trajectory: "Career Growth Pattern",
+  domain: "Industry Experience",
+  seniority: "Seniority Level",
+  tenure: "Job Stability",
 };
 
 export const SCORE_TAGS = [

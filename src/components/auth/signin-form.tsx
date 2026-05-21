@@ -1,37 +1,73 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { AuthDivider } from "@/components/auth/auth-divider";
 import { GoogleAuthButton } from "@/components/auth/google-auth-button";
 import { karta } from "@/lib/brand/karta";
+import {
+  authFinishUrl,
+  navigateAfterAuth,
+  safeIntendedPath,
+} from "@/lib/auth/post-login-redirect";
+import { signOutAndRedirectToSignIn } from "@/lib/auth/sign-out-client";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
-export function SignInForm() {
-  const router = useRouter();
+type SignInFormProps = {
+  forceGoogleAccountPicker?: boolean;
+};
+
+export function SignInForm({
+  forceGoogleAccountPicker = false,
+}: SignInFormProps) {
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") || "/jobs";
+  const signedOut = searchParams.get("signed_out") === "1";
+  const next =
+    signedOut
+      ? "/jobs"
+      : safeIntendedPath(searchParams.get("next")) ?? "/jobs";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (searchParams.get("signed_out") === "1") {
+      setError(null);
+      setInfo("Signed out. Sign in with the account you want to use.");
+      void createSupabaseBrowserClient().auth.signOut({ scope: "global" });
+    }
+    if (searchParams.get("choose_google") === "1") {
+      setInfo(
+        "Use “Choose Google account” below, or sign in with email + password to test onboarding.",
+      );
+    }
+    if (searchParams.get("error") === "session_missing") {
+      setError(
+        "Session did not persist. Sign out, then try email + password sign-in.",
+      );
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setInfo(null);
     try {
       const supabase = createSupabaseBrowserClient();
+      await supabase.auth.signOut({ scope: "global" });
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
       if (signInError) throw signInError;
-      router.replace(next);
-      router.refresh();
+      navigateAfterAuth(authFinishUrl(next));
+      return;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign in failed");
     } finally {
@@ -40,10 +76,25 @@ export function SignInForm() {
   };
 
   return (
-    <>
-      <GoogleAuthButton next={next} />
-      <AuthDivider />
+    <div className="space-y-6">
+      <div className="rounded-lg border border-[#0D9488]/25 bg-teal-50/80 px-4 py-3 text-sm text-[#0F766E]">
+        <p className="font-medium text-[#134E4A]">Testing onboarding?</p>
+        <p className="mt-1 text-[#0F766E]">
+          Create a user in Supabase (email + password), then sign in here with
+          that email — not Google.{" "}
+          <code className="text-xs">recruiter.harsha@gmail.com</code> is super
+          admin and never sees onboarding.
+        </p>
+      </div>
+
+      {info && (
+        <p className="text-sm text-[#0D9488]" role="status">
+          {info}
+        </p>
+      )}
+
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+        <p className="text-sm font-semibold text-[#1E293B]">Sign in with email</p>
         <label className="block text-sm font-medium text-[#334155]">
           Email
           <input
@@ -80,11 +131,22 @@ export function SignInForm() {
           {loading ? (
             <Loader2 className="mx-auto h-5 w-5 animate-spin" />
           ) : (
-            "Sign In"
+            "Sign in with email"
           )}
         </button>
       </form>
-      <p className="mt-6 text-center text-sm text-[#64748B]">
+
+      <AuthDivider />
+
+      <div>
+        <p className="mb-3 text-sm font-semibold text-[#1E293B]">Or use Google</p>
+        <GoogleAuthButton
+          next={next}
+          forceAccountPicker={forceGoogleAccountPicker}
+        />
+      </div>
+
+      <p className="text-center text-sm text-[#64748B]">
         New to Karta?{" "}
         <Link
           href="/auth/signup"
@@ -93,6 +155,15 @@ export function SignInForm() {
           Create your account
         </Link>
       </p>
-    </>
+      <p className="text-center text-sm text-[#94A3B8]">
+        <button
+          type="button"
+          className="font-medium text-[#0D9488] hover:underline"
+          onClick={() => void signOutAndRedirectToSignIn()}
+        >
+          Sign out of Karta completely
+        </button>
+      </p>
+    </div>
   );
 }

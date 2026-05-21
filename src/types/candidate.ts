@@ -109,6 +109,7 @@ export type CandidateNote = {
   candidate_id: string;
   body: string;
   created_at: string;
+  job_id?: string | null;
 };
 
 export type CandidateRow = {
@@ -184,10 +185,11 @@ export type CandidateDetail = CandidateRow & {
 
 export type CandidateVerdictFilter =
   | "all"
+  | "exceptional"
   | "strong"
-  | "possible"
+  | "potential"
   | "weak"
-  | "not_suitable"
+  | "not_a_match"
   | "unscored";
 
 export type CandidateCompanyTypeFilter = "all" | CompanyType;

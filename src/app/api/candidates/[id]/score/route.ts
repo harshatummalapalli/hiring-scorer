@@ -10,10 +10,17 @@ import { insertSavedScoreWithFallback } from "@/lib/saved-scores/insert-with-fal
 import { buildSavedScoreInsertPayload } from "@/lib/saved-scores/build-save-payload";
 import { scoringStatusFromOverall } from "@/lib/jobs/scoring-status";
 import { scoreToVerdict } from "@/lib/scoring/recruiter-card";
+import {
+  recomputeOverallFromSnapshot,
+  recomputeVerdict,
+} from "@/lib/scoring/recompute-from-snapshot";
+import { computeBriefContentHash } from "@/lib/role-brief/jd-cache";
 import { getCandidateById, updateCandidate } from "@/lib/supabase/candidates";
 import { recordRecruiterDecision } from "@/lib/decisions/recruiter-decisions";
 import { logWorkspaceActivityIfAuthed } from "@/lib/activity/log";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
+import { parseRoleBriefRow } from "@/types/role-brief";
+import type { CandidateScoreResult } from "@/types/score";
 import type { RoleBrief } from "@/types/role-brief";
 
 export const maxDuration = 120;
@@ -50,9 +57,64 @@ export async function POST(request: Request, { params }: Params) {
       );
     }
 
-    const roleBrief = briefRow as unknown as RoleBrief;
+    const roleBrief = parseRoleBriefRow(
+      briefRow as Record<string, unknown>,
+    );
     const filename =
       candidate.resume_filename ?? `${candidate.display_name}.pdf`;
+
+    const currentHash = computeBriefContentHash(roleBrief);
+
+    const cacheQuery = await supabase
+      .from("saved_scores")
+      .select("id, overall_score, score_snapshot, brief_content_hash")
+      .eq("candidate_id", id)
+      .eq("role_brief_id", body.roleBriefId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    const cacheRow =
+      !cacheQuery.error && cacheQuery.data
+        ? (cacheQuery.data as Array<Record<string, unknown>>).find(
+            (row) => row.brief_content_hash === currentHash,
+          )
+        : null;
+
+    if (cacheRow?.score_snapshot) {
+      const existingScore = cacheRow;
+      const snapshot = cacheRow.score_snapshot as CandidateScoreResult;
+      const dims = snapshot.dimension_scores as unknown as Record<
+        string,
+        { score: number }
+      >;
+      if (dims) {
+        const recomputed = recomputeOverallFromSnapshot(dims, roleBrief);
+        const recomputedVerdict = recomputeVerdict(recomputed);
+        const cachedResult: CandidateScoreResult = {
+          ...snapshot,
+          overall_score: recomputed,
+        };
+
+        if (Number(cacheRow.overall_score) !== recomputed) {
+          await supabase
+            .from("saved_scores")
+            .update({ overall_score: recomputed })
+            .eq("id", String(cacheRow.id));
+        }
+
+        await updateCandidate(id, {
+          scoring_status: scoringStatusFromOverall(recomputed),
+          job_id: candidate.job_id ?? body.roleBriefId,
+        });
+
+        return NextResponse.json({
+          result: cachedResult,
+          savedScoreId: String(cacheRow.id),
+          fromCache: true,
+          verdict: recomputedVerdict,
+        });
+      }
+    }
 
     const { stripped } = stripPII(candidate.resume_text);
     const rawText = candidate.resume_text?.trim() ?? "";

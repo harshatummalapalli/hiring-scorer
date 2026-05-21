@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { ChevronDown, LogOut, Settings } from "lucide-react";
+import { signOutAndRedirectToSignIn } from "@/lib/auth/sign-out-client";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import {
   displayNameFromProfile,
@@ -13,7 +13,6 @@ import {
 } from "@/lib/workspace/settings";
 
 export function UserMenu() {
-  const router = useRouter();
   const menuRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
@@ -53,11 +52,9 @@ export function UserMenu() {
     ? initialFromProfile(profile, email)
     : (displayName.charAt(0) || "U").toUpperCase();
 
-  const signOut = async () => {
-    const supabase = createSupabaseBrowserClient();
-    await supabase.auth.signOut();
-    router.replace("/auth/signin");
-    router.refresh();
+  const signOut = () => {
+    setOpen(false);
+    void signOutAndRedirectToSignIn();
   };
 
   return (

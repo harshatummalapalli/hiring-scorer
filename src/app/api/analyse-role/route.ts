@@ -3,6 +3,7 @@ import { logWorkspaceActivityIfAuthed } from "@/lib/activity/log";
 import { resolveJobDescriptionAnalysis } from "@/lib/role-brief/resolve-jd-analysis";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import { deriveTitleFromAnalysis, parseRoleBriefRow } from "@/types/role-brief";
+import type { JdRecruiterContext } from "@/types/job-posting";
 import type { JdSessionCache } from "@/lib/role-brief/resolve-jd-analysis";
 
 export const maxDuration = 120;
@@ -11,6 +12,7 @@ type AnalyseRoleBody = {
   jobDescription?: string;
   roleBriefId?: string;
   sessionCache?: JdSessionCache | null;
+  recruiterContext?: JdRecruiterContext | null;
 };
 
 export async function POST(request: Request) {
@@ -45,6 +47,7 @@ export async function POST(request: Request) {
       jobDescription: body.jobDescription,
       existingBrief,
       sessionCache: body.sessionCache ?? null,
+      recruiterContext: body.recruiterContext ?? null,
     });
 
     if (!result.fromCache) {

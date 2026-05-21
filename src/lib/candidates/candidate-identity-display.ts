@@ -2,7 +2,7 @@ import { formatTotalExperienceDisplay } from "@/lib/candidates/format-total-expe
 import { isSummaryLikeTitle } from "@/lib/candidates/profile-display";
 
 const SECTION_HEADER_IN_TITLE =
-  /\b(?:education|post\s*graduate|postgraduate|certification|objective|summary|profile|curriculum|vitae|resume|cv|about\s*me|professional\s*summary|projects?|equinox|environment|highlights?|expertise|competencies)\b/i;
+  /\b(?:education|post\s*graduate|postgraduate|certification|objective|summary|profile|curriculum|vitae|resume|cv|about\s*me|professional\s*summary|projects?|equinox|environment|highlights?|expertise|competencies|b\.?tech|m\.?tech|b\.?e\b|m\.?e\b|mca\b|mba\b|bca\b|b\.?sc\b|m\.?sc\b|ph\.?d\b|pgdm\b|bachelor|master|degree|diploma|graduate|undergraduate|computer\s+science|information\s+technology)\b/i;
 
 const BULLET_OR_HYPHEN_START = /^[\s•\-\*▪◦‣⁃]+/;
 

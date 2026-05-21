@@ -11,7 +11,7 @@ export type ScoringRunDimensionScores = Record<
 
 export type ScoringRunPerModelScores = Record<
   DimensionKey,
-  { claude: number; gpt4o: number; gemini: number }
+  { gpt4o: number; claude?: number; gemini?: number }
 >;
 
 export type ScoringRunConfidenceLevels = Record<

@@ -23,6 +23,16 @@ export function DimensionBreakdown({
 }: DimensionBreakdownProps) {
   const [open, setOpen] = useState(false);
   const { model_details: m } = detail;
+  const modelRows = [
+    m.gemini
+      ? { name: MODEL_ROLE_LABELS.gemini, cell: m.gemini }
+      : null,
+    m.claude
+      ? { name: MODEL_ROLE_LABELS.claude, cell: m.claude }
+      : null,
+    { name: MODEL_ROLE_LABELS.gpt4o, cell: m.gpt4o },
+  ].filter((row): row is { name: string; cell: typeof m.gpt4o } => row != null);
+  const scoreValues = modelRows.map((row) => row.cell.score);
 
   return (
     <li className="rounded-lg border border-slate-200 bg-white">
@@ -82,25 +92,18 @@ export function DimensionBreakdown({
                 </tr>
               </thead>
               <tbody className="text-slate-700">
-                <ModelRow
-                  name={MODEL_ROLE_LABELS.gemini}
-                  cell={m.gemini}
-                />
-                <ModelRow
-                  name={MODEL_ROLE_LABELS.claude}
-                  cell={m.claude}
-                />
-                <ModelRow
-                  name={MODEL_ROLE_LABELS.gpt4o}
-                  cell={m.gpt4o}
-                />
+                {modelRows.map((row) => (
+                  <ModelRow key={row.name} name={row.name} cell={row.cell} />
+                ))}
               </tbody>
               <tfoot>
                 <tr className="border-t border-slate-200">
                   <td className="py-2 pr-3 font-medium text-slate-800">Spread</td>
                   <td colSpan={3} className="py-2 tabular-nums">
-                    {detail.spread} points (high {Math.max(m.gpt4o.score, m.claude.score, m.gemini.score)} − low{" "}
-                    {Math.min(m.gpt4o.score, m.claude.score, m.gemini.score)})
+                    {detail.spread} points
+                    {scoreValues.length > 1
+                      ? ` (high ${Math.max(...scoreValues)} − low ${Math.min(...scoreValues)})`
+                      : null}
                   </td>
                 </tr>
                 <tr>

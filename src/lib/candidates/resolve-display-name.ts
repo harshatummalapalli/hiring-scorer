@@ -23,6 +23,25 @@ const GENERIC_DISPLAY_NAMES = new Set([
   "about me",
   "curriculum vitae",
   "unknown candidate",
+  // Degree / education strings that GPT sometimes surfaces as names
+  "b.tech",
+  "m.tech",
+  "b.e",
+  "m.e",
+  "mca",
+  "mba",
+  "bca",
+  "bsc",
+  "msc",
+  "b.sc",
+  "m.sc",
+  "phd",
+  "ph.d",
+  "pgdm",
+  "pgd",
+  "education",
+  "post graduate",
+  "postgraduate",
 ]);
 
 const SECTION_NAME_PHRASE =

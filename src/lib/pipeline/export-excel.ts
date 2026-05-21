@@ -6,10 +6,11 @@ import type { CandidateScoreResult, FitVerdict } from "@/types/score";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 const VERDICT_FILL: Record<FitVerdict, string> = {
-  "STRONG FIT": "C6EFCE",
-  "POSSIBLE FIT": "FFEB9C",
-  "WEAK FIT": "FCD5B4",
-  "NOT SUITABLE": "FFC7CE",
+  "EXCEPTIONAL MATCH": "E9D5FF",
+  "STRONG MATCH": "C6EFCE",
+  "POTENTIAL MATCH": "FFEB9C",
+  "WEAK MATCH": "FED7AA",
+  "NOT A MATCH": "FFC7CE",
 };
 
 function sheetName(title: string): string {

@@ -6,35 +6,55 @@ export const KARTA = {
 } as const;
 
 export const VERDICT_BADGE_BASE =
-  "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-[20px] px-3 py-1 text-[12px] font-medium leading-none text-white";
+  "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-[20px] border px-3 py-1 text-[12px] font-semibold leading-none";
 
-export const VERDICT_BADGE_UNMATCHED = `${VERDICT_BADGE_BASE} bg-slate-200 !text-slate-600`;
+export const VERDICT_BADGE_UNMATCHED = `${VERDICT_BADGE_BASE} bg-slate-200 text-slate-600 border-slate-200`;
 
-export const VERDICT_BADGE_SHADOW: Partial<Record<FitVerdict, string>> = {
-  "STRONG FIT": "shadow-[0_0_0_3px_rgba(5,150,105,0.15)]",
-  "POSSIBLE FIT": "shadow-[0_0_0_3px_rgba(217,119,6,0.15)]",
+export const VERDICT_COLORS: Record<
+  FitVerdict,
+  { bg: string; text: string; border: string }
+> = {
+  "EXCEPTIONAL MATCH": {
+    bg: "bg-violet-100",
+    text: "text-violet-800",
+    border: "border-violet-200",
+  },
+  "STRONG MATCH": {
+    bg: "bg-emerald-100",
+    text: "text-emerald-800",
+    border: "border-emerald-200",
+  },
+  "POTENTIAL MATCH": {
+    bg: "bg-amber-100",
+    text: "text-amber-800",
+    border: "border-amber-200",
+  },
+  "WEAK MATCH": {
+    bg: "bg-orange-100",
+    text: "text-orange-800",
+    border: "border-orange-200",
+  },
+  "NOT A MATCH": {
+    bg: "bg-red-100",
+    text: "text-red-700",
+    border: "border-red-200",
+  },
 };
 
-export const VERDICT_DISPLAY: Record<
-  FitVerdict,
-  { label: string; badgeClass: string }
-> = {
-  "STRONG FIT": {
-    label: "Strong Match",
-    badgeClass: "bg-[#059669]",
-  },
-  "POSSIBLE FIT": {
-    label: "Potential Match",
-    badgeClass: "bg-[#D97706]",
-  },
-  "WEAK FIT": {
-    label: "Low Match",
-    badgeClass: "bg-[#64748B]",
-  },
-  "NOT SUITABLE": {
-    label: "No Match",
-    badgeClass: "bg-[#E11D48]",
-  },
+export const VERDICT_BADGE_SHADOW: Record<FitVerdict, string> = {
+  "EXCEPTIONAL MATCH": "shadow-[0_0_0_3px_rgba(124,58,237,0.15)]",
+  "STRONG MATCH": "shadow-[0_0_0_3px_rgba(5,150,105,0.15)]",
+  "POTENTIAL MATCH": "shadow-[0_0_0_3px_rgba(217,119,6,0.15)]",
+  "WEAK MATCH": "shadow-[0_0_0_3px_rgba(234,88,12,0.15)]",
+  "NOT A MATCH": "shadow-[0_0_0_3px_rgba(220,38,38,0.15)]",
+};
+
+export const VERDICT_DISPLAY: Record<FitVerdict, { label: string }> = {
+  "EXCEPTIONAL MATCH": { label: "Exceptional Match" },
+  "STRONG MATCH": { label: "Strong Match" },
+  "POTENTIAL MATCH": { label: "Potential Match" },
+  "WEAK MATCH": { label: "Weak Match" },
+  "NOT A MATCH": { label: "Not a Match" },
 };
 
 export function verdictLabel(verdict: string | null | undefined): string {
@@ -43,10 +63,10 @@ export function verdictLabel(verdict: string | null | undefined): string {
 }
 
 export function verdictBadgeClass(verdict: string | null | undefined): string {
-  if (!verdict) {
-    return "bg-slate-200";
-  }
-  return VERDICT_DISPLAY[verdict as FitVerdict]?.badgeClass ?? "bg-slate-200";
+  if (!verdict) return "bg-slate-200 text-slate-600 border-slate-200";
+  const c = VERDICT_COLORS[verdict as FitVerdict];
+  if (!c) return "bg-slate-200 text-slate-600 border-slate-200";
+  return `${c.bg} ${c.text} ${c.border}`;
 }
 
 export function verdictBadgeShadow(verdict: string | null | undefined): string {
@@ -95,8 +115,9 @@ export const karta = {
 } as const;
 
 export const VERDICT_SORT_ORDER: Record<FitVerdict, number> = {
-  "STRONG FIT": 0,
-  "POSSIBLE FIT": 1,
-  "WEAK FIT": 2,
-  "NOT SUITABLE": 3,
+  "EXCEPTIONAL MATCH": 0,
+  "STRONG MATCH": 1,
+  "POTENTIAL MATCH": 2,
+  "WEAK MATCH": 3,
+  "NOT A MATCH": 4,
 };

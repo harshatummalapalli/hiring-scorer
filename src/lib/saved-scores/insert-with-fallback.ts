@@ -5,6 +5,7 @@ const OPTIONAL_SCORE_KEYS = [
   "scoring_prompt_version",
   "scoring_cost_usd",
   "model_used",
+  "brief_content_hash",
 ] as const;
 
 export function stripSnapshotColumns(

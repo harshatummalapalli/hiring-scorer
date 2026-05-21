@@ -29,9 +29,14 @@ function GoogleIcon() {
 
 type GoogleAuthButtonProps = {
   next?: string;
+  /** When true, clears Karta session and asks Google to show the account chooser. */
+  forceAccountPicker?: boolean;
 };
 
-export function GoogleAuthButton({ next = "/jobs" }: GoogleAuthButtonProps) {
+export function GoogleAuthButton({
+  next = "/jobs",
+  forceAccountPicker = false,
+}: GoogleAuthButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,11 +45,19 @@ export function GoogleAuthButton({ next = "/jobs" }: GoogleAuthButtonProps) {
     setError(null);
     try {
       const supabase = createSupabaseBrowserClient();
+      if (forceAccountPicker) {
+        await supabase.auth.signOut({ scope: "global" });
+      }
       const redirectTo = new URL("/auth/callback", window.location.origin);
       redirectTo.searchParams.set("next", next);
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: redirectTo.toString() },
+        options: {
+          redirectTo: redirectTo.toString(),
+          queryParams: {
+            prompt: "select_account",
+          },
+        },
       });
       if (oauthError) throw oauthError;
     } catch (err) {
@@ -66,10 +79,16 @@ export function GoogleAuthButton({ next = "/jobs" }: GoogleAuthButtonProps) {
         ) : (
           <>
             <GoogleIcon />
-            Continue with Google
+            {forceAccountPicker
+              ? "Choose Google account"
+              : "Continue with Google"}
           </>
         )}
       </button>
+      <p className="mt-2 text-center text-xs text-[#94A3B8]">
+        Google uses whichever account is active in your browser. To test
+        onboarding, use email + password below with a non–super-admin user.
+      </p>
       {error && (
         <p className="mt-3 text-sm text-red-600" role="alert">
           {error}

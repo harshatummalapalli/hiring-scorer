@@ -319,7 +319,7 @@ export function SavedScoresManager() {
           heading={rows.length === 0 ? "No saved scores yet" : "No matches"}
           subtitle={
             rows.length === 0
-              ? "Score a candidate and save to Supabase to see results here."
+              ? "Evaluate a candidate and save to Supabase to see results here."
               : "Try adjusting your search or filters."
           }
         />

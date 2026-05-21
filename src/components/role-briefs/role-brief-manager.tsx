@@ -13,14 +13,17 @@ import { getErrorMessage } from "@/lib/errors";
 import {
   buildFullBriefPayload,
   buildLegacyBriefPayload,
+  isMissingClientContextColumnError,
   isMissingJobArchitectureColumnError,
   isMissingScoringPromptColumnError,
   isMissingJdAnalysisMetaColumnError,
   isMissingV2ColumnError,
+  stripClientContextColumns,
   stripJdAnalysisMetaColumns,
   stripJobArchitectureColumns,
   stripScoringPromptColumns,
 } from "@/lib/role-brief/insert-brief-payload";
+import type { JobPostingFields } from "@/types/job-posting";
 import {
   getAuthenticatedUserId,
   withCreatedBy,
@@ -39,6 +42,7 @@ async function upsertRoleBrief(
   analysis: RoleBriefAnalysis,
   analysisMeta: RoleBriefAnalysisMeta,
   editingId: string | null,
+  jobPosting?: JobPostingFields,
 ): Promise<RoleBrief> {
   const supabase = createSupabaseClient();
 
@@ -70,6 +74,7 @@ async function upsertRoleBrief(
     analysis,
     !editingId,
     analysisMeta,
+    jobPosting,
   );
   if (!editingId) {
     const userId = await getAuthenticatedUserId(supabase);
@@ -95,6 +100,14 @@ async function upsertRoleBrief(
         if (!isMissingScoringPromptColumnError(metaMsg)) throw metaErr;
       }
     }
+    if (isMissingClientContextColumnError(msg)) {
+      try {
+        return await attempt(stripClientContextColumns(full));
+      } catch (clientErr) {
+        const clientMsg = getErrorMessage(clientErr, "");
+        if (!isMissingV2ColumnError(clientMsg)) throw clientErr;
+      }
+    }
     if (isMissingScoringPromptColumnError(msg)) {
       try {
         return await attempt(stripScoringPromptColumns(full));
@@ -102,6 +115,9 @@ async function upsertRoleBrief(
         const retryMsg = getErrorMessage(retryErr, "");
         if (isMissingJdAnalysisMetaColumnError(retryMsg)) {
           return await attempt(stripJdAnalysisMetaColumns(full));
+        }
+        if (isMissingClientContextColumnError(retryMsg)) {
+          return await attempt(stripClientContextColumns(full));
         }
         if (isMissingV2ColumnError(retryMsg)) {
           return await attempt(
@@ -136,6 +152,9 @@ export function RoleBriefManager() {
     useState<RoleBriefAnalysisMeta | null>(null);
   const [editAnalysedJobDescription, setEditAnalysedJobDescription] =
     useState("");
+  const [editJobPosting, setEditJobPosting] = useState<
+    JobPostingFields | undefined
+  >(undefined);
 
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -187,6 +206,7 @@ export function RoleBriefManager() {
     setEditTitle("");
     setEditAnalysisMeta(null);
     setEditAnalysedJobDescription("");
+    setEditJobPosting(undefined);
     setCreatorKey((k) => k + 1);
   };
 
@@ -195,6 +215,7 @@ export function RoleBriefManager() {
     jobDescription: string;
     analysis: RoleBriefAnalysis;
     analysisMeta: RoleBriefAnalysisMeta;
+    jobPosting: JobPostingFields;
   }) => {
     setIsSaving(true);
     setError(null);
@@ -224,6 +245,7 @@ export function RoleBriefManager() {
           data.analysis,
           data.analysisMeta,
           editingId,
+          data.jobPosting,
         );
       }
       setSuccess(`Saved “${saved.title}”.`);
@@ -309,6 +331,7 @@ export function RoleBriefManager() {
         initialJobDescription={editJobDescription}
         initialAnalysis={editAnalysis}
         initialTitle={editTitle}
+        initialJobPosting={editJobPosting}
         initialAnalysisMeta={editAnalysisMeta}
         initialAnalysedJobDescription={editAnalysedJobDescription}
         editingId={editingId}

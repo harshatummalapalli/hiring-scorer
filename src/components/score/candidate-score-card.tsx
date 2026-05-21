@@ -5,6 +5,7 @@ import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import type { RoleBrief } from "@/types/role-brief";
 import type { CandidateScoreResult, FitVerdict } from "@/types/score";
 import { formatSkillsMatchSummary } from "@/lib/intelligence/semantic-matcher";
+import { verdictLabel } from "@/lib/brand/karta";
 import {
   buildFallbackRecruiterCard,
   scoreToVerdict,
@@ -29,25 +30,30 @@ const VERDICT_STYLES: Record<
   FitVerdict,
   { text: string; ring: string; bg: string }
 > = {
-  "STRONG FIT": {
-    text: "text-emerald-700",
+  "EXCEPTIONAL MATCH": {
+    text: "text-violet-800",
+    ring: "ring-violet-200",
+    bg: "bg-violet-100",
+  },
+  "STRONG MATCH": {
+    text: "text-emerald-800",
     ring: "ring-emerald-200",
-    bg: "bg-emerald-50",
+    bg: "bg-emerald-100",
   },
-  "POSSIBLE FIT": {
-    text: "text-amber-700",
+  "POTENTIAL MATCH": {
+    text: "text-amber-800",
     ring: "ring-amber-200",
-    bg: "bg-amber-50",
+    bg: "bg-amber-100",
   },
-  "WEAK FIT": {
-    text: "text-orange-700",
+  "WEAK MATCH": {
+    text: "text-orange-800",
     ring: "ring-orange-200",
-    bg: "bg-orange-50",
+    bg: "bg-orange-100",
   },
-  "NOT SUITABLE": {
+  "NOT A MATCH": {
     text: "text-red-700",
     ring: "ring-red-200",
-    bg: "bg-red-50",
+    bg: "bg-red-100",
   },
 };
 
@@ -74,9 +80,9 @@ export function CandidateScoreCard({
         ...result.watch_signals.map((f) => f.text),
         ...result.gaps.map((f) => f.text),
       ],
-      result.model_flags.claude.gaps.length > 0
+      (result.model_flags.claude?.gaps.length ?? 0) > 0
         ? normalizeInterviewQuestions(
-            result.model_flags.claude.gaps.map(
+            (result.model_flags.claude?.gaps ?? []).map(
               (g) => `Can you walk me through how you would address: ${g}`,
             ),
           )
@@ -128,12 +134,14 @@ export function CandidateScoreCard({
         {/* Verdict */}
         <section
           className={`rounded-xl px-4 py-5 text-center ring-1 ${verdictStyle.bg} ${verdictStyle.ring} ${compact ? "" : "rounded-2xl px-6 py-8"}`}
-          aria-label={`Verdict: ${verdict}`}
+          aria-label={`Verdict: ${verdictLabel(verdict)}`}
         >
           <p className={`${verdictSize} ${verdictStyle.text}`}>
-            {verdict}
+            {verdictLabel(verdict)}
           </p>
-          <p className="sr-only">Score {result.overall_score} out of 100</p>
+          <p className="sr-only">
+            Match strength {result.overall_score} out of 100
+          </p>
           {skillsMatchSummary && (
             <p className="mt-5 text-center text-sm font-medium leading-relaxed text-slate-600">
               {skillsMatchSummary}

@@ -30,8 +30,11 @@ export function computeJobListStats(
     if (cid && seenCandidates.has(cid)) continue;
     if (cid) seenCandidates.add(cid);
     const verdict = scoreToVerdict(Number(row.overall_score ?? 0));
-    if (verdict === "STRONG FIT") strongMatches += 1;
-    else if (verdict === "POSSIBLE FIT") potentialMatches += 1;
+    if (verdict === "EXCEPTIONAL MATCH" || verdict === "STRONG MATCH") {
+      strongMatches += 1;
+    } else if (verdict === "POTENTIAL MATCH") {
+      potentialMatches += 1;
+    }
   }
 
   return { applicantCount, strongMatches, potentialMatches };

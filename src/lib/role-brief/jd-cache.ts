@@ -1,4 +1,6 @@
+import { createHash } from "crypto";
 import type { CoreSignal, TitleBand } from "@/types/role-brief";
+import type { RoleBrief } from "@/types/role-brief";
 
 const SIMILARITY_REUSE_THRESHOLD = 80;
 
@@ -41,6 +43,22 @@ export function isAnalysisPopulated(source: JdAnalysisCacheSource): boolean {
     source.preferred_signals.length > 0 &&
     Object.keys(source.semantic_clusters).length > 0
   );
+}
+
+/**
+ * Hash of deal_breakers + core_signals — what drives AI scoring content.
+ * Weight-only changes do not change this hash.
+ */
+export function computeBriefContentHash(
+  brief: Pick<RoleBrief, "deal_breakers" | "core_signals">,
+): string {
+  const dealBreakers = [...(brief.deal_breakers ?? [])].sort().join("|");
+  const coreSignals = [...(brief.core_signals ?? [])]
+    .map((s) => s.skill.toLowerCase().trim())
+    .sort()
+    .join("|");
+  const content = `${dealBreakers}::${coreSignals}`;
+  return createHash("sha256").update(content).digest("hex").slice(0, 16);
 }
 
 export function shouldReuseCachedJdAnalysis(

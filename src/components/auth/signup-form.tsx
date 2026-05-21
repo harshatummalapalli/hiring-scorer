@@ -7,6 +7,10 @@ import { Loader2 } from "lucide-react";
 import { AuthDivider } from "@/components/auth/auth-divider";
 import { GoogleAuthButton } from "@/components/auth/google-auth-button";
 import { karta } from "@/lib/brand/karta";
+import {
+  authFinishUrl,
+  navigateAfterAuth,
+} from "@/lib/auth/post-login-redirect";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { upsertWorkspaceSettings } from "@/lib/workspace/settings";
 
@@ -37,7 +41,7 @@ export function SignUpForm() {
             first_name: firstName.trim(),
             company_name: companyName.trim(),
           },
-          emailRedirectTo: `${origin}/auth/callback?next=/jobs`,
+          emailRedirectTo: `${origin}/auth/callback`,
         },
       });
       if (signUpError) throw signUpError;
@@ -47,8 +51,7 @@ export function SignUpForm() {
           first_name: firstName.trim(),
           company_name: companyName.trim(),
         });
-        router.replace("/jobs");
-        router.refresh();
+        navigateAfterAuth(authFinishUrl("/jobs"));
         return;
       }
 

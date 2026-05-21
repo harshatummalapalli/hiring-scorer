@@ -12,6 +12,7 @@ export type CandidateSource =
 
 export type CandidateScoringStatus =
   | "unscored"
+  | "needs_scoring"
   | "scored"
   | "low_relevance"
   | "skipped"
@@ -61,6 +62,7 @@ export function parseScoringStatus(value: unknown): CandidateScoringStatus {
   const s = String(value ?? "unscored").toLowerCase();
   if (
     s === "scored" ||
+    s === "needs_scoring" ||
     s === "low_relevance" ||
     s === "unlikely_fit" ||
     s === "skipped" ||

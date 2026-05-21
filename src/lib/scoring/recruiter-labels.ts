@@ -43,13 +43,13 @@ export const FUNCTIONAL_ROLE_LABELS: Record<FunctionalRole, string> = {
 /** Column / filter label in Saved Scores (values use CONFIDENCE_LABEL_*). */
 export const MODEL_AGREEMENT_COLUMN_LABEL = "Model agreement";
 
-export const SCORING_PANEL_TITLE = "AI-powered candidate scoring";
+export const SCORING_PANEL_TITLE = "AI-powered candidate evaluation";
 export const SCORING_PANEL_DESCRIPTION =
   "Upload a resume and get an evidence-based assessment against your active role brief.";
-export const SCORE_CANDIDATE_BUTTON = "Score candidate";
-export const SCORING_IN_PROGRESS_LABEL = "Scoring…";
+export const SCORE_CANDIDATE_BUTTON = "Evaluate candidate";
+export const SCORING_IN_PROGRESS_LABEL = "Evaluating…";
 export const SCORE_ALL_READY_LABEL = (count: number) =>
-  `Score all ready (${count})`;
+  `Evaluate all ready (${count})`;
 
 /** Maps internal model keys to recruiter-facing role names (fixed production config). */
 export function modelRoleDisplayName(model: ModelRole): string {

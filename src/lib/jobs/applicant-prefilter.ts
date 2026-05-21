@@ -3,8 +3,11 @@ import {
   collectRequiredSkills,
   matchSingleSkill,
 } from "@/lib/intelligence/semantic-matcher";
+import { hasSeniorityGap } from "@/lib/candidates/seniority-rank";
 import {
   coreStrengthOverlapsRole,
+  hasNonTechnicalSignals,
+  isSoftwareEngineeringRole,
   primaryRoleDomains,
 } from "@/lib/intelligence/skill-domains";
 import type { CandidateSignalProfile } from "@/types/candidate";
@@ -59,6 +62,31 @@ export function classifyApplicantPrefilter(
   profile: CandidateSignalProfile,
   resumeText: string,
 ): CandidateScoringStatus {
+  if (
+    roleBrief.title_band &&
+    profile.title_band &&
+    hasSeniorityGap(profile.title_band, roleBrief.title_band)
+  ) {
+    return "low_relevance";
+  }
+
+  if (
+    isSoftwareEngineeringRole(roleBrief) &&
+    hasNonTechnicalSignals({
+      core_strength_primary: profile.core_strength_primary,
+      core_strength_secondary: profile.core_strength_secondary,
+      most_recent_title: profile.most_recent_title,
+      current_title: profile.current_title,
+    })
+  ) {
+    return "low_relevance";
+  }
+
+  const wordCount = resumeText.trim().split(/\s+/).filter(Boolean).length;
+  if (wordCount < 150) {
+    return "low_relevance";
+  }
+
   const mustHaveMatches = countPrefilterMustHaveMatches(
     roleBrief,
     profile,

@@ -35,7 +35,7 @@ export function buildSavedScoresCsv(rows: SavedScoreRow[]): string {
   const headers = [
     "candidate filename",
     "role brief",
-    "overall score",
+    "match strength",
     "model agreement",
     "skills match score",
     "career trajectory score",

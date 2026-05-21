@@ -7,8 +7,75 @@ function parserBaseUrl(): string | null {
   return url || null;
 }
 
+function parserHeaders(json = false): HeadersInit {
+  const headers: Record<string, string> = {};
+  if (json) headers["Content-Type"] = "application/json";
+  const secret = process.env.PARSER_SECRET_KEY?.trim();
+  if (secret) headers["X-Parser-Secret"] = secret;
+  return headers;
+}
+
+async function logParserUsage(
+  durationMs: number,
+  success: boolean,
+  parserUsed: string,
+  rawLength: number,
+  strippedLength: number,
+): Promise<void> {
+  const durationSec = durationMs / 1000;
+  const vcpuSeconds = 1 * durationSec;
+  const gibSeconds = 2 * durationSec;
+
+  try {
+    const { createSupabaseServerClient } =
+      await import("@/lib/supabase/server-auth");
+    const supabase = await createSupabaseServerClient();
+    await supabase.from("parser_usage_log").insert({
+      duration_ms: Math.round(durationMs),
+      success,
+      parser_used: parserUsed,
+      raw_text_length: rawLength,
+      pii_stripped_length: strippedLength,
+      estimated_vcpu_seconds: vcpuSeconds.toFixed(4),
+      estimated_gib_seconds: gibSeconds.toFixed(4),
+    });
+  } catch {
+    // Never fail a parse because of logging
+  }
+}
+
+function usageFromResult(result: ParseRunResult): {
+  parserUsed: string;
+  rawLength: number;
+  strippedLength: number;
+} {
+  const structured = result.structured_resume;
+  return {
+    parserUsed: structured?.metadata?.parser_used ?? "unknown",
+    rawLength: structured?.metadata?.raw_text_length ?? 0,
+    strippedLength: structured?.metadata?.pii_stripped_text_length ?? 0,
+  };
+}
+
 export function isResumeParserConfigured(): boolean {
   return Boolean(parserBaseUrl());
+}
+
+async function readParserJson(res: Response): Promise<ParseRunResult> {
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    const body = await res.text().catch(() => "");
+    const isHtml = body.trimStart().startsWith("<");
+    return {
+      success: false,
+      error: isHtml
+        ? `Parser returned HTML (HTTP ${res.status}). Check RESUME_PARSER_URL — it should be the Python service (e.g. http://localhost:8001), not the Karta app URL.`
+        : `Parser returned non-JSON (HTTP ${res.status}).`,
+      warnings: ["parser_non_json"],
+      duration_ms: 0,
+    };
+  }
+  return (await res.json()) as ParseRunResult;
 }
 
 export async function parseResumeFile(
@@ -30,21 +97,34 @@ export async function parseResumeFile(
   try {
     const res = await fetch(`${base.replace(/\/$/, "")}/parse`, {
       method: "POST",
+      headers: parserHeaders(),
       body: form,
       signal: controller.signal,
     });
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
-      return {
+      const failed: ParseRunResult = {
         success: false,
         error: detail || `Parser HTTP ${res.status}`,
         warnings: ["parser_http_error"],
         duration_ms: 0,
       };
+      void logParserUsage(0, false, "http_error", 0, 0);
+      return failed;
     }
-    return (await res.json()) as ParseRunResult;
+    const result = await readParserJson(res);
+    const usage = usageFromResult(result);
+    void logParserUsage(
+      result.duration_ms ?? 0,
+      result.success,
+      usage.parserUsed,
+      usage.rawLength,
+      usage.strippedLength,
+    );
+    return result;
   } catch (err) {
     const message = err instanceof Error ? err.message : "Parser request failed";
+    void logParserUsage(0, false, "unreachable", 0, 0);
     return {
       success: false,
       error: message,
@@ -68,11 +148,12 @@ export async function parseResumeText(
   try {
     const res = await fetch(`${base.replace(/\/$/, "")}/parse-text`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: parserHeaders(true),
       body: JSON.stringify({ text, filename }),
       signal: controller.signal,
     });
     if (!res.ok) {
+      void logParserUsage(0, false, "http_error", text.length, 0);
       return {
         success: false,
         error: `Parser HTTP ${res.status}`,
@@ -80,9 +161,19 @@ export async function parseResumeText(
         duration_ms: 0,
       };
     }
-    return (await res.json()) as ParseRunResult;
+    const result = await readParserJson(res);
+    const usage = usageFromResult(result);
+    void logParserUsage(
+      result.duration_ms ?? 0,
+      result.success,
+      usage.parserUsed,
+      usage.rawLength || text.length,
+      usage.strippedLength,
+    );
+    return result;
   } catch (err) {
     const message = err instanceof Error ? err.message : "Parser request failed";
+    void logParserUsage(0, false, "unreachable", text.length, 0);
     return {
       success: false,
       error: message,

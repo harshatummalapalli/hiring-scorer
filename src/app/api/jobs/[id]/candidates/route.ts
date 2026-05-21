@@ -14,23 +14,44 @@ export async function GET(_request: Request, { params }: Params) {
     const rows = await listCandidatesByJob(jobId);
 
     const supabase = await createSupabaseServerClient();
-    const { data: scoreRows } = await supabase
-      .from("saved_scores")
-      .select(
-        "id, candidate_id, overall_score, role_brief_id, role_brief_title, created_at",
-      )
-      .eq("role_brief_id", jobId)
-      .order("created_at", { ascending: false });
+    const candidateIds = rows.map((c) => c.id);
+    const [byRoleRes, byCandidateRes] = await Promise.all([
+      supabase
+        .from("saved_scores")
+        .select(
+          "id, candidate_id, overall_score, role_brief_id, role_brief_title, created_at",
+        )
+        .eq("role_brief_id", jobId)
+        .order("created_at", { ascending: false }),
+      candidateIds.length > 0
+        ? supabase
+            .from("saved_scores")
+            .select(
+              "id, candidate_id, overall_score, role_brief_id, role_brief_title, created_at",
+            )
+            .in("candidate_id", candidateIds)
+            .is("role_brief_id", null)
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    if (byRoleRes.error) throw new Error(byRoleRes.error.message);
+    if (byCandidateRes.error) throw new Error(byCandidateRes.error.message);
 
     const scoresByCandidate = new Map<string, CandidateScoreSummary[]>();
-    for (const raw of scoreRows ?? []) {
-      const row = raw as Record<string, unknown>;
+    const seenScoreIds = new Set<string>();
+
+    const attachScore = (row: Record<string, unknown>) => {
+      const scoreId = String(row.id);
+      if (seenScoreIds.has(scoreId)) return;
+      seenScoreIds.add(scoreId);
       const cid = row.candidate_id != null ? String(row.candidate_id) : "";
-      if (!cid) continue;
+      if (!cid) return;
       const overall = Number(row.overall_score ?? 0);
       const summary: CandidateScoreSummary = {
-        id: String(row.id),
-        role_brief_id: jobId,
+        id: scoreId,
+        role_brief_id:
+          row.role_brief_id != null ? String(row.role_brief_id) : jobId,
         role_brief_title:
           row.role_brief_title != null ? String(row.role_brief_title) : null,
         overall_score: overall,
@@ -39,6 +60,13 @@ export async function GET(_request: Request, { params }: Params) {
       const list = scoresByCandidate.get(cid) ?? [];
       list.push(summary);
       scoresByCandidate.set(cid, list);
+    };
+
+    for (const raw of byRoleRes.data ?? []) {
+      attachScore(raw as Record<string, unknown>);
+    }
+    for (const raw of byCandidateRes.data ?? []) {
+      attachScore(raw as Record<string, unknown>);
     }
 
     const candidates: CandidateListItem[] = rows.map((c) => {

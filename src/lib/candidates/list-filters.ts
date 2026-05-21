@@ -12,6 +12,8 @@ import type {
   CandidateVerdictFilter,
 } from "@/types/candidate";
 import type { CompanyType, FitVerdict } from "@/types/score";
+import { isUnlikelyFitStatus } from "@/types/job";
+import { getScoreForRole } from "./active-role-score";
 import { getDisplayJobTitle } from "./profile-display";
 
 export function parseYearsFromLabel(label: string): number | null {
@@ -56,10 +58,11 @@ const VERDICT_MAP: Record<
   Exclude<CandidateVerdictFilter, "all" | "unscored">,
   FitVerdict
 > = {
-  strong: "STRONG FIT",
-  possible: "POSSIBLE FIT",
-  weak: "WEAK FIT",
-  not_suitable: "NOT SUITABLE",
+  exceptional: "EXCEPTIONAL MATCH",
+  strong: "STRONG MATCH",
+  potential: "POTENTIAL MATCH",
+  weak: "WEAK MATCH",
+  not_a_match: "NOT A MATCH",
 };
 
 export function matchesVerdictFilter(
@@ -70,6 +73,58 @@ export function matchesVerdictFilter(
   if (filter === "unscored") return item.role_scores.length === 0;
   const target = VERDICT_MAP[filter];
   return item.role_scores.some((s) => s.verdict === target);
+}
+
+export function matchesVerdictFilterForRole(
+  item: CandidateListItem,
+  filter: CandidateVerdictFilter,
+  roleBriefId: string | null,
+): boolean {
+  if (filter === "all") return true;
+  const score = roleBriefId ? getScoreForRole(item, roleBriefId) : null;
+  if (filter === "unscored") return !score;
+  if (!score) return false;
+  const target = VERDICT_MAP[filter];
+  return score.verdict === target;
+}
+
+/** True when this job has a saved score row (regardless of scoring_status). */
+export function hasEvaluatedScoreForRole(
+  item: CandidateListItem,
+  roleBriefId: string,
+): boolean {
+  return getScoreForRole(item, roleBriefId) != null;
+}
+
+/** Pending only when there is no score for this job yet. */
+export function isPipelinePendingEvaluation(
+  item: CandidateListItem,
+  roleBriefId: string,
+): boolean {
+  if (hasEvaluatedScoreForRole(item, roleBriefId)) return false;
+  return (
+    item.scoring_status === "unscored" ||
+    item.scoring_status === "needs_scoring"
+  );
+}
+
+export function pipelineVerdictForRole(
+  item: CandidateListItem,
+  roleBriefId: string,
+): FitVerdict | null {
+  return getScoreForRole(item, roleBriefId)?.verdict ?? null;
+}
+
+/** Not a match bucket: explicit verdict or pre-score unlikely flags (weak fits use weak bucket). */
+export function isPipelineNotAMatch(
+  item: CandidateListItem,
+  roleBriefId: string,
+): boolean {
+  const verdict = pipelineVerdictForRole(item, roleBriefId);
+  if (verdict === "WEAK MATCH") return false;
+  if (verdict === "NOT A MATCH") return true;
+  if (isUnlikelyFitStatus(item.scoring_status)) return true;
+  return false;
 }
 
 export function matchesSearch(item: CandidateListItem, query: string): boolean {
@@ -196,13 +251,15 @@ export function initialsFromName(name: string): string {
 
 export function shortVerdictLabel(verdict: FitVerdict): string {
   switch (verdict) {
-    case "STRONG FIT":
+    case "EXCEPTIONAL MATCH":
+      return "Exceptional";
+    case "STRONG MATCH":
       return "Strong";
-    case "POSSIBLE FIT":
-      return "Possible";
-    case "WEAK FIT":
+    case "POTENTIAL MATCH":
+      return "Potential";
+    case "WEAK MATCH":
       return "Weak";
     default:
-      return "Not suitable";
+      return "Not a match";
   }
 }

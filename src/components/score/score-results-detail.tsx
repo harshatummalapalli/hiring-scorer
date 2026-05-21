@@ -55,7 +55,7 @@ export function ScoreResultsDetail({
     <div className="space-y-6 border-t border-slate-200 pt-8">
       <div className="flex flex-wrap items-end justify-between gap-4 rounded-lg border border-slate-100 bg-slate-50 p-4">
         <div>
-          <p className="text-sm font-medium text-slate-500">Overall score</p>
+          <p className="text-sm font-medium text-slate-500">Match Strength</p>
           <p className="text-4xl font-bold tabular-nums tracking-tight text-slate-900">
             {result.overall_score}
             {result.overall_provisional && (
@@ -160,17 +160,17 @@ export function ScoreResultsDetail({
           <ul className="mt-2 space-y-2 text-xs">
             <li>
               <strong>{MODEL_ROLE_LABELS.gemini} — watch signals:</strong>{" "}
-              {result.model_flags.gemini.watch_signals.length > 0
-                ? result.model_flags.gemini.watch_signals.join("; ")
+              {(result.model_flags.gemini?.watch_signals.length ?? 0) > 0
+                ? (result.model_flags.gemini?.watch_signals ?? []).join("; ")
                 : "No watch signals"}
             </li>
             <li>
               <strong>{MODEL_ROLE_LABELS.claude} — risks:</strong>{" "}
-              {result.model_flags.claude.risks.join("; ") || "None"}
+              {result.model_flags.claude?.risks.join("; ") || "None"}
             </li>
             <li>
               <strong>{MODEL_ROLE_LABELS.claude} — gaps:</strong>{" "}
-              {result.model_flags.claude.gaps.join("; ") || "None"}
+              {result.model_flags.claude?.gaps.join("; ") || "None"}
             </li>
             <li>
               <strong>{MODEL_ROLE_LABELS.gpt4o} — insufficient data:</strong>{" "}

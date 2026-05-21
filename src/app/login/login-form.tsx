@@ -1,13 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { karta } from "@/lib/brand/karta";
-import { createSupabaseClient } from "@/lib/supabase/client";
+import {
+  authFinishUrl,
+  navigateAfterAuth,
+} from "@/lib/auth/post-login-redirect";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 export function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") || "/jobs";
 
@@ -22,7 +25,7 @@ export function LoginForm() {
     setLoading(true);
     setError(null);
     try {
-      const supabase = createSupabaseClient();
+      const supabase = createSupabaseBrowserClient();
       if (mode === "sign_up") {
         const { error: signUpError } = await supabase.auth.signUp({
           email: email.trim(),
@@ -40,8 +43,8 @@ export function LoginForm() {
         password,
       });
       if (signInError) throw signInError;
-      router.replace(next);
-      router.refresh();
+      navigateAfterAuth(authFinishUrl(next));
+      return;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Authentication failed");
     } finally {

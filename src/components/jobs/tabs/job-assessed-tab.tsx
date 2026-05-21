@@ -1,3 +1,5 @@
+// Legacy — replaced by JobPipelineTab
+
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -8,11 +10,16 @@ import { SkipReasonModal } from "@/components/candidates/skip-reason-modal";
 import { VerdictBadge } from "@/components/candidates/profile-shared";
 import { useCandidatePanel } from "@/contexts/candidate-panel-context";
 import { getScoreForRole } from "@/lib/candidates/active-role-score";
+import { matchesVerdictFilterForRole } from "@/lib/candidates/list-filters";
+import { CANDIDATE_VERDICT_FILTER_OPTIONS } from "@/lib/candidates/verdict-filter-options";
 import { formatTotalExperienceDisplay } from "@/lib/candidates/format-total-experience";
 import { EmptyState } from "@/components/ui/empty-state";
 import { karta } from "@/lib/brand/karta";
 import { VERDICT_SORT_ORDER } from "@/lib/brand/karta";
-import type { CandidateListItem } from "@/types/candidate";
+import type {
+  CandidateListItem,
+  CandidateVerdictFilter,
+} from "@/types/candidate";
 import type { Job } from "@/types/job";
 
 type JobAssessedTabProps = {
@@ -32,6 +39,8 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
     Set<string>
   >(new Set());
   const [skippedOpen, setSkippedOpen] = useState(false);
+  const [verdictFilter, setVerdictFilter] =
+    useState<CandidateVerdictFilter>("all");
   const { openPanel } = useCandidatePanel();
 
   const panelOpts = useMemo(
@@ -47,16 +56,19 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
         fetch(`/api/pipeline?role_brief_id=${encodeURIComponent(jobId)}`),
       ]);
       const candJson = await candRes.json();
-      const pipeJson = await pipeRes.json();
       if (!candRes.ok) throw new Error(candJson.error ?? "Failed to load");
       setCandidates(candJson.candidates as CandidateListItem[]);
-      const ids = new Set<string>();
-      for (const section of pipeJson.sections ?? []) {
-        for (const row of section.candidates ?? []) {
-          ids.add(String(row.candidate_id));
+      // Only update pipeline IDs when the pipeline fetch actually succeeded
+      if (pipeRes.ok) {
+        const pipeJson = await pipeRes.json();
+        const ids = new Set<string>();
+        for (const section of pipeJson.sections ?? []) {
+          for (const row of section.candidates ?? []) {
+            ids.add(String(row.candidate_id));
+          }
         }
+        setPipelineIds(ids);
       }
-      setPipelineIds(ids);
       setOptimisticShortlistedIds(new Set());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
@@ -69,24 +81,58 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ jobId?: string }>).detail;
+      if (detail?.jobId && detail.jobId !== jobId) return;
+      void load();
+    };
+    window.addEventListener("karta:job-scores-recomputed", handler);
+    return () =>
+      window.removeEventListener("karta:job-scores-recomputed", handler);
+  }, [jobId, load]);
+
+  // Fix #2: sync inline edits made inside the slide panel back to this list
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ id: string; display_name: string; current_title: string | null; current_company: string | null }>).detail;
+      if (!detail?.id) return;
+      setCandidates((prev) =>
+        prev.map((c) =>
+          c.id === detail.id
+            ? {
+                ...c,
+                display_name: detail.display_name || c.display_name,
+                current_title: detail.current_title ?? c.current_title,
+                current_company: detail.current_company ?? c.current_company,
+              }
+            : c,
+        ),
+      );
+    };
+    window.addEventListener("karta:candidate-updated", handler);
+    return () => window.removeEventListener("karta:candidate-updated", handler);
+  }, []);
+
   const assessed = useMemo(() => {
     const scored = candidates.filter(
       (c) =>
         c.scoring_status === "scored" &&
-        !pipelineIds.has(c.id) &&
-        !optimisticShortlistedIds.has(c.id),
+        !pipelineIds.has(String(c.id)) &&
+        !optimisticShortlistedIds.has(String(c.id)) &&
+        matchesVerdictFilterForRole(c, verdictFilter, jobId),
     );
     return scored.sort((a, b) => {
       const sa = getScoreForRole(a, jobId);
       const sb = getScoreForRole(b, jobId);
-      const va = sa?.verdict ?? "NOT SUITABLE";
-      const vb = sb?.verdict ?? "NOT SUITABLE";
+      const va = sa?.verdict ?? "NOT A MATCH";
+      const vb = sb?.verdict ?? "NOT A MATCH";
       const orderA = VERDICT_SORT_ORDER[va] ?? 99;
       const orderB = VERDICT_SORT_ORDER[vb] ?? 99;
       if (orderA !== orderB) return orderA - orderB;
       return (sb?.overall_score ?? 0) - (sa?.overall_score ?? 0);
     });
-  }, [candidates, jobId, pipelineIds, optimisticShortlistedIds]);
+  }, [candidates, jobId, pipelineIds, optimisticShortlistedIds, verdictFilter]);
 
   const skipped = useMemo(
     () => candidates.filter((c) => c.scoring_status === "skipped"),
@@ -94,7 +140,8 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
   );
 
   const shortlistCandidate = async (target: CandidateListItem) => {
-    setOptimisticShortlistedIds((prev) => new Set(prev).add(target.id));
+    const targetId = String(target.id);
+    setOptimisticShortlistedIds((prev) => new Set(prev).add(targetId));
     setShortlisting(true);
     setError(null);
     try {
@@ -103,16 +150,17 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           role_brief_id: jobId,
-          candidate_ids: [target.id],
+          candidate_ids: [targetId],
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Shortlist failed");
-      setPipelineIds((prev) => new Set(prev).add(target.id));
+      // Immediately lock this candidate out of the Assessed list via both paths
+      setPipelineIds((prev) => new Set(prev).add(targetId));
     } catch (err) {
       setOptimisticShortlistedIds((prev) => {
         const next = new Set(prev);
-        next.delete(target.id);
+        next.delete(targetId);
         return next;
       });
       setError(
@@ -160,9 +208,27 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-[#64748B]">
-        All candidates scored against this role, sorted by match strength.
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-[#64748B]">
+          All candidates evaluated against this role, sorted by match strength.
+        </p>
+        <select
+          value={verdictFilter}
+          onChange={(e) =>
+            setVerdictFilter(e.target.value as CandidateVerdictFilter)
+          }
+          className={karta.input}
+          aria-label="Filter by verdict"
+        >
+          {CANDIDATE_VERDICT_FILTER_OPTIONS.filter(
+            (opt) => opt.value !== "unscored",
+          ).map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </div>
       {error && (
         <p className="text-sm text-red-600" role="alert">
           {error}
@@ -172,7 +238,7 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
         <EmptyState
           illustration="people"
           heading="No assessed candidates yet"
-          subtitle="Score applicants from the Applicants tab to see match results here."
+          subtitle="Evaluate applicants from the Applicants tab to see match results here."
         />
       ) : (
         <div className={`${karta.card} overflow-hidden`}>
@@ -281,8 +347,23 @@ export function JobAssessedTab({ jobId, roleBrief }: JobAssessedTabProps) {
                   {skipped.map((c) => {
                     const score = getScoreForRole(c, jobId);
                     return (
-                      <tr key={c.id} className="border-b border-slate-100">
-                        <td className="px-4 py-3 font-medium">{c.display_name}</td>
+                      <tr
+                        key={c.id}
+                        className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50"
+                        onClick={() => openPanel(c.id, panelOpts)}
+                      >
+                        <td className="px-4 py-3">
+                          <CandidateIdentityCard
+                            displayName={c.display_name}
+                            candidateId={c.id}
+                            panelOptions={panelOpts}
+                            currentTitle={c.current_title}
+                            currentCompany={c.current_company}
+                            yearsExperience={c.signal_profile.total_years_experience}
+                            experienceYears={c.signal_profile.experience_years}
+                            showMetaRow={false}
+                          />
+                        </td>
                         <td className="px-4 py-3">
                           {score && (
                             <VerdictBadge

@@ -3,6 +3,7 @@ import { createJobForUser } from "@/lib/supabase/jobs-mutate";
 import { listJobsWithStats } from "@/lib/supabase/jobs";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import { limitErrorResponse } from "@/lib/workspace/limits";
+import type { JobPostingFields } from "@/types/job-posting";
 import type { RoleBriefAnalysis, RoleBriefAnalysisMeta } from "@/types/role-brief";
 
 export async function GET() {
@@ -26,6 +27,7 @@ type PostBody = {
   jobDescription?: string;
   analysis?: RoleBriefAnalysis;
   analysisMeta?: RoleBriefAnalysisMeta;
+  jobPosting?: JobPostingFields;
 };
 
 export async function POST(request: Request) {
@@ -40,10 +42,11 @@ export async function POST(request: Request) {
 
     const supabase = await createSupabaseServerClient();
     const job = await createJobForUser(supabase, {
-      title: body.title.trim(),
+      title: body.jobPosting?.jobTitle.trim() ?? body.title.trim(),
       jobDescription: body.jobDescription?.trim() ?? "",
       analysis: body.analysis,
       analysisMeta: body.analysisMeta,
+      jobPosting: body.jobPosting,
     });
 
     return NextResponse.json({ job });

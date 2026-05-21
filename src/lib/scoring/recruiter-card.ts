@@ -26,23 +26,26 @@ export function filenameToDisplayName(filename: string): string {
 }
 
 export function scoreToVerdict(score: number): FitVerdict {
-  if (score >= 75) return "STRONG FIT";
-  if (score >= 55) return "POSSIBLE FIT";
-  if (score >= 35) return "WEAK FIT";
-  return "NOT SUITABLE";
+  if (score >= 85) return "EXCEPTIONAL MATCH";
+  if (score >= 75) return "STRONG MATCH";
+  if (score >= 55) return "POTENTIAL MATCH";
+  if (score >= 35) return "WEAK MATCH";
+  return "NOT A MATCH";
 }
 
 export function verdictTone(
   verdict: FitVerdict,
-): "green" | "amber" | "orange" | "red" {
+): "violet" | "green" | "amber" | "orange" | "red" {
   switch (verdict) {
-    case "STRONG FIT":
+    case "EXCEPTIONAL MATCH":
+      return "violet";
+    case "STRONG MATCH":
       return "green";
-    case "POSSIBLE FIT":
+    case "POTENTIAL MATCH":
       return "amber";
-    case "WEAK FIT":
+    case "WEAK MATCH":
       return "orange";
-    default:
+    case "NOT A MATCH":
       return "red";
   }
 }

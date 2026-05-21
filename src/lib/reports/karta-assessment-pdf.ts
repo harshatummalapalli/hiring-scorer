@@ -31,10 +31,11 @@ const DIMENSION_KEYS: DimensionKey[] = [
 ];
 
 const VERDICT_RGB: Record<FitVerdict, [number, number, number]> = {
-  "STRONG FIT": [5, 150, 105],
-  "POSSIBLE FIT": [217, 119, 6],
-  "WEAK FIT": [100, 116, 139],
-  "NOT SUITABLE": [225, 29, 72],
+  "EXCEPTIONAL MATCH": [124, 58, 237],
+  "STRONG MATCH": [5, 150, 105],
+  "POTENTIAL MATCH": [217, 119, 6],
+  "WEAK MATCH": [234, 88, 12],
+  "NOT A MATCH": [220, 38, 38],
 };
 
 function formatReportDate(d: Date = new Date()): string {

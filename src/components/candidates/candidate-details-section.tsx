@@ -101,6 +101,17 @@ export function CandidateDetailsSection({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Save failed");
+      // Broadcast update so mounted list components refresh this candidate row
+      window.dispatchEvent(
+        new CustomEvent("karta:candidate-updated", {
+          detail: {
+            id: candidate.id,
+            display_name: form.display_name.trim(),
+            current_title: form.current_title.trim() || null,
+            current_company: form.current_company.trim() || null,
+          },
+        }),
+      );
       setEditing(false);
       onSaved();
     } catch (err) {

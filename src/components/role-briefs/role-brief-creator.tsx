@@ -1,12 +1,25 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ChevronDown, ChevronRight, Loader2, Sparkles } from "lucide-react";
 import { AnalysisCards } from "@/components/role-briefs/analysis-cards";
 import { JdAnalysisLoading } from "@/components/role-briefs/jd-analysis-loading";
 import { karta } from "@/lib/brand/karta";
 import { getErrorMessage } from "@/lib/errors";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import type { JdSessionCache } from "@/lib/role-brief/resolve-jd-analysis";
+import {
+  COMPANY_SIZE_OPTIONS,
+  type CompanySize,
+  type RecruiterType,
+} from "@/lib/workspace/workspace-profiles";
+import {
+  briefRowToJobPosting,
+  jobPostingToJdContext,
+  SENIORITY_LEVELS,
+  type JobPostingFields,
+  type SeniorityLevel,
+} from "@/types/job-posting";
 import type {
   RoleBrief,
   RoleBriefAnalysis,
@@ -18,27 +31,44 @@ import {
   emptyAnalysis,
 } from "@/types/role-brief";
 
+type SavePayload = {
+  title: string;
+  jobDescription: string;
+  analysis: RoleBriefAnalysis;
+  analysisMeta: RoleBriefAnalysisMeta;
+  jobPosting: JobPostingFields;
+};
+
 type RoleBriefCreatorProps = {
   initialJobDescription?: string;
   initialAnalysis?: RoleBriefAnalysis | null;
   initialTitle?: string;
+  initialJobPosting?: Partial<JobPostingFields>;
   initialAnalysisMeta?: RoleBriefAnalysisMeta | null;
   initialAnalysedJobDescription?: string;
   editingId?: string | null;
-  onSave: (data: {
-    title: string;
-    jobDescription: string;
-    analysis: RoleBriefAnalysis;
-    analysisMeta: RoleBriefAnalysisMeta;
-  }) => Promise<void>;
+  onSave: (data: SavePayload) => Promise<void>;
   isSaving: boolean;
   onCancel?: () => void;
 };
+
+type FieldErrors = Partial<
+  Record<
+    | "jobTitle"
+    | "jobLocation"
+    | "seniority"
+    | "clientCompanyName"
+    | "clientCompanyBrief"
+    | "form",
+    string
+  >
+>;
 
 export function RoleBriefCreator({
   initialJobDescription = "",
   initialAnalysis = null,
   initialTitle = "",
+  initialJobPosting,
   initialAnalysisMeta = null,
   initialAnalysedJobDescription = "",
   editingId = null,
@@ -51,6 +81,31 @@ export function RoleBriefCreator({
     initialAnalysis,
   );
   const [title, setTitle] = useState(initialTitle);
+  const [jobTitle, setJobTitle] = useState(
+    initialJobPosting?.jobTitle ?? initialTitle,
+  );
+  const [jobLocation, setJobLocation] = useState(
+    initialJobPosting?.jobLocation ?? "",
+  );
+  const [seniority, setSeniority] = useState<SeniorityLevel>(
+    initialJobPosting?.seniorityOverride ?? "Mid",
+  );
+  const [department, setDepartment] = useState(initialJobPosting?.department ?? "");
+  const [recruiterType, setRecruiterType] = useState<RecruiterType>("inhouse");
+  const [clientContextOpen, setClientContextOpen] = useState(false);
+  const [clientCompanyName, setClientCompanyName] = useState(
+    initialJobPosting?.clientCompanyName ?? "",
+  );
+  const [clientCompanyBrief, setClientCompanyBrief] = useState(
+    initialJobPosting?.clientCompanyBrief ?? "",
+  );
+  const [clientCompanySize, setClientCompanySize] = useState<CompanySize | "">(
+    initialJobPosting?.clientCompanySize ?? "",
+  );
+  const [clientCompanyWebsite, setClientCompanyWebsite] = useState(
+    initialJobPosting?.clientCompanyWebsite ?? "",
+  );
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [analysing, setAnalysing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
@@ -63,15 +118,83 @@ export function RoleBriefCreator({
     initialAnalysedJobDescription || initialJobDescription,
   );
 
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    void (async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data, error: profileError } = await supabase
+          .from("workspace_profiles")
+          .select(
+            "recruiter_type, company_name, company_size, company_website",
+          )
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (profileError || !data) return;
+
+        const type = data.recruiter_type === "agency" ? "agency" : "inhouse";
+        setRecruiterType(type);
+        setClientContextOpen(type === "agency");
+
+        if (!initialJobPosting?.clientCompanyName && type === "inhouse") {
+          setClientCompanyName(String(data.company_name ?? ""));
+          if (!initialJobPosting?.clientCompanySize && data.company_size) {
+            setClientCompanySize(data.company_size as CompanySize);
+          }
+          if (!initialJobPosting?.clientCompanyWebsite && data.company_website) {
+            setClientCompanyWebsite(String(data.company_website));
+          }
+        }
+      } catch {
+        /* workspace_profiles may not exist until migration runs */
+      }
+    })();
+  }, [initialJobPosting?.clientCompanyName, initialJobPosting?.clientCompanySize, initialJobPosting?.clientCompanyWebsite]);
+
+  const buildJobPosting = (): JobPostingFields => ({
+    jobTitle: jobTitle.trim(),
+    jobLocation: jobLocation.trim(),
+    seniorityOverride: seniority,
+    department: department.trim() || undefined,
+    clientCompanyName: clientCompanyName.trim() || undefined,
+    clientCompanyBrief: clientCompanyBrief.trim() || undefined,
+    clientCompanySize: clientCompanySize || undefined,
+    clientCompanyWebsite: clientCompanyWebsite.trim() || undefined,
+  });
+
+  const validatePosting = (): FieldErrors => {
+    const next: FieldErrors = {};
+    if (!jobTitle.trim()) next.jobTitle = "Job title is required.";
+    if (!jobLocation.trim()) next.jobLocation = "Job location is required.";
+    if (!seniority) next.seniority = "Seniority level is required.";
+    if (!clientCompanyName.trim()) {
+      next.clientCompanyName = "Hiring company name is required.";
+    }
+    if (clientCompanyBrief.length > 300) {
+      next.clientCompanyBrief = "Company brief must be 300 characters or fewer.";
+    }
+    return next;
+  };
+
   const handleAnalyse = async () => {
+    const postingErrors = validatePosting();
     if (!jobDescription.trim()) {
       setError("Paste a job description first.");
+      return;
+    }
+    if (Object.keys(postingErrors).length > 0) {
+      setFieldErrors(postingErrors);
+      setError("Complete the job fields above before reading the JD.");
       return;
     }
 
     setAnalysing(true);
     setError(null);
     setInfoMessage(null);
+    setFieldErrors({});
 
     try {
       const sessionCache: JdSessionCache | null =
@@ -96,6 +219,7 @@ export function RoleBriefCreator({
           jobDescription: jobDescription.trim(),
           roleBriefId: editingId ?? undefined,
           sessionCache,
+          recruiterContext: jobPostingToJdContext(buildJobPosting()),
         }),
       });
       const data = (await res.json()) as {
@@ -111,7 +235,10 @@ export function RoleBriefCreator({
 
       const next = data.analysis ?? emptyAnalysis();
       setAnalysis(next);
-      setTitle(data.title ?? deriveTitleFromAnalysis(next, jobDescription));
+      const derived =
+        data.title ?? deriveTitleFromAnalysis(next, jobDescription);
+      setTitle(derived);
+      if (!jobTitle.trim()) setJobTitle(derived);
       setAnalysisMeta({
         job_description_hash: data.job_description_hash ?? null,
         analysis_version: data.analysis_version ?? 1,
@@ -130,15 +257,22 @@ export function RoleBriefCreator({
   };
 
   const handleSave = async () => {
+    const postingErrors = validatePosting();
+    setFieldErrors(postingErrors);
+    if (Object.keys(postingErrors).length > 0) return;
+
     if (!analysis) {
       setError("Read the job description before saving.");
       return;
     }
-    const finalTitle = title.trim() || deriveTitleFromAnalysis(analysis, jobDescription);
+
+    const finalTitle =
+      jobTitle.trim() || title.trim() || deriveTitleFromAnalysis(analysis, jobDescription);
     if (!finalTitle) {
-      setError("Role title is required.");
+      setFieldErrors({ jobTitle: "Job title is required." });
       return;
     }
+
     setError(null);
     await onSave({
       title: finalTitle,
@@ -148,19 +282,168 @@ export function RoleBriefCreator({
         ...analysisMeta,
         job_description_hash: analysisMeta.job_description_hash ?? null,
       },
+      jobPosting: buildJobPosting(),
     });
   };
 
   return (
     <div className="space-y-10">
       <section className={`${karta.card} p-8 sm:p-10`}>
+        <div className="space-y-4">
+          <label className="block text-sm font-medium text-[#334155]">
+            Job Title
+            <input
+              type="text"
+              value={jobTitle}
+              onChange={(e) => setJobTitle(e.target.value)}
+              className={`mt-1 w-full ${karta.input}`}
+              disabled={analysing}
+            />
+            {fieldErrors.jobTitle && (
+              <p className="mt-1 text-sm text-red-600">{fieldErrors.jobTitle}</p>
+            )}
+          </label>
+
+          <label className="block text-sm font-medium text-[#334155]">
+            Job Location
+            <input
+              type="text"
+              value={jobLocation}
+              onChange={(e) => setJobLocation(e.target.value)}
+              placeholder="e.g. Bangalore / Remote / Hybrid - Mumbai"
+              className={`mt-1 w-full ${karta.input}`}
+              disabled={analysing}
+            />
+            {fieldErrors.jobLocation && (
+              <p className="mt-1 text-sm text-red-600">{fieldErrors.jobLocation}</p>
+            )}
+          </label>
+
+          <label className="block text-sm font-medium text-[#334155]">
+            Seniority Level
+            <select
+              value={seniority}
+              onChange={(e) =>
+                setSeniority(e.target.value as SeniorityLevel)
+              }
+              className={`mt-1 w-full ${karta.input}`}
+              disabled={analysing}
+            >
+              {SENIORITY_LEVELS.map((level) => (
+                <option key={level} value={level}>
+                  {level}
+                </option>
+              ))}
+            </select>
+            {fieldErrors.seniority && (
+              <p className="mt-1 text-sm text-red-600">{fieldErrors.seniority}</p>
+            )}
+          </label>
+
+          <label className="block text-sm font-medium text-[#334155]">
+            Department{" "}
+            <span className="font-normal text-[#94A3B8]">(optional)</span>
+            <input
+              type="text"
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
+              className={`mt-1 w-full ${karta.input}`}
+              disabled={analysing}
+            />
+          </label>
+
+          <div className="rounded-lg border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setClientContextOpen((o) => !o)}
+              className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-[#1E293B]"
+              aria-expanded={clientContextOpen}
+            >
+              {clientContextOpen ? (
+                <ChevronDown className="h-4 w-4 text-[#64748B]" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-[#64748B]" />
+              )}
+              Client / Company Context
+            </button>
+            {clientContextOpen && (
+              <div className="space-y-4 border-t border-slate-100 px-4 pb-4 pt-3">
+                <label className="block text-sm font-medium text-[#334155]">
+                  Hiring company name
+                  <input
+                    type="text"
+                    value={clientCompanyName}
+                    onChange={(e) => setClientCompanyName(e.target.value)}
+                    className={`mt-1 w-full ${karta.input}`}
+                    disabled={analysing}
+                  />
+                  {fieldErrors.clientCompanyName && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {fieldErrors.clientCompanyName}
+                    </p>
+                  )}
+                </label>
+
+                <label className="block text-sm font-medium text-[#334155]">
+                  Brief about the company
+                  <textarea
+                    value={clientCompanyBrief}
+                    onChange={(e) => setClientCompanyBrief(e.target.value)}
+                    maxLength={300}
+                    rows={3}
+                    placeholder="e.g. Series B fintech startup building payment infrastructure for SMEs in Southeast Asia"
+                    className={`mt-1 w-full resize-y ${karta.input}`}
+                    disabled={analysing}
+                  />
+                  {fieldErrors.clientCompanyBrief && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {fieldErrors.clientCompanyBrief}
+                    </p>
+                  )}
+                </label>
+
+                <label className="block text-sm font-medium text-[#334155]">
+                  Company size
+                  <select
+                    value={clientCompanySize}
+                    onChange={(e) =>
+                      setClientCompanySize(e.target.value as CompanySize | "")
+                    }
+                    className={`mt-1 w-full ${karta.input}`}
+                    disabled={analysing}
+                  >
+                    <option value="">Select size</option>
+                    {COMPANY_SIZE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block text-sm font-medium text-[#334155]">
+                  Company website{" "}
+                  <span className="font-normal text-[#94A3B8]">(optional)</span>
+                  <input
+                    type="text"
+                    value={clientCompanyWebsite}
+                    onChange={(e) => setClientCompanyWebsite(e.target.value)}
+                    className={`mt-1 w-full ${karta.input}`}
+                    disabled={analysing}
+                  />
+                </label>
+              </div>
+            )}
+          </div>
+        </div>
+
         <textarea
           id="job-description"
           value={jobDescription}
           onChange={(e) => setJobDescription(e.target.value)}
           rows={14}
           placeholder="Paste the complete job description here — include the title, responsibilities, requirements, and any context about the team or company."
-          className={`w-full resize-y ${karta.input} leading-relaxed`}
+          className={`mt-6 w-full resize-y ${karta.input} leading-relaxed`}
           aria-label="Job description"
           disabled={analysing}
         />
@@ -262,10 +545,12 @@ export function RoleBriefCreator({
 
 /** Hydrate creator when editing an existing brief. */
 export function roleBriefToCreatorState(brief: RoleBrief) {
+  const row = brief as unknown as Record<string, unknown>;
   return {
     jobDescription: brief.job_description ?? "",
     analysis: analysisFromRoleBrief(brief),
     title: brief.title,
+    jobPosting: briefRowToJobPosting(row, brief.title),
     analysisMeta: {
       job_description_hash: brief.job_description_hash,
       analysis_version: brief.analysis_version,

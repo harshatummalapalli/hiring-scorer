@@ -1,3 +1,7 @@
+// DEPRECATED: GPT profile extraction was removed to prevent PII from being
+// sent to OpenAI. All extraction now happens in the Python parser service
+// via RESUME_PARSER_URL. This file is kept for reference only.
+
 import OpenAI from "openai";
 import { formatProviderAuthError, getApiKey } from "@/lib/ai/api-keys";
 import type { CandidateSignalProfile } from "@/types/candidate";
@@ -44,6 +48,7 @@ export async function gptExtractProfile(
       console.log(`[gpt-profile] Trying model: ${modelId}`);
       const completion = await client.chat.completions.create({
         model: modelId,
+        max_tokens: 1200,
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: EXTRACTION_PROMPT },

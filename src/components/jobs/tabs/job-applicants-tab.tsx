@@ -1,3 +1,5 @@
+// Legacy — replaced by JobPipelineTab
+
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -247,7 +249,7 @@ export function JobApplicantsTab({
           .join(" · ");
         setError(
           succeeded > 0
-            ? `Scored ${succeeded} of ${ids.length}. Failed: ${detail}${failures.length > 3 ? "…" : ""}`
+            ? `Evaluated ${succeeded} of ${ids.length}. Failed: ${detail}${failures.length > 3 ? "…" : ""}`
             : `Scoring failed: ${detail}`,
         );
       }
@@ -477,7 +479,7 @@ export function JobApplicantsTab({
               {batchScoring ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                `Score Selected (${selected.size})`
+                `Evaluate Selected (${selected.size})`
               )}
             </button>
           )}
@@ -593,7 +595,7 @@ export function JobApplicantsTab({
                               className="review-dot-pulse inline-block h-2 w-2 rounded-full bg-amber-200"
                               aria-hidden
                             />
-                            Review and Score
+                            Review and Evaluate
                           </button>
                         </div>
                       )}

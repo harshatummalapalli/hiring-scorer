@@ -6,6 +6,7 @@ import {
   coreStrengthOverlapsRole,
   domainIdFromLabel,
   hasNonTechnicalCoreStrength,
+  hasNonTechnicalSignals,
   isSoftwareEngineeringRole,
   primaryRoleDomains,
 } from "@/lib/intelligence/skill-domains";
@@ -35,11 +36,19 @@ export type TalentRecommendation = {
 };
 
 const BAND_RANK: Record<TitleBand, number> = {
+  Intern: 0,
   Entry: 1,
   Mid: 2,
   Senior: 3,
-  Staff: 4,
-  Principal: 5,
+  Lead: 4,
+  Staff: 5,
+  Principal: 6,
+  Manager: 7,
+  "Senior Manager": 8,
+  Director: 9,
+  "Senior Director": 10,
+  VP: 11,
+  "C-Suite": 12,
 };
 
 export function titleBandRank(band: string | null | undefined): number | null {
@@ -95,7 +104,8 @@ export function passesCoreStrengthFilter(
   const roleDomains = primaryRoleDomains(roleBrief);
   const isEngRole = isSoftwareEngineeringRole(roleBrief);
 
-  if (isEngRole && hasNonTechnicalCoreStrength(profile)) {
+  // Block non-technical profiles (by core_strength OR job title) from eng roles
+  if (isEngRole && hasNonTechnicalSignals(profile)) {
     if (
       roleDomains.length === 0 ||
       !coreStrengthOverlapsRole(profile, roleDomains)
@@ -105,7 +115,10 @@ export function passesCoreStrengthFilter(
   }
 
   if (roleDomains.length === 0) {
-    return !isEngRole || !hasNonTechnicalCoreStrength(profile);
+    // For eng roles detected only by title (no domain signals), use the
+    // broader signal check so recruiter/HR profiles with null core_strength
+    // don't slip through.
+    return !isEngRole || !hasNonTechnicalSignals(profile);
   }
 
   if (!profileHasSkillSignals(profile)) {
@@ -263,16 +276,30 @@ export function parseYearsExperience(value: string | null | undefined): number {
 
 function minYearsForBand(band: TitleBand | null): number {
   switch (band) {
-    case "Principal":
-      return 10;
-    case "Staff":
-      return 8;
-    case "Senior":
-      return 5;
-    case "Mid":
-      return 2;
+    case "Intern":
+      return 0;
     case "Entry":
       return 0;
+    case "Mid":
+      return 2;
+    case "Senior":
+    case "Lead":
+      return 5;
+    case "Staff":
+      return 8;
+    case "Principal":
+      return 10;
+    case "Manager":
+      return 6;
+    case "Senior Manager":
+      return 8;
+    case "Director":
+      return 10;
+    case "Senior Director":
+      return 12;
+    case "VP":
+    case "C-Suite":
+      return 12;
     default:
       return 2;
   }

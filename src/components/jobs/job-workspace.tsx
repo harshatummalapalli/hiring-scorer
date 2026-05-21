@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2 } from "lucide-react";
-import { JobApplicantsTab } from "@/components/jobs/tabs/job-applicants-tab";
-import { JobAssessedTab } from "@/components/jobs/tabs/job-assessed-tab";
-import { JobOverviewTab } from "@/components/jobs/tabs/job-overview-tab";
+import { ArrowLeft, Loader2, Settings } from "lucide-react";
+import { JobPipelineTab } from "@/components/jobs/tabs/job-pipeline-tab";
 import { JobShortlistTab } from "@/components/jobs/tabs/job-shortlist-tab";
+import { JobSettingsPanel } from "@/components/jobs/job-settings-panel";
 import { formatKartaDate } from "@/lib/dates/format-karta-date";
 import { getErrorMessage } from "@/lib/errors";
 import type { Job } from "@/types/job";
@@ -15,13 +14,11 @@ import { karta } from "@/lib/brand/karta";
 import { JOB_STATUS_LABELS } from "@/types/job";
 
 const TABS = [
-  ["overview", "Overview"],
-  ["applicants", "Applicants"],
-  ["assessed", "Assessed"],
+  ["pipeline", "Pipeline"],
   ["shortlist", "Shortlist"],
 ] as const;
 
-type JobTab = (typeof TABS)[number][0];
+type JobTab = "pipeline" | "shortlist";
 
 function statusBadgeClass(status: string): string {
   switch (status) {
@@ -36,7 +33,8 @@ function statusBadgeClass(status: string): string {
 
 export function JobWorkspace({ jobId }: { jobId: string }) {
   const [job, setJob] = useState<Job | null>(null);
-  const [tab, setTab] = useState<JobTab>("overview");
+  const [tab, setTab] = useState<JobTab>("pipeline");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,7 +76,10 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
   if (!job) {
     return (
       <div className="space-y-4">
-        <Link href="/jobs" className="inline-flex items-center gap-2 text-sm text-[#64748B] hover:text-[#1E293B]">
+        <Link
+          href="/jobs"
+          className="inline-flex items-center gap-2 text-sm text-[#64748B] hover:text-[#1E293B]"
+        >
           <ArrowLeft className="h-4 w-4" />
           Back to Jobs
         </Link>
@@ -89,30 +90,40 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
 
   return (
     <div className="space-y-8">
-      <div>
-        <Link
-          href="/jobs"
-          className="inline-flex items-center gap-2 text-sm text-[#64748B] hover:text-[#1E293B]"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Jobs
-        </Link>
-        <h1 className={`mt-4 ${karta.pageTitle}`}>{job.title}</h1>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          {job.title_band && (
-            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-[#64748B]">
-              {job.title_band}
-            </span>
-          )}
-          <span
-            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusBadgeClass(job.status)}`}
+      <div className="flex flex-wrap items-start gap-4">
+        <div className="min-w-0 flex-1">
+          <Link
+            href="/jobs"
+            className="inline-flex items-center gap-2 text-sm text-[#64748B] hover:text-[#1E293B]"
           >
-            {JOB_STATUS_LABELS[job.status]}
-          </span>
-          <span className="text-sm text-[#64748B]">
-            Posted {formatKartaDate(job.created_at)}
-          </span>
+            <ArrowLeft className="h-4 w-4" />
+            Jobs
+          </Link>
+          <h1 className={`mt-4 ${karta.pageTitle}`}>{job.title}</h1>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {job.title_band && (
+              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-[#64748B]">
+                {job.title_band}
+              </span>
+            )}
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusBadgeClass(job.status)}`}
+            >
+              {JOB_STATUS_LABELS[job.status]}
+            </span>
+            <span className="text-sm text-[#64748B]">
+              Posted {formatKartaDate(job.created_at)}
+            </span>
+          </div>
         </div>
+        <button
+          type="button"
+          onClick={() => setSettingsOpen(true)}
+          className="ml-auto rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+          aria-label="Job settings"
+        >
+          <Settings className="h-5 w-5" />
+        </button>
       </div>
 
       <SlidingTabs
@@ -121,19 +132,12 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
         onChange={setTab}
       />
 
-      {tab === "overview" && (
-        <JobOverviewTab job={job} onJobUpdated={setJob} />
-      )}
-      {tab === "applicants" && (
-        <JobApplicantsTab
+      {tab === "pipeline" && (
+        <JobPipelineTab
           jobId={job.id}
           jobTitle={job.title}
           roleBrief={job}
-          onGoToAssessed={() => setTab("assessed")}
         />
-      )}
-      {tab === "assessed" && (
-        <JobAssessedTab jobId={job.id} roleBrief={job} />
       )}
       {tab === "shortlist" && (
         <JobShortlistTab
@@ -143,6 +147,13 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
           roleBrief={job}
         />
       )}
+
+      <JobSettingsPanel
+        job={job}
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onJobUpdated={setJob}
+      />
     </div>
   );
 }

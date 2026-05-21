@@ -23,6 +23,7 @@ import {
   sortCandidates,
 } from "@/lib/candidates/list-filters";
 import { getPrimaryRoleScore } from "@/lib/candidates/active-role-score";
+import { CANDIDATE_VERDICT_FILTER_OPTIONS } from "@/lib/candidates/verdict-filter-options";
 import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
 import { karta } from "@/lib/brand/karta";
@@ -132,6 +133,28 @@ export function TalentPoolWorkspace() {
   useEffect(() => {
     void loadCandidates();
   }, [loadCandidates]);
+
+  // Fix #2: sync inline edits made inside the slide panel back to this list
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ id: string; display_name: string; current_title: string | null; current_company: string | null }>).detail;
+      if (!detail?.id) return;
+      setCandidates((prev) =>
+        prev.map((c) =>
+          c.id === detail.id
+            ? {
+                ...c,
+                display_name: detail.display_name || c.display_name,
+                current_title: detail.current_title ?? c.current_title,
+                current_company: detail.current_company ?? c.current_company,
+              }
+            : c,
+        ),
+      );
+    };
+    window.addEventListener("karta:candidate-updated", handler);
+    return () => window.removeEventListener("karta:candidate-updated", handler);
+  }, []);
 
   const filtered = useMemo(() => {
     const base = filterCandidates(candidates, {
@@ -319,15 +342,19 @@ export function TalentPoolWorkspace() {
             />
             Drop resumes or click to browse
           </label>
-          {uploadUi.phase !== "idle" && (
-            <ResumeUploadProgress
-              files={uploadUi.files}
-              phase={uploadUi.phase}
-              successCount={
-                uploadUi.phase === "success" ? uploadUi.count : undefined
-              }
-            />
-          )}
+        </div>
+      )}
+
+      {/* Progress is shown outside the upload panel so closing the panel mid-upload doesn't hide it */}
+      {uploadUi.phase !== "idle" && (
+        <div className={`mb-6 ${karta.card} p-4`}>
+          <ResumeUploadProgress
+            files={uploadUi.files}
+            phase={uploadUi.phase}
+            successCount={
+              uploadUi.phase === "success" ? uploadUi.count : undefined
+            }
+          />
         </div>
       )}
 
@@ -384,12 +411,11 @@ export function TalentPoolWorkspace() {
           className={karta.input}
           aria-label="Filter by verdict"
         >
-          <option value="all">All verdicts</option>
-          <option value="strong">Strong Match</option>
-          <option value="possible">Potential Match</option>
-          <option value="weak">Low Match</option>
-          <option value="not_suitable">No Match</option>
-          <option value="unscored">Not scored yet</option>
+          {CANDIDATE_VERDICT_FILTER_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
         </select>
         <select
           value={coreStrength}
@@ -467,7 +493,7 @@ export function TalentPoolWorkspace() {
                     <th className="px-4 py-3">Name</th>
                     <th className="px-4 py-3">Core Strength</th>
                     <th className="px-4 py-3">Experience</th>
-                    <th className="px-4 py-3">Last Scored Job</th>
+                    <th className="px-4 py-3">Last Evaluated Job</th>
                     <th className="px-4 py-3">Verdict</th>
                     <th className="px-4 py-3 text-right">Action</th>
                   </tr>
@@ -593,20 +619,27 @@ export function TalentPoolWorkspace() {
                       <tr className={karta.tableHeadRow}>
                         <th className="w-10 px-3 py-3" aria-label="Select" />
                         <th className="px-4 py-3">Name</th>
-                        <th className="px-4 py-3">Source</th>
+                        <th className="px-4 py-3">Core Strength</th>
+                        <th className="px-4 py-3">Experience</th>
+                        <th className="px-4 py-3 text-right">Action</th>
                       </tr>
                     </thead>
                     <tbody>
                       {unscoredFiltered.map((c) => (
                         <tr
                           key={c.id}
-                          className="border-b border-slate-100 last:border-0 hover:bg-slate-50"
+                          className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50"
+                          onClick={(e) => {
+                            if ((e.target as HTMLElement).closest("input,button,a")) return;
+                            openPanel(c.id);
+                          }}
                         >
                           <td className="px-3 py-3">
                             <input
                               type="checkbox"
                               checked={selected.has(c.id)}
                               onChange={() => toggleOne(c.id)}
+                              onClick={(e) => e.stopPropagation()}
                               aria-label={`Select ${c.display_name}`}
                             />
                           </td>
@@ -622,10 +655,31 @@ export function TalentPoolWorkspace() {
                               experienceYears={c.signal_profile.experience_years}
                               location={c.signal_profile.location}
                               topSkills={profileTopSkills(c.signal_profile)}
+                              sourceLabel={sourceBadgeLabel(c.source)}
                             />
                           </td>
-                          <td className="px-4 py-3 text-[#64748B]">
-                            {sourceBadgeLabel(c.source)}
+                          <td className="px-4 py-3 align-top">
+                            <CoreStrengthLabel
+                              primary={c.signal_profile.core_strength_primary}
+                              secondary={c.signal_profile.core_strength_secondary}
+                              prefix=""
+                              className="text-xs font-medium text-[#0D9488]"
+                            />
+                          </td>
+                          <td className="px-4 py-3 align-top text-[#64748B]">
+                            {c.signal_profile.total_years_experience?.trim() || "—"}
+                          </td>
+                          <td className="px-4 py-3 text-right align-top">
+                            <button
+                              type="button"
+                              className="text-sm font-medium text-[#0D9488] hover:underline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openPanel(c.id);
+                              }}
+                            >
+                              View
+                            </button>
                           </td>
                         </tr>
                       ))}

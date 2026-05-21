@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Loader2, Search } from "lucide-react";
 import type { AdminOverview, AdminWorkspaceRow } from "@/lib/admin/queries";
 import { AdminCostDashboard } from "@/components/admin/admin-cost-dashboard";
+import { ParserUsageWidget } from "@/components/admin/parser-usage-widget";
 import { karta } from "@/lib/brand/karta";
 
 function formatStorageBytes(bytes: number): string {
@@ -238,6 +239,8 @@ export function AdminDashboard() {
           </div>
         )}
       </section>
+
+      <ParserUsageWidget />
 
       <AdminCostDashboard />
 

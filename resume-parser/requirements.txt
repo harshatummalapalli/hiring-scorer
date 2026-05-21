@@ -1,0 +1,10 @@
+fastapi==0.115.6
+uvicorn==0.32.1
+python-multipart==0.0.20
+pydantic==2.10.3
+docling==2.94.0
+spacy==3.8.14
+phonenumbers==9.0.30
+python-docx==1.2.0
+python-dateutil==2.9.0.post0
+regex==2026.5.9

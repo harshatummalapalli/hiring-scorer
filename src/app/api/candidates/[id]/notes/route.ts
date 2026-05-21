@@ -11,7 +11,10 @@ type Params = { params: Promise<{ id: string }> };
 export async function POST(request: Request, { params }: Params) {
   try {
     const { id } = await params;
-    const body = (await request.json()) as { body?: string };
+    const body = (await request.json()) as {
+      body?: string;
+      jobId?: string | null;
+    };
     const text = body.body?.trim();
     if (!text) {
       return NextResponse.json({ error: "Note body is required." }, { status: 400 });
@@ -22,7 +25,7 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: "Candidate not found." }, { status: 404 });
     }
 
-    const note = await insertCandidateNote(id, text);
+    const note = await insertCandidateNote(id, text, body.jobId ?? null);
     const activity = prependActivity(
       candidate.activity,
       createActivity("note_added", "Recruiter note added"),

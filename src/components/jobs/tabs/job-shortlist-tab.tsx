@@ -98,6 +98,20 @@ export function JobShortlistTab({
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [checked, setChecked] = useState<Set<number>>(new Set());
+
+  const cannotAssess = roleBrief.cannot_assess ?? [];
+  const totalCannotAssess = cannotAssess.length;
+  const checkedCount = checked.size;
+
+  const toggleCheck = (i: number) => {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -176,6 +190,46 @@ export function JobShortlistTab({
 
   return (
     <div className="space-y-4">
+      {totalCannotAssess > 0 && (
+        <section className={`${karta.card} mb-6 p-5`}>
+          <div className="flex items-start justify-between">
+            <div>
+              <h3 className={karta.sectionHeading}>Verify Before Submitting</h3>
+              <p className="mt-1 text-xs text-[#64748B]">
+                These qualities cannot be verified from a resume. Confirm each
+                before presenting this shortlist to the hiring manager.
+              </p>
+            </div>
+            <span className="text-xs font-medium text-[#64748B]">
+              {checkedCount}/{totalCannotAssess} verified
+            </span>
+          </div>
+          <ul className="mt-4 space-y-2">
+            {cannotAssess.map((item, i) => (
+              <li key={i} className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id={`ca-${i}`}
+                  checked={checked.has(i)}
+                  onChange={() => toggleCheck(i)}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-[#0D9488]"
+                />
+                <label
+                  htmlFor={`ca-${i}`}
+                  className={`cursor-pointer text-sm ${
+                    checked.has(i)
+                      ? "line-through text-[#94A3B8]"
+                      : "text-[#334155]"
+                  }`}
+                >
+                  {item}
+                </label>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <div className="flex justify-end">
         <button
           type="button"
@@ -202,7 +256,7 @@ export function JobShortlistTab({
         <EmptyState
           illustration="people"
           heading="Shortlist is empty"
-          subtitle="Score applicants and add strong matches from the Assessed tab or talent pool."
+          subtitle="Evaluate applicants and add strong matches from the Assessed tab or talent pool."
         />
       ) : (
         <div className={`overflow-x-auto ${karta.card}`}>

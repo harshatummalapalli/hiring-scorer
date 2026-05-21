@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Download, Loader2, X } from "lucide-react";
 import type { CandidateDetail, CandidateSignalProfile } from "@/types/candidate";
 import type { RoleBrief } from "@/types/role-brief";
@@ -10,11 +10,17 @@ import { scoreToVerdict } from "@/lib/scoring/recruiter-card";
 import type { CandidateScoreResult } from "@/types/score";
 import {
   ownershipLabel,
+  ownershipScore,
+  ownershipWhy,
   impactEvidenceLabel,
+  impactScore,
+  impactWhy,
   careerGrowthLabel,
-  careerGrowthBarPercent,
+  careerGrowthScore,
+  careerGrowthWhy,
   profileDepthLabel,
-  profileDepthBarPercent,
+  profileDepthScore,
+  profileDepthWhy,
 } from "@/lib/candidates/signal-labels";
 import {
   pickDefaultScoreId,
@@ -27,13 +33,14 @@ import { snapshotToRoleBrief } from "@/lib/saved-scores/build-save-payload";
 import { downloadKartaAssessmentPdf } from "@/lib/reports/karta-assessment-pdf";
 import type { RoleBriefSnapshot } from "@/types/saved-score";
 import { formatCoreStrengthLabel } from "@/lib/intelligence/skill-domains";
-import { AnimatedSignalBar } from "@/components/ui/animated-signal-bar";
+import { SignalScoreCard } from "@/components/ui/signal-score-card";
 import { SlidingTabs } from "@/components/ui/sliding-tabs";
 import { CandidateDetailsSection } from "./candidate-details-section";
 import { CandidatePanelHeader } from "./candidate-panel-header";
 import { ScoreRolePickerModal } from "./score-role-picker-modal";
 import { useScoreCandidate } from "@/lib/candidates/use-score-candidate";
 import { VerdictBadge } from "./profile-shared";
+import { CandidateScoreHistory } from "./candidate-score-history";
 
 function formatDate(iso: string): string {
   try {
@@ -54,60 +61,110 @@ function CandidateInsightsBars({
   profile: CandidateSignalProfile;
   animate: boolean;
 }) {
+  const ownershipCount =
+    profile.resume_quality?.ownership?.ownership_count ?? 0;
+  const ownershipRatio = profile.ownership_ratio_percent ?? 0;
+  const impactRatio = profile.quantification_ratio_percent;
+  const impactLevel = profile.quantification_level ?? "rarely";
+  const velocity = profile.trajectory_velocity ?? "normal";
+  const keywordFlagged = profile.keyword_stuffing_flagged ?? false;
+  const verifiedCount = (profile.skills_verified ?? []).length;
+  const listedCount = (profile.skills_listed_only ?? []).length;
+
+  const oScore = ownershipScore(ownershipCount, ownershipRatio);
+  const iScore = impactScore(impactRatio, impactLevel);
+  const gScore = careerGrowthScore(velocity);
+  const dScore = profileDepthScore(keywordFlagged, verifiedCount, listedCount);
+
   return (
-    <div className="space-y-4">
-      <div>
-        <AnimatedSignalBar
-          label="Ownership Drive"
-          rating={ownershipLabel(profile.resume_quality.ownership.ownership_count)}
-          fillPercent={profile.ownership_ratio_percent}
-          animate={animate}
-          delayMs={0}
-        />
-        <p className="mt-1 text-[11px] leading-snug text-[#94A3B8]">
-          Measures first-person ownership language versus participation in team work.
-        </p>
-      </div>
-      <div>
-        <AnimatedSignalBar
-          label="Impact Evidence"
-          rating={impactEvidenceLabel(
-            profile.quantification_ratio_percent,
-            profile.quantification_level,
-          )}
-          fillPercent={profile.quantification_ratio_percent}
-          animate={animate}
-          delayMs={100}
-        />
-        <p className="mt-1 text-[11px] leading-snug text-[#94A3B8]">
-          Measures quantified outcomes with numbers versus vague activity descriptions.
-        </p>
-      </div>
-      <div>
-        <AnimatedSignalBar
-          label="Career Growth"
-          rating={careerGrowthLabel(profile.trajectory_velocity)}
-          fillPercent={careerGrowthBarPercent(profile.trajectory_velocity)}
-          animate={animate}
-          delayMs={200}
-        />
-        <p className="mt-1 text-[11px] leading-snug text-[#94A3B8]">
-          Measures progression speed relative to typical market pace for this experience level.
-        </p>
-      </div>
-      <div>
-        <AnimatedSignalBar
-          label="Profile Depth"
-          rating={profileDepthLabel(profile.keyword_stuffing_flagged)}
-          fillPercent={profileDepthBarPercent(profile.keyword_stuffing_flagged)}
-          animate={animate}
-          delayMs={300}
-        />
-        <p className="mt-1 text-[11px] leading-snug text-[#94A3B8]">
-          Measures whether claimed skills are demonstrated in work descriptions or listed only.
-        </p>
-      </div>
+    <div className="space-y-3">
+      <SignalScoreCard
+        label="Ownership Drive"
+        score={oScore}
+        wordLabel={ownershipLabel(ownershipCount)}
+        why={ownershipWhy(oScore, ownershipCount, ownershipRatio)}
+        animate={animate}
+        delayMs={0}
+      />
+      <SignalScoreCard
+        label="Impact Evidence"
+        score={iScore}
+        wordLabel={impactEvidenceLabel(impactRatio, impactLevel)}
+        why={impactWhy(iScore, impactRatio, impactLevel)}
+        animate={animate}
+        delayMs={100}
+      />
+      <SignalScoreCard
+        label="Career Growth"
+        score={gScore}
+        wordLabel={careerGrowthLabel(velocity)}
+        why={careerGrowthWhy(gScore, velocity)}
+        animate={animate}
+        delayMs={200}
+      />
+      <SignalScoreCard
+        label="Profile Depth"
+        score={dScore}
+        wordLabel={profileDepthLabel(keywordFlagged)}
+        why={profileDepthWhy(dScore, keywordFlagged, verifiedCount, listedCount)}
+        animate={animate}
+        delayMs={300}
+      />
     </div>
+  );
+}
+
+function CandidateInsightsProfileExtras({
+  profile,
+}: {
+  profile: CandidateSignalProfile;
+}) {
+  const careerSequence = profile.career_types_sequence ?? [];
+  const education = profile.education ?? [];
+
+  return (
+    <>
+      {careerSequence.length > 0 && (
+        <section>
+          <h3 className={karta.sectionHeading}>Career Path</h3>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-sm">
+            {careerSequence.map((type, i) => (
+              <Fragment key={i}>
+                {i > 0 && <span className="text-[#94A3B8]">→</span>}
+                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-[#334155]">
+                  {type}
+                </span>
+              </Fragment>
+            ))}
+          </div>
+          {profile.shows_product_progression && (
+            <p className="mt-1.5 text-[11px] text-[#0D9488]">
+              ✓ Product company progression
+            </p>
+          )}
+        </section>
+      )}
+      {education.length > 0 && (
+        <section>
+          <h3 className={karta.sectionHeading}>Education</h3>
+          <ul className="mt-2 space-y-1.5">
+            {education.map((edu, i) => (
+              <li key={i} className="text-sm text-[#334155]">
+                <span className="font-medium">
+                  {edu.degree ?? "Degree"}
+                  {edu.field ? ` in ${edu.field}` : ""}
+                </span>
+                <span className="text-[#64748B]">
+                  {" "}
+                  · {edu.institution}
+                  {edu.year ? `, ${edu.year}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </>
   );
 }
 
@@ -193,6 +250,9 @@ export function CandidateSlidePanel({
   const [panelTab, setPanelTab] = useState<"insights" | "resume">("insights");
   const [panelExiting, setPanelExiting] = useState(false);
   const [insightsAnimateKey, setInsightsAnimateKey] = useState(0);
+  const [noteFilter, setNoteFilter] = useState<"all" | "role">(
+    contextJobId ? "role" : "all",
+  );
 
   const handlePanelClose = () => {
     setPanelExiting(true);
@@ -271,6 +331,20 @@ export function CandidateSlidePanel({
     return null;
   }, [selectedFit, roleBrief]);
 
+  const cannotAssessItems = useMemo(() => {
+    const brief =
+      contextJobId && roleBrief ? roleBrief : displayRoleBrief;
+    return (brief?.cannot_assess ?? []).filter((s) => s.trim().length > 0);
+  }, [contextJobId, roleBrief, displayRoleBrief]);
+
+  const visibleNotes = useMemo(() => {
+    if (!candidate) return [];
+    if (noteFilter === "all" || !contextJobId) return candidate.notes;
+    return candidate.notes.filter(
+      (n) => !n.job_id || n.job_id === contextJobId,
+    );
+  }, [candidate, noteFilter, contextJobId]);
+
   const jobTitleLabel =
     selectedFit?.role_brief_title ?? roleBrief?.title ?? null;
 
@@ -323,6 +397,10 @@ export function CandidateSlidePanel({
     if (scorePickerError) setError(scorePickerError);
   }, [scorePickerError]);
 
+  useEffect(() => {
+    setNoteFilter(contextJobId ? "role" : "all");
+  }, [contextJobId]);
+
   const addNote = async () => {
     if (!candidateId || !noteText.trim()) return;
     setNoteBusy(true);
@@ -330,7 +408,10 @@ export function CandidateSlidePanel({
       const res = await fetch(`/api/candidates/${candidateId}/notes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: noteText.trim() }),
+        body: JSON.stringify({
+          body: noteText.trim(),
+          jobId: contextJobId ?? null,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to add note");
@@ -453,7 +534,7 @@ export function CandidateSlidePanel({
                   {!contextJobId && historicalFits.length > 1 ? (
                     <div className="mt-2">
                       <label className="sr-only" htmlFor="panel-job-score-select">
-                        Scored against
+                        Evaluated against
                       </label>
                       <select
                         id="panel-job-score-select"
@@ -491,6 +572,25 @@ export function CandidateSlidePanel({
                     </p>
                   )}
               </div>
+
+              {candidate.manual_rejection_reason && (
+                <div className="mx-0 mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-red-600">
+                    Not a Fit
+                  </p>
+                  <p className="mt-0.5 text-sm text-red-700">
+                    {candidate.manual_rejection_reason}
+                    {candidate.manual_rejection_detail
+                      ? ` — ${candidate.manual_rejection_detail}`
+                      : ""}
+                  </p>
+                  {candidate.manually_rejected_at && (
+                    <p className="mt-0.5 text-[11px] text-red-400">
+                      {formatDate(candidate.manually_rejected_at)}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="flex flex-wrap items-center justify-end gap-2">
                 {candidate.resume_file_path ? (
@@ -569,6 +669,8 @@ export function CandidateSlidePanel({
                       />
                     </div>
                   </section>
+
+                  <CandidateInsightsProfileExtras profile={profile} />
 
                   {profile.github && (
                     <GithubPresenceSection github={profile.github} />
@@ -672,6 +774,29 @@ export function CandidateSlidePanel({
                     </section>
                   )}
 
+                  {cannotAssessItems.length > 0 && (
+                    <section>
+                      <h3 className={karta.sectionHeading}>
+                        Verify in Conversation
+                      </h3>
+                      <p className="mt-1 text-[11px] text-[#94A3B8]">
+                        These qualities need to be explored in a call or
+                        interview — they cannot be assessed from a resume alone.
+                      </p>
+                      <ul className="mt-2 space-y-1">
+                        {cannotAssessItems.map((item, i) => (
+                          <li
+                            key={i}
+                            className="flex items-center gap-2 text-sm text-[#334155]"
+                          >
+                            <span className="text-[#0D9488]">◦</span>
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+
                   {card && card.interview_questions.length > 0 && (
                     <section>
                       <h3 className={karta.sectionHeading}>Ask Them</h3>
@@ -701,6 +826,10 @@ export function CandidateSlidePanel({
                       roleBrief={displayRoleBrief}
                     />
                   )}
+
+                  {candidateId && (
+                    <CandidateScoreHistory candidateId={candidateId} />
+                  )}
                 </>
               ) : (
                 <>
@@ -715,13 +844,15 @@ export function CandidateSlidePanel({
                     </div>
                   </section>
 
+                  <CandidateInsightsProfileExtras profile={profile} />
+
                   {profile.github && (
                     <GithubPresenceSection github={profile.github} />
                   )}
 
                   <div className="rounded-lg border border-dashed border-[#0D9488]/40 bg-teal-50/50 px-4 py-5 text-center">
                     <p className="text-sm font-medium text-[#1E293B]">
-                      This candidate has not been scored yet
+                      This candidate has not been evaluated yet
                     </p>
                     <button
                       type="button"
@@ -735,7 +866,7 @@ export function CandidateSlidePanel({
                           Analysing…
                         </span>
                       ) : (
-                        "Score Now"
+                        "Evaluate Now"
                       )}
                     </button>
                   </div>
@@ -774,16 +905,55 @@ export function CandidateSlidePanel({
 
               <section className={`${karta.card} p-4`}>
                 <h3 className={karta.sectionHeading}>Notes</h3>
-                {candidate.notes.length > 0 && (
+                {contextJobId && (
+                  <div className="mb-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNoteFilter("all")}
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                        noteFilter === "all"
+                          ? "bg-[#0D9488] text-white"
+                          : "bg-slate-100 text-[#64748B] hover:bg-slate-200"
+                      }`}
+                    >
+                      All notes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNoteFilter("role")}
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                        noteFilter === "role"
+                          ? "bg-[#0D9488] text-white"
+                          : "bg-slate-100 text-[#64748B] hover:bg-slate-200"
+                      }`}
+                    >
+                      This role
+                    </button>
+                  </div>
+                )}
+                {visibleNotes.length > 0 && (
                   <ul className="mb-3 space-y-2">
-                    {candidate.notes.map((n) => (
+                    {visibleNotes.map((n) => (
                       <li
                         key={n.id}
                         className="rounded-md bg-[#F8FAFC] px-3 py-2 text-sm text-[#334155]"
                       >
                         <p>{n.body}</p>
-                        <p className="mt-1 text-xs text-[#64748B]">
-                          {formatDate(n.created_at)}
+                        <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#64748B]">
+                          <span>{formatDate(n.created_at)}</span>
+                          {n.job_id && contextJobId === n.job_id ? (
+                            <span className="text-[10px] text-[#0D9488]">
+                              This role
+                            </span>
+                          ) : n.job_id ? (
+                            <span className="text-[10px] text-[#94A3B8]">
+                              Other role
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-[#94A3B8]">
+                              General
+                            </span>
+                          )}
                         </p>
                       </li>
                     ))}
@@ -806,6 +976,11 @@ export function CandidateSlidePanel({
                 </button>
               </section>
             </div>
+          ) : candidate ? (
+            <p className="text-sm text-[#64748B]">
+              Profile data is still loading or unavailable for this candidate.
+              Try closing and reopening the panel, or re-upload the resume.
+            </p>
           ) : null}
         </div>
       </aside>

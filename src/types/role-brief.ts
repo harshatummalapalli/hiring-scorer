@@ -2,20 +2,45 @@ import { applyLinkPath, generateApplicationToken } from "@/lib/jobs/token";
 import { computeJobDescriptionHash } from "@/lib/role-brief/jd-cache";
 import { dedupeRoleBriefAnalysis } from "@/lib/role-brief/dedupe-skills";
 import {
+  jobPostingToBriefColumns,
+  type JobPostingFields,
+} from "@/types/job-posting";
+import {
   parseAutoScoreMode,
   parseJobStatus,
   type AutoScoreMode,
   type JobStatus,
 } from "@/types/job";
 
-export type TitleBand = "Entry" | "Mid" | "Senior" | "Staff" | "Principal";
+export type TitleBand =
+  | "Intern"
+  | "Entry"
+  | "Mid"
+  | "Senior"
+  | "Lead"
+  | "Staff"
+  | "Principal"
+  | "Manager"
+  | "Senior Manager"
+  | "Director"
+  | "Senior Director"
+  | "VP"
+  | "C-Suite";
 
 export const TITLE_BANDS: TitleBand[] = [
+  "Intern",
   "Entry",
   "Mid",
   "Senior",
+  "Lead",
   "Staff",
   "Principal",
+  "Manager",
+  "Senior Manager",
+  "Director",
+  "Senior Director",
+  "VP",
+  "C-Suite",
 ];
 
 export type CoreSignal = {
@@ -45,6 +70,13 @@ export type RoleBriefAnalysis = {
 export type RoleBrief = {
   id: string;
   title: string;
+  job_location: string | null;
+  seniority_override: string | null;
+  department: string | null;
+  client_company_name: string | null;
+  client_company_brief: string | null;
+  client_company_size: string | null;
+  client_company_website: string | null;
   job_description: string | null;
   job_description_hash: string | null;
   analysis_version: number;
@@ -201,15 +233,23 @@ export function roleBriefToSavePayload(
   title: string,
   jobDescription: string,
   analysis: RoleBriefAnalysis,
-  options?: { isNew?: boolean; analysisMeta?: RoleBriefAnalysisMeta },
+  options?: {
+    isNew?: boolean;
+    analysisMeta?: RoleBriefAnalysisMeta;
+    jobPosting?: JobPostingFields;
+  },
 ) {
   const deduped = dedupeRoleBriefAnalysis(analysis);
   const weights = weightsFromAnalysis({ ...deduped, suggested_weights: analysis.suggested_weights });
 
   const jd = jobDescription.trim();
+  const postingColumns = options?.jobPosting
+    ? jobPostingToBriefColumns(options.jobPosting)
+    : { title: title.trim(), department: null };
 
   return {
-    title: title.trim(),
+    ...postingColumns,
+    title: options?.jobPosting?.jobTitle.trim() ?? title.trim(),
     job_description: jd,
     job_description_hash:
       options?.analysisMeta?.job_description_hash ??
@@ -223,7 +263,6 @@ export function roleBriefToSavePayload(
     equivalent_titles: deduped.equivalent_titles,
     title_band: deduped.title_band,
     semantic_clusters: deduped.semantic_clusters,
-    department: null,
     responsibilities: null,
     required_skills: null,
     nice_to_have_skills: null,
@@ -313,6 +352,22 @@ export function parseRoleBriefRow(row: Record<string, unknown>): RoleBrief {
   return {
     id: String(row.id),
     title: String(row.title ?? "Job role"),
+    job_location: row.job_location != null ? String(row.job_location) : null,
+    seniority_override:
+      row.seniority_override != null ? String(row.seniority_override) : null,
+    department: row.department != null ? String(row.department) : null,
+    client_company_name:
+      row.client_company_name != null ? String(row.client_company_name) : null,
+    client_company_brief:
+      row.client_company_brief != null
+        ? String(row.client_company_brief)
+        : null,
+    client_company_size:
+      row.client_company_size != null ? String(row.client_company_size) : null,
+    client_company_website:
+      row.client_company_website != null
+        ? String(row.client_company_website)
+        : null,
     job_description: row.job_description
       ? String(row.job_description)
       : [row.responsibilities, row.required_skills]
