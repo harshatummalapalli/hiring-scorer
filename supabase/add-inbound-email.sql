@@ -3,7 +3,7 @@ ALTER TABLE role_briefs
   ADD COLUMN IF NOT EXISTS inbound_email text UNIQUE;
 
 ALTER TABLE role_briefs
-  ADD COLUMN IF NOT EXISTS inbound_email_active boolean DEFAULT false;
+  ADD COLUMN IF NOT EXISTS inbound_email_active boolean DEFAULT true;
 
 CREATE TABLE IF NOT EXISTS email_ingestion_log (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
