@@ -15,8 +15,31 @@ const GARBAGE_TITLE_AT =
 const PHONE_IN_SUBTITLE = /\+?\d[\d\s\-().]{8,}/;
 const EMAIL_IN_SUBTITLE =
   /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/;
-const AT_DATE_PATTERN =
-  /\bat\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{4})/i;
+const MONTH_YEAR_IN_SUBTITLE =
+  /\b(at\s+)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}/i;
+
+const AT_DATE_SUFFIX_RE =
+  /\b(?:at|@)\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s*\d{4}/i;
+
+const YEAR_ONLY_RE = /^\d{4}$/;
+
+const AT_MONTH_OR_YEAR_RE =
+  /\bat\s+(?:\d{4}|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i;
+
+const DATE_RANGE_RE =
+  /(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}\s*[-–—]\s*(?:Present|Current|Now|\d{4})/i;
+
+function isDateAtSuffix(atPart: string): boolean {
+  const fragment = atPart.trim();
+  if (!fragment) return false;
+  const withAt = /^at\s+/i.test(fragment) ? fragment : `at ${fragment}`;
+  return (
+    AT_DATE_SUFFIX_RE.test(withAt) ||
+    DATE_RANGE_RE.test(fragment) ||
+    AT_MONTH_OR_YEAR_RE.test(withAt) ||
+    YEAR_ONLY_RE.test(fragment)
+  );
+}
 
 /** Strip PII and date-range garbage from subtitle/company lines. */
 export function sanitizeSubtitle(
@@ -26,7 +49,11 @@ export function sanitizeSubtitle(
   const s = raw.trim();
   if (PHONE_IN_SUBTITLE.test(s)) return null;
   if (EMAIL_IN_SUBTITLE.test(s)) return null;
-  if (AT_DATE_PATTERN.test(s)) return null;
+  if (MONTH_YEAR_IN_SUBTITLE.test(s)) return null;
+  if (YEAR_ONLY_RE.test(s)) return null;
+  if (AT_DATE_SUFFIX_RE.test(s)) return null;
+  if (AT_MONTH_OR_YEAR_RE.test(s)) return null;
+  if (DATE_RANGE_RE.test(s)) return null;
   if (s.length > 80) return null;
   return s;
 }
@@ -38,6 +65,10 @@ export function isInvalidDisplayTitle(title: string | null | undefined): boolean
   if (BULLET_OR_HYPHEN_START.test(t)) return true;
   if (SECTION_HEADER_IN_TITLE.test(t)) return true;
   if (GARBAGE_TITLE_AT.test(t)) return true;
+  if (YEAR_ONLY_RE.test(t)) return true;
+  if (AT_DATE_SUFFIX_RE.test(t)) return true;
+  if (AT_MONTH_OR_YEAR_RE.test(t)) return true;
+  if (DATE_RANGE_RE.test(t)) return true;
   if (RESUME_BULLET_VERB.test(t) && t.length > 35) return true;
   if (isSummaryLikeTitle(t)) return true;
   if (t.length > 72) return true;
@@ -62,7 +93,10 @@ export function sanitizeDisplayTitle(
   let trimmed = title!.trim();
   const atGarbage = trimmed.match(/^(.+?)\s+at\s+(.+)$/i);
   if (atGarbage?.[1] && atGarbage[2]) {
-    if (
+    if (isDateAtSuffix(atGarbage[2])) {
+      trimmed = atGarbage[1].trim();
+      if (isInvalidDisplayTitle(trimmed)) return null;
+    } else if (
       isInvalidDisplayCompany(atGarbage[2]) ||
       RESUME_BULLET_VERB.test(atGarbage[2])
     ) {

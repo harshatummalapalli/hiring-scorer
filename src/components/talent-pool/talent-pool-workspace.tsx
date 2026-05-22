@@ -579,12 +579,14 @@ export function TalentPoolWorkspace() {
                             location={c.signal_profile.location}
                             topSkills={profileTopSkills(c.signal_profile)}
                             sourceLabel={sourceBadgeLabel(c.source)}
+                            enforceMinHeight
                           />
                         </td>
                         <td className="px-4 py-3 align-top">
                           <CoreStrengthLabel
                             primary={c.signal_profile.core_strength_primary}
                             secondary={c.signal_profile.core_strength_secondary}
+                            topSkills={profileTopSkills(c.signal_profile)}
                             prefix=""
                             className="text-xs font-medium text-[#0D9488]"
                           />

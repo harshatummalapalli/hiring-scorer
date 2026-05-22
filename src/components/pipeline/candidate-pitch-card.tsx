@@ -47,6 +47,63 @@ function flagText(flag: AttributedFlag | string): string {
   return typeof flag === "string" ? flag.trim() : (flag.text?.trim() ?? "");
 }
 
+const GREEN_FLAG_PREFIXES: Record<string, string> = {
+  "performance improvement":
+    "Demonstrated measurable performance improvements in production systems",
+  "ownership language":
+    "Strong evidence of individual ownership and direct contribution across roles",
+  "quantified impact":
+    "Work history backed by quantified outcomes and measurable results",
+  "career growth":
+    "Career progression faster than typical for this experience level",
+  "stable tenure":
+    "Consistent tenure across employers — low attrition risk",
+  "domain match": "Industry background aligns with role requirements",
+};
+
+const DIMENSION_SENTENCES: Record<string, string> = {
+  skills: "Technical skills match verified against role requirements",
+  trajectory:
+    "Career growth pattern consistent with the expected level for this role",
+  domain: "Industry or domain background relevant to this position",
+  seniority: "Seniority level matches the expectations for this role",
+  tenure: "Stable work history with consistent employer tenures",
+};
+
+function formatGreenFlag(text: string): string {
+  const t = text.trim();
+  if (!t) return "";
+  if (t.length > 40) return t;
+  if (/\d+%|\$\d+|\d+x/.test(t)) return t;
+
+  const key = Object.keys(GREEN_FLAG_PREFIXES).find((k) =>
+    t.toLowerCase().includes(k),
+  );
+  if (key) return GREEN_FLAG_PREFIXES[key];
+
+  return t.charAt(0).toUpperCase() + t.slice(1) + (t.endsWith(".") ? "" : ".");
+}
+
+function supplementFromDimensions(
+  score: CandidateRoleFitScore | null,
+  bullets: string[],
+): void {
+  const dimScores = score?.score_snapshot?.dimension_scores ?? {};
+  const topDims = Object.entries(dimScores)
+    .sort(
+      ([, a], [, b]) =>
+        (b as { score: number }).score - (a as { score: number }).score,
+    )
+    .filter(([, v]) => (v as { score: number }).score >= 65)
+    .map(([key]) => key);
+
+  for (const dim of topDims) {
+    if (bullets.length >= 3) break;
+    const sentence = DIMENSION_SENTENCES[dim];
+    if (sentence && !bullets.includes(sentence)) bullets.push(sentence);
+  }
+}
+
 function snapshotOf(
   score: CandidateRoleFitScore | null,
 ): ExtendedSnapshot | null {
@@ -62,9 +119,13 @@ function buildWhyBullets(
   const bullets: string[] = [];
 
   for (const flag of snapshot.green_flags ?? []) {
-    const text = flagText(flag);
-    if (text) bullets.push(text);
+    const sentence = formatGreenFlag(flagText(flag));
+    if (sentence && !bullets.includes(sentence)) bullets.push(sentence);
     if (bullets.length >= 2) break;
+  }
+
+  if (bullets.length < 2) {
+    supplementFromDimensions(score, bullets);
   }
 
   const dims = snapshot.dimension_scores;
@@ -81,9 +142,6 @@ function buildWhyBullets(
       if (bullets.length >= 3) break;
       const line = DIMENSION_PITCH[key]?.(dims[key].score);
       if (line && !bullets.includes(line)) bullets.push(line);
-      if (bullets.length >= 2 && ranked.length > 0) {
-        // allow up to 2 dimension lines before verdict line
-      }
     }
   }
 

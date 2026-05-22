@@ -754,10 +754,18 @@ export function JobPipelineTab({
             location={c.signal_profile.location}
             scoredJobTitle={jobTitle}
             showMetaRow={false}
+            enforceMinHeight
           />
           <CoreStrengthLabel
             primary={c.signal_profile.core_strength_primary}
             secondary={c.signal_profile.core_strength_secondary}
+            topSkills={
+              (
+                c.signal_profile as typeof c.signal_profile & {
+                  top_skills?: string[];
+                }
+              ).top_skills
+            }
           />
           {showRejectionReason && c.manual_rejection_reason && (
             <span className="mt-0.5 inline-block rounded bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-600">

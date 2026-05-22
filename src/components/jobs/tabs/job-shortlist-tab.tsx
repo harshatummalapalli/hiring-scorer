@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Download, Loader2, Star } from "lucide-react";
 import { CandidateIdentityCard } from "@/components/candidates/candidate-identity-card";
 import { VerdictBadge } from "@/components/candidates/profile-shared";
@@ -79,6 +79,8 @@ function EditableCell({
     </button>
   );
 }
+
+const SHORTLIST_COLUMN_COUNT = 10;
 
 type JobShortlistTabProps = {
   jobId: string;
@@ -338,7 +340,8 @@ export function JobShortlistTab({
                 const fitScore =
                   scoresByCandidateId.get(row.candidate_id) ?? null;
                 return (
-                <tr key={row.id} className="border-b border-slate-100">
+                <Fragment key={row.id}>
+                <tr className="border-b border-slate-100">
                   <td className="px-4 py-3 align-top">
                     <CandidateIdentityCard
                       displayName={row.candidate_name}
@@ -355,14 +358,6 @@ export function JobShortlistTab({
                         ? "▾ Hide summary"
                         : "▸ View pitch summary"}
                     </button>
-                    {pitchExpanded && (
-                      <div className="mt-3 max-w-md">
-                        <CandidatePitchCard
-                          candidate={row}
-                          score={fitScore}
-                        />
-                      </div>
-                    )}
                   </td>
                   <td className="px-4 py-3 text-slate-600">{row.email ?? "—"}</td>
                   <td className="px-4 py-3 text-slate-600">{row.phone ?? "—"}</td>
@@ -406,6 +401,20 @@ export function JobShortlistTab({
                     />
                   </td>
                 </tr>
+                {pitchExpanded && (
+                  <tr className="border-b border-slate-100">
+                    <td
+                      colSpan={SHORTLIST_COLUMN_COUNT}
+                      className="border-b border-slate-100 bg-slate-50 px-4 pb-4 pt-2 align-top"
+                    >
+                      <CandidatePitchCard
+                        candidate={row}
+                        score={fitScore}
+                      />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               );
               })}
             </tbody>

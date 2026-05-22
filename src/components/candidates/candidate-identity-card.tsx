@@ -27,6 +27,8 @@ export type CandidateIdentityCardProps = {
   showExperienceWhenNoTitle?: boolean;
   /** Hide the experience/location meta row (e.g. when a table has its own Experience column). */
   showMetaRow?: boolean;
+  /** Reserve consistent role/meta rows for list alignment. */
+  enforceMinHeight?: boolean;
 };
 
 export function CandidateIdentityCard({
@@ -44,6 +46,7 @@ export function CandidateIdentityCard({
   verdictBadge,
   showExperienceWhenNoTitle = false,
   showMetaRow = true,
+  enforceMinHeight = false,
 }: CandidateIdentityCardProps) {
   const title = sanitizeDisplayTitle(currentTitle, {
     roleBriefTitle: scoredJobTitle,
@@ -101,14 +104,19 @@ export function CandidateIdentityCard({
         <p className="mt-0.5 truncate text-[13px] leading-snug text-[#334155]">
           {roleLine}
         </p>
+      ) : enforceMinHeight ? (
+        <p className="mt-0.5 text-[13px] italic text-[#94A3B8]">Title not stated</p>
       ) : subtitleWhenNoRole ? (
         <p className="mt-0.5 text-[12px] text-[#64748B]">{subtitleWhenNoRole}</p>
       ) : null}
-      {showMetaRow && metaParts.length > 0 ? (
-        <p className="mt-0.5 text-[12px] text-[#64748B]">
-          {metaParts.join(" · ")}
-        </p>
-      ) : null}
+      {showMetaRow &&
+        (metaParts.length > 0 ? (
+          <p className="mt-0.5 text-[12px] text-[#64748B]">
+            {metaParts.join(" · ")}
+          </p>
+        ) : enforceMinHeight ? (
+          <p className="mt-0.5 text-[12px] text-[#64748B]">&nbsp;</p>
+        ) : null)}
       {skills.length > 0 ? (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {skills.map((skill) => (
