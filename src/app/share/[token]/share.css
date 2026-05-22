@@ -1,0 +1,10 @@
+@media print {
+  .share-page {
+    max-width: 100%;
+    padding: 0;
+  }
+
+  .share-footer {
+    page-break-inside: avoid;
+  }
+}

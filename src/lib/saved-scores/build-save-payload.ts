@@ -53,6 +53,8 @@ function minimalRoleBrief(
     application_count: 0,
     auto_score_mode: "needs_scoring",
     status: "active",
+    share_token: null,
+    share_enabled: false,
     created_by: null,
     created_at: partial.created_at ?? "",
   };

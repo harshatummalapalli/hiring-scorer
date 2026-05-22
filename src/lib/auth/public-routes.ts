@@ -6,6 +6,7 @@ export function isPublicPath(pathname: string): boolean {
   if (/^\/apply\/[^/]+$/.test(pathname)) return true;
   if (/^\/apply\/[^/]+\/success$/.test(pathname)) return true;
   if (pathname.startsWith("/api/apply/")) return true;
+  if (/^\/share\/[^/]+$/.test(pathname)) return true;
   return false;
 }
 

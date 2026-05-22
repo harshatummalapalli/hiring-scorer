@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Plus, X } from "lucide-react";
+import { Loader2, Plus, Share2, X } from "lucide-react";
+import { ShareShortlistModal } from "@/components/jobs/share-shortlist-modal";
 import { RoleBriefCreator } from "@/components/role-briefs/role-brief-creator";
 import { EmptyState } from "@/components/ui/empty-state";
 import { JobLimitModal } from "@/components/workspace/job-limit-modal";
@@ -41,6 +42,7 @@ export function JobsPage() {
   const [showPost, setShowPost] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showJobLimitModal, setShowJobLimitModal] = useState(false);
+  const [shareJob, setShareJob] = useState<JobListItem | null>(null);
 
   const loadUsage = useCallback(async () => {
     try {
@@ -217,12 +219,22 @@ export function JobsPage() {
                   </dd>
                 </div>
               </dl>
-              <Link
-                href={`/jobs/${job.id}`}
-                className="mt-auto block w-full rounded-lg border border-[#0D9488] bg-white py-2.5 text-center text-sm font-semibold text-[#0D9488] transition hover:bg-[#F0FDFA]"
-              >
-                Open Job
-              </Link>
+              <div className="mt-auto flex flex-col gap-2 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShareJob(job)}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 py-2 text-sm text-[#64748B] hover:bg-slate-50"
+                >
+                  <Share2 className="h-4 w-4" />
+                  Share Shortlist
+                </button>
+                <Link
+                  href={`/jobs/${job.id}`}
+                  className="block w-full rounded-lg border border-[#0D9488] bg-white py-2.5 text-center text-sm font-semibold text-[#0D9488] transition hover:bg-[#F0FDFA]"
+                >
+                  Open Job
+                </Link>
+              </div>
             </li>
           ))}
         </ul>
@@ -284,6 +296,15 @@ export function JobsPage() {
         open={showJobLimitModal}
         onClose={() => setShowJobLimitModal(false)}
       />
+
+      {shareJob && (
+        <ShareShortlistModal
+          jobId={shareJob.id}
+          initialToken={shareJob.share_token}
+          initialEnabled={shareJob.share_enabled}
+          onClose={() => setShareJob(null)}
+        />
+      )}
     </div>
   );
 }

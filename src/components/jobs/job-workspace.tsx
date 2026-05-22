@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Settings } from "lucide-react";
+import { ArrowLeft, Loader2, Settings, Share2 } from "lucide-react";
+import { useShareShortlist } from "@/components/jobs/share-shortlist-modal";
 import { JobPipelineTab } from "@/components/jobs/tabs/job-pipeline-tab";
 import { JobShortlistTab } from "@/components/jobs/tabs/job-shortlist-tab";
 import { JobSettingsPanel } from "@/components/jobs/job-settings-panel";
@@ -65,6 +66,14 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
     void loadJob();
   }, [loadJob]);
 
+  const { handleShare, shareModal } = useShareShortlist(
+    job ?? {
+      id: jobId,
+      share_token: null,
+      share_enabled: false,
+    },
+  );
+
   if (loading) {
     return (
       <div className="flex justify-center py-24">
@@ -116,15 +125,26 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
             </span>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setSettingsOpen(true)}
-          className="ml-auto rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-          aria-label="Job settings"
-        >
-          <Settings className="h-5 w-5" />
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void handleShare()}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-[#64748B] hover:bg-slate-50"
+          >
+            <Share2 className="h-4 w-4" />
+            Share Shortlist
+          </button>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+            aria-label="Job settings"
+          >
+            <Settings className="h-5 w-5" />
+          </button>
+        </div>
       </div>
+      {shareModal}
 
       <SlidingTabs
         tabs={TABS.map(([id, label]) => ({ id, label }))}

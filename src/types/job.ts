@@ -26,6 +26,8 @@ export type JobFields = {
   application_count: number;
   auto_score_mode: AutoScoreMode;
   status: JobStatus;
+  share_token: string | null;
+  share_enabled: boolean;
 };
 
 export type Job = RoleBrief & JobFields;
