@@ -96,9 +96,9 @@ export function OnboardingForm() {
   return (
     <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-4 py-10">
       <div className={`w-full max-w-[560px] ${karta.card} p-8 sm:p-10`}>
-        <h1 className="text-2xl font-semibold text-[#1E293B]">Welcome to Karta</h1>
+        <h1 className="text-2xl font-semibold text-[#1E293B]">Welcome to Kharta</h1>
         <p className="mt-2 text-sm text-[#64748B]">
-          Tell us about yourself so Karta can personalise your experience
+          Tell us about yourself so Kharta can personalise your experience
         </p>
 
         <form onSubmit={(e) => void handleSubmit(e)} className="mt-8 space-y-8">

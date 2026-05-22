@@ -30,7 +30,7 @@ export function RoleBriefList({
       <EmptyState
         illustration="briefcase"
         heading="No job roles yet"
-        subtitle="Add your first job role — paste a JD and Karta will break it down instantly."
+        subtitle="Add your first job role — paste a JD and Kharta will break it down instantly."
       />
     );
   }

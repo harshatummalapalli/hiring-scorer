@@ -14,7 +14,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: KARTA.name,
   description:
-    "Karta analyses candidates against your job roles — beyond the resume.",
+    "Kharta gives recruiters intelligent candidate insights — beyond the resume.",
 };
 
 export default function RootLayout({

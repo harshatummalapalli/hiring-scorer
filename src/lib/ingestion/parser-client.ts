@@ -69,7 +69,7 @@ async function readParserJson(res: Response): Promise<ParseRunResult> {
     return {
       success: false,
       error: isHtml
-        ? `Parser returned HTML (HTTP ${res.status}). Check RESUME_PARSER_URL — it should be the Python service (e.g. http://localhost:8001), not the Karta app URL.`
+        ? `Parser returned HTML (HTTP ${res.status}). Check RESUME_PARSER_URL — it should be the Python service (e.g. http://localhost:8001), not the Kharta app URL.`
         : `Parser returned non-JSON (HTTP ${res.status}).`,
       warnings: ["parser_non_json"],
       duration_ms: 0,

@@ -161,7 +161,7 @@ export function JobsPage() {
         <EmptyState
           illustration="briefcase"
           heading="Your first role is waiting"
-          subtitle="Post a job and Karta will start building your talent intelligence."
+          subtitle="Post a job and Kharta will start building your talent intelligence."
           action={
             <button
               type="button"
@@ -247,7 +247,7 @@ export function JobsPage() {
                   Post a job
                 </h2>
                 <p className="mt-1 text-sm text-[#64748B]">
-                  Paste the JD — Karta will extract requirements and generate a
+                  Paste the JD — Kharta will extract requirements and generate a
                   scoring prompt.
                 </p>
               </div>

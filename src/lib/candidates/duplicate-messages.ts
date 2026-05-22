@@ -19,7 +19,7 @@ export function duplicateWarningMessage(match: DuplicateMatch): string {
     case "content_hash":
       return `This resume appears to already exist as ${match.displayName}, added on ${date}.`;
     case "email":
-      return `This email address belongs to ${match.displayName}, who is already in Karta.`;
+      return `This email address belongs to ${match.displayName}, who is already in Kharta.`;
     case "name_similarity":
       return `A candidate named ${match.displayName} already exists in your talent pool.`;
     default:

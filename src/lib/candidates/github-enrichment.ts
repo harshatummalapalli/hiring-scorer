@@ -23,7 +23,7 @@ function githubHeaders(): HeadersInit {
   const token = process.env.GITHUB_TOKEN?.trim();
   const headers: HeadersInit = {
     Accept: "application/vnd.github+json",
-    "User-Agent": "Karta-Hiring-Scorer",
+    "User-Agent": "Kharta-Recruiting",
   };
   if (token) {
     headers.Authorization = `Bearer ${token}`;

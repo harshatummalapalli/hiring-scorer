@@ -12,7 +12,7 @@ export function AdminShellHeader() {
           <p className="text-xs font-semibold uppercase tracking-wider text-[#64748B]">
             Super Admin
           </p>
-          <h1 className="text-lg font-semibold text-[#1E293B]">Karta Platform</h1>
+          <h1 className="text-lg font-semibold text-[#1E293B]">Kharta Platform</h1>
         </div>
         <nav className="flex flex-wrap items-center gap-3 text-sm">
           <SuperAdminViewToggle variant="light" />

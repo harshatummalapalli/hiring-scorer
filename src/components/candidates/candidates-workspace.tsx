@@ -288,7 +288,7 @@ export function CandidatesWorkspace() {
         <AlertCircle className="mx-auto mb-2 h-8 w-8 text-amber-600" />
         <p className="font-medium text-amber-900">No job roles yet</p>
         <p className="mt-1 text-sm text-amber-800">
-          Add your first job role to get started — paste a JD and Karta will break
+          Add your first job role to get started — paste a JD and Kharta will break
           it down instantly.
         </p>
         <Link
@@ -461,7 +461,7 @@ export function CandidatesWorkspace() {
       ) : filtered.length === 0 ? (
         <p className="py-12 text-center text-sm text-slate-500">
           {candidates.length === 0
-            ? "Upload resumes to begin — Karta matches them against your active job role."
+            ? "Upload resumes to begin — Kharta matches them against your active job role."
             : "No candidates match your filters."}
         </p>
       ) : (

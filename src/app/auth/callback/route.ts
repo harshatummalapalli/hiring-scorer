@@ -1,69 +1,57 @@
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
-import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
+import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
+import { ensureWorkspaceSettingsForUser } from "@/lib/workspace/settings";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
-  const next = requestUrl.searchParams.get("next") ?? "/";
+  const next = requestUrl.searchParams.get("next") ?? "/jobs";
 
-  const forwardedHost = request.headers.get("x-forwarded-host");
-  const isLocalEnv = process.env.NODE_ENV === "development";
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-  const redirectBase = isLocalEnv
-    ? `${requestUrl.protocol}//${requestUrl.host}`
-    : siteUrl
-      ? siteUrl.replace(/\/$/, "")
-      : forwardedHost
-        ? `https://${forwardedHost}`
-        : requestUrl.origin;
+  const host =
+    request.headers.get("x-forwarded-host") ?? requestUrl.host;
+  const protocol =
+    request.headers.get("x-forwarded-proto") ??
+    requestUrl.protocol.replace(":", "");
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ?? `${protocol}://${host}`;
 
   if (code) {
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      getSupabaseUrl(),
-      getSupabaseAnonKey(),
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
-          setAll(cookiesToSet) {
-            try {
-              cookiesToSet.forEach(({ name, value, options }) =>
-                cookieStore.set(name, value, options),
-              );
-            } catch (e) {
-              console.error("[auth/callback] Cookie set error:", e);
-            }
-          },
-        },
-      },
-    );
+    try {
+      const supabase = await createSupabaseServerClient();
+      const { data, error } =
+        await supabase.auth.exchangeCodeForSession(code);
 
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) {
+        console.error(
+          "[auth/callback] Exchange error:",
+          error.message,
+        );
+        return NextResponse.redirect(
+          `${baseUrl}/auth/signin?error=exchange_failed`,
+        );
+      }
 
-    if (error) {
-      console.error("[auth/callback] Exchange error:", error.message);
+      if (data.user) {
+        try {
+          await ensureWorkspaceSettingsForUser(supabase, data.user);
+        } catch (e) {
+          console.error(
+            "[auth/callback] Workspace bootstrap error:",
+            e,
+          );
+        }
+        return NextResponse.redirect(`${baseUrl}${next}`);
+      }
+    } catch (e) {
+      console.error("[auth/callback] Unexpected error:", e);
       return NextResponse.redirect(
-        `${redirectBase}/auth/signin?error=auth_callback_failed`,
+        `${baseUrl}/auth/signin?error=unexpected`,
       );
-    }
-
-    if (data.session) {
-      console.log(
-        "[auth/callback] Session created for:",
-        data.user?.email,
-      );
-      return NextResponse.redirect(`${redirectBase}${next}`);
     }
   }
 
-  console.error("[auth/callback] No code received");
-  return NextResponse.redirect(
-    `${redirectBase}/auth/signin?error=no_code`,
-  );
+  console.error("[auth/callback] No code in request");
+  return NextResponse.redirect(`${baseUrl}/auth/signin?error=no_code`);
 }

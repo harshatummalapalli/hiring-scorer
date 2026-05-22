@@ -23,7 +23,6 @@ export function SignInForm({
   forceGoogleAccountPicker = false,
 }: SignInFormProps) {
   const searchParams = useSearchParams();
-  const authError = searchParams.get("error");
   const signedOut = searchParams.get("signed_out") === "1";
   const next =
     signedOut
@@ -83,21 +82,10 @@ export function SignInForm({
 
   return (
     <div className="space-y-6">
-      {authError && (
-        <div
-          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-          role="alert"
-        >
-          Sign in failed. Please try again or use email and password.
-        </div>
-      )}
-      <div className="rounded-lg border border-[#0D9488]/25 bg-teal-50/80 px-4 py-3 text-sm text-[#0F766E]">
-        <p className="font-medium text-[#134E4A]">Testing onboarding?</p>
-        <p className="mt-1 text-[#0F766E]">
-          Create a user in Supabase (email + password), then sign in here with
-          that email — not Google.{" "}
-          <code className="text-xs">recruiter.harsha@gmail.com</code> is super
-          admin and never sees onboarding.
+      <div className="mb-6 rounded-lg border border-teal-100 bg-teal-50 px-4 py-3 text-sm text-teal-800">
+        <p className="font-medium">Welcome to Kharta</p>
+        <p className="mt-0.5 text-teal-700">
+          Sign in to access your recruiting workspace.
         </p>
       </div>
 
@@ -161,7 +149,7 @@ export function SignInForm({
       </div>
 
       <p className="text-center text-sm text-[#64748B]">
-        New to Karta?{" "}
+        New to Kharta?{" "}
         <Link
           href="/auth/signup"
           className="font-medium text-[#0D9488] hover:underline"
@@ -175,7 +163,7 @@ export function SignInForm({
           className="font-medium text-[#0D9488] hover:underline"
           onClick={() => void signOutAndRedirectToSignIn()}
         >
-          Sign out of Karta completely
+          Sign out of Kharta completely
         </button>
       </p>
     </div>

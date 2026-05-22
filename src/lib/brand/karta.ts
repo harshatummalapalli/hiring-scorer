@@ -1,8 +1,8 @@
 import type { FitVerdict } from "@/types/score";
 
 export const KARTA = {
-  name: "Karta",
-  tagline: "The Agent That Sees Beyond the Resume",
+  name: "Kharta",
+  tagline: "Smart insights. Smarter hires.",
 } as const;
 
 export const VERDICT_BADGE_BASE =
@@ -41,7 +41,7 @@ export const VERDICT_COLORS: Record<
   },
 };
 
-export const VERDICT_BADGE_SHADOW: Record<FitVerdict, string> = {
+export const VERDICT_BADGE_SHADOW: Partial<Record<FitVerdict, string>> = {
   "EXCEPTIONAL MATCH": "shadow-[0_0_0_3px_rgba(124,58,237,0.15)]",
   "STRONG MATCH": "shadow-[0_0_0_3px_rgba(5,150,105,0.15)]",
   "POTENTIAL MATCH": "shadow-[0_0_0_3px_rgba(217,119,6,0.15)]",
@@ -49,12 +49,34 @@ export const VERDICT_BADGE_SHADOW: Record<FitVerdict, string> = {
   "NOT A MATCH": "shadow-[0_0_0_3px_rgba(220,38,38,0.15)]",
 };
 
-export const VERDICT_DISPLAY: Record<FitVerdict, { label: string }> = {
-  "EXCEPTIONAL MATCH": { label: "Exceptional Match" },
-  "STRONG MATCH": { label: "Strong Match" },
-  "POTENTIAL MATCH": { label: "Potential Match" },
-  "WEAK MATCH": { label: "Weak Match" },
-  "NOT A MATCH": { label: "Not a Match" },
+export const VERDICT_DISPLAY: Record<
+  FitVerdict,
+  { label: string; badgeClass: string }
+> = {
+  "EXCEPTIONAL MATCH": {
+    label: "Exceptional Match",
+    badgeClass:
+      "bg-violet-100 text-violet-800 border border-violet-200",
+  },
+  "STRONG MATCH": {
+    label: "Strong Match",
+    badgeClass:
+      "bg-emerald-100 text-emerald-800 border border-emerald-200",
+  },
+  "POTENTIAL MATCH": {
+    label: "Potential Match",
+    badgeClass:
+      "bg-amber-100 text-amber-800 border border-amber-200",
+  },
+  "WEAK MATCH": {
+    label: "Weak Match",
+    badgeClass:
+      "bg-orange-100 text-orange-800 border border-orange-200",
+  },
+  "NOT A MATCH": {
+    label: "Not a Match",
+    badgeClass: "bg-red-100 text-red-700 border border-red-200",
+  },
 };
 
 export function verdictLabel(verdict: string | null | undefined): string {

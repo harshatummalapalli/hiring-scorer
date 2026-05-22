@@ -49,7 +49,7 @@ export function TalentPoolRecommendations({
       const elapsed = performance.now() - start;
       if (elapsed > 500 && candidates.length > 0) {
         console.warn(
-          `[Karta] Local recommendations took ${Math.round(elapsed)}ms for ${candidates.length} candidates`,
+          `[Kharta] Local recommendations took ${Math.round(elapsed)}ms for ${candidates.length} candidates`,
         );
       }
       setTopFive(allScored.slice(0, 5));

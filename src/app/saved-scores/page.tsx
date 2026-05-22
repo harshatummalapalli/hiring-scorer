@@ -2,7 +2,7 @@ import { SavedScoresManager } from "@/components/saved-scores/saved-scores-manag
 import { karta } from "@/lib/brand/karta";
 
 export const metadata = {
-  title: "Saved Matches | Karta",
+  title: "Saved Matches | Kharta",
   description: "View and manage saved candidate score cards",
 };
 
