@@ -12,6 +12,9 @@ import {
   buildPipelineWorkbook,
   downloadPipelineExcel,
 } from "@/lib/pipeline/export-excel";
+import { CandidatePitchCard } from "@/components/pipeline/candidate-pitch-card";
+import type { CandidateRoleFitScore } from "@/types/candidate";
+import { pickDefaultScoreId } from "@/lib/candidates/pick-panel-score";
 import type { PipelineCandidateRow, PipelineRoleSection } from "@/types/pipeline";
 import type { TitleBand } from "@/types/role-brief";
 
@@ -99,6 +102,10 @@ export function JobShortlistTab({
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checked, setChecked] = useState<Set<number>>(new Set());
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [scoresByCandidateId, setScoresByCandidateId] = useState<
+    Map<string, CandidateRoleFitScore | null>
+  >(new Map());
 
   const cannotAssess = roleBrief.cannot_assess ?? [];
   const totalCannotAssess = cannotAssess.length;
@@ -141,6 +148,54 @@ export function JobShortlistTab({
   useEffect(() => {
     void load();
   }, [load]);
+
+  const rows = section?.candidates ?? [];
+
+  useEffect(() => {
+    if (rows.length === 0) {
+      setScoresByCandidateId(new Map());
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const next = new Map<string, CandidateRoleFitScore | null>();
+      await Promise.all(
+        rows.map(async (row) => {
+          try {
+            const res = await fetch(
+              `/api/candidates/${encodeURIComponent(row.candidate_id)}`,
+            );
+            const json = await res.json();
+            if (!res.ok) return;
+            const fits = (json.candidate?.role_fit_scores ??
+              []) as CandidateRoleFitScore[];
+            const fitId = pickDefaultScoreId(fits, jobId);
+            const fit =
+              fits.find((f) => f.id === fitId) ??
+              fits.find((f) => f.role_brief_id === jobId) ??
+              fits[0] ??
+              null;
+            next.set(row.candidate_id, fit);
+          } catch {
+            next.set(row.candidate_id, null);
+          }
+        }),
+      );
+      if (!cancelled) setScoresByCandidateId(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [rows, jobId]);
+
+  const togglePitch = (candidateId: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(candidateId)) next.delete(candidateId);
+      else next.add(candidateId);
+      return next;
+    });
+  };
 
   const patchRow = async (
     id: string,
@@ -185,8 +240,6 @@ export function JobShortlistTab({
       </div>
     );
   }
-
-  const rows = section?.candidates ?? [];
 
   return (
     <div className="space-y-4">
@@ -276,15 +329,36 @@ export function JobShortlistTab({
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {rows.map((row) => {
+                const pitchExpanded = expandedIds.has(row.candidate_id);
+                const fitScore =
+                  scoresByCandidateId.get(row.candidate_id) ?? null;
+                return (
                 <tr key={row.id} className="border-b border-slate-100">
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 align-top">
                     <CandidateIdentityCard
                       displayName={row.candidate_name}
                       candidateId={row.candidate_id}
                       panelOptions={panelOptions}
                       showMetaRow={false}
                     />
+                    <button
+                      type="button"
+                      onClick={() => togglePitch(row.candidate_id)}
+                      className="mt-2 cursor-pointer text-xs text-[#0D9488] hover:underline"
+                    >
+                      {pitchExpanded
+                        ? "▾ Hide summary"
+                        : "▸ View pitch summary"}
+                    </button>
+                    {pitchExpanded && (
+                      <div className="mt-3 max-w-md">
+                        <CandidatePitchCard
+                          candidate={row}
+                          score={fitScore}
+                        />
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-slate-600">{row.email ?? "—"}</td>
                   <td className="px-4 py-3 text-slate-600">{row.phone ?? "—"}</td>
@@ -328,7 +402,8 @@ export function JobShortlistTab({
                     />
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </div>

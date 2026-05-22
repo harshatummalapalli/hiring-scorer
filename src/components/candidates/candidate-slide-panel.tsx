@@ -41,6 +41,7 @@ import { ScoreRolePickerModal } from "./score-role-picker-modal";
 import { useScoreCandidate } from "@/lib/candidates/use-score-candidate";
 import { VerdictBadge } from "./profile-shared";
 import { CandidateScoreHistory } from "./candidate-score-history";
+import { CandidatePitchCard } from "@/components/pipeline/candidate-pitch-card";
 
 function formatDate(iso: string): string {
   try {
@@ -250,6 +251,8 @@ export function CandidateSlidePanel({
   const [panelTab, setPanelTab] = useState<"insights" | "resume">("insights");
   const [panelExiting, setPanelExiting] = useState(false);
   const [insightsAnimateKey, setInsightsAnimateKey] = useState(0);
+  const [inShortlist, setInShortlist] = useState(false);
+  const [signalBreakdownOpen, setSignalBreakdownOpen] = useState(false);
   const [noteFilter, setNoteFilter] = useState<"all" | "role">(
     contextJobId ? "role" : "all",
   );
@@ -400,6 +403,37 @@ export function CandidateSlidePanel({
   useEffect(() => {
     setNoteFilter(contextJobId ? "role" : "all");
   }, [contextJobId]);
+
+  useEffect(() => {
+    if (!candidateId || !contextJobId) {
+      setInShortlist(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/pipeline?role_brief_id=${encodeURIComponent(contextJobId)}`,
+        );
+        const json = await res.json();
+        if (!res.ok || cancelled) return;
+        const sections = json.sections as { candidates: { candidate_id: string }[] }[];
+        const listed = sections[0]?.candidates ?? [];
+        setInShortlist(
+          listed.some((c) => c.candidate_id === candidateId),
+        );
+      } catch {
+        if (!cancelled) setInShortlist(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [candidateId, contextJobId]);
+
+  useEffect(() => {
+    setSignalBreakdownOpen(false);
+  }, [candidateId, contextJobId]);
 
   const addNote = async () => {
     if (!candidateId || !noteText.trim()) return;
@@ -659,18 +693,84 @@ export function CandidateSlidePanel({
                     </p>
                   )}
 
-                  <section>
-                    <h3 className={karta.sectionHeading}>Candidate Insights</h3>
-                    <div className="mt-3">
-                      <CandidateInsightsBars
-                        key={insightsAnimateKey}
-                        profile={profile}
-                        animate={insightsAnimate}
-                      />
-                    </div>
-                  </section>
+                  {inShortlist && selectedFit && candidate && (
+                    <CandidatePitchCard
+                      candidate={{
+                        id: "",
+                        role_brief_id: contextJobId ?? "",
+                        candidate_id: candidate.id,
+                        candidate_name: candidate.display_name,
+                        email: candidate.application_email,
+                        phone: candidate.application_phone,
+                        location: candidate.application_location,
+                        fit_score: selectedFit.overall_score,
+                        fit_verdict: selectedFit.verdict,
+                        insights: { signals: [] },
+                        relocation: null,
+                        present_salary: null,
+                        expected_salary: null,
+                        recruiter_notes: null,
+                        added_at: "",
+                        created_by: null,
+                      }}
+                      score={selectedFit}
+                    />
+                  )}
 
-                  <CandidateInsightsProfileExtras profile={profile} />
+                  {inShortlist ? (
+                    <section>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSignalBreakdownOpen((o) => !o)
+                        }
+                        className="flex w-full items-center justify-between gap-2 border-t border-[#F1F5F9] pt-3 text-sm font-medium text-[#0D9488] hover:text-[#0B8276]"
+                      >
+                        Full Signal Breakdown
+                        {signalBreakdownOpen ? (
+                          <ChevronUp className="h-4 w-4 shrink-0" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 shrink-0" />
+                        )}
+                      </button>
+                      {signalBreakdownOpen && (
+                        <div className="mt-3 space-y-4">
+                          <div>
+                            <h3 className={karta.sectionHeading}>
+                              Candidate Insights
+                            </h3>
+                            <div className="mt-3">
+                              <CandidateInsightsBars
+                                key={insightsAnimateKey}
+                                profile={profile}
+                                animate={insightsAnimate}
+                              />
+                            </div>
+                          </div>
+                          <CandidateInsightsProfileExtras
+                            profile={profile}
+                          />
+                        </div>
+                      )}
+                    </section>
+                  ) : (
+                    <>
+                      <section>
+                        <h3 className={karta.sectionHeading}>
+                          Candidate Insights
+                        </h3>
+                        <div className="mt-3">
+                          <CandidateInsightsBars
+                            key={insightsAnimateKey}
+                            profile={profile}
+                            animate={insightsAnimate}
+                          />
+                        </div>
+                      </section>
+
+                      <CandidateInsightsProfileExtras profile={profile} />
+                    </>
+                  )}
 
                   {profile.github && (
                     <GithubPresenceSection github={profile.github} />
