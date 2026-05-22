@@ -52,6 +52,11 @@ export function SignInForm({
         "Session did not persist. Sign out, then try email + password sign-in.",
       );
     }
+    if (searchParams.get("error") === "no_code") {
+      setError(
+        "Google sign-in did not return a verification code. Please try again.",
+      );
+    }
   }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
