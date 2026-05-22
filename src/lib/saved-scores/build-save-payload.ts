@@ -55,6 +55,8 @@ function minimalRoleBrief(
     status: "active",
     share_token: null,
     share_enabled: false,
+    inbound_email: null,
+    inbound_email_active: false,
     created_by: null,
     created_at: partial.created_at ?? "",
   };

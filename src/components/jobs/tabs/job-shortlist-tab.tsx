@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download, Loader2 } from "lucide-react";
+import { Download, Loader2, Star } from "lucide-react";
 import { CandidateIdentityCard } from "@/components/candidates/candidate-identity-card";
 import { VerdictBadge } from "@/components/candidates/profile-shared";
 import type { Job } from "@/types/job";
@@ -306,11 +306,15 @@ export function JobShortlistTab({
       )}
 
       {rows.length === 0 ? (
-        <EmptyState
-          illustration="people"
-          heading="Shortlist is empty"
-          subtitle="Evaluate applicants and add strong matches from the Assessed tab or talent pool."
-        />
+        <div className={`${karta.card} px-6 py-12 text-center`}>
+          <Star className="mx-auto h-10 w-10 text-amber-300" aria-hidden />
+          <h2 className="mt-6 text-[18px] font-semibold text-[#1E293B]">
+            Your shortlist is empty
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-[#64748B]">
+            Evaluate candidates in the Pipeline tab and move the best ones here.
+          </p>
+        </div>
       ) : (
         <div className={`overflow-x-auto ${karta.card}`}>
           <table className="w-full min-w-[960px] text-left text-sm">

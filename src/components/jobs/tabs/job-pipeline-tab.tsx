@@ -161,6 +161,9 @@ export function JobPipelineTab({
   const [duplicateMatch, setDuplicateMatch] = useState<DuplicateMatch | null>(
     null,
   );
+  const [duplicateNotices, setDuplicateNotices] = useState<
+    { fileName: string; existingId: string; existingName: string }[]
+  >([]);
   const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(
     null,
   );
@@ -216,6 +219,21 @@ export function JobPipelineTab({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { id } = (e as CustomEvent<{ id: string }>).detail;
+      setCandidates((prev) => prev.filter((c) => c.id !== id));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    };
+    window.addEventListener("karta:candidate-deleted", handler);
+    return () =>
+      window.removeEventListener("karta:candidate-deleted", handler);
+  }, []);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -574,6 +592,17 @@ export function JobPipelineTab({
       forceUpload: force,
     });
     const json = await res.json();
+    if (res.status === 409 && json.error === "duplicate") {
+      setDuplicateNotices((prev) => [
+        ...prev,
+        {
+          fileName: pending.resumeFilename,
+          existingId: String(json.existingId),
+          existingName: String(json.existingName ?? "Existing candidate"),
+        },
+      ]);
+      throw new Error("duplicate");
+    }
     if (res.status === 409 && json.duplicate) {
       setDuplicateMatch(json.duplicate as DuplicateMatch);
       setPendingUpload(pending);
@@ -937,6 +966,36 @@ export function JobPipelineTab({
         />
       )}
 
+      {duplicateNotices.length > 0 && (
+        <ul className="space-y-2">
+          {duplicateNotices.map((n) => (
+            <li
+              key={`${n.fileName}-${n.existingId}`}
+              className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm"
+            >
+              <p className="font-medium text-amber-900">
+                Already in your workspace
+              </p>
+              <p className="mt-1 text-amber-800">
+                {n.fileName}: This resume matches {n.existingName}.
+              </p>
+              <button
+                type="button"
+                className="mt-2 font-medium text-[#0D9488] hover:underline"
+                onClick={() => {
+                  openPanel(n.existingId, panelOptions);
+                  setDuplicateNotices((prev) =>
+                    prev.filter((x) => x.existingId !== n.existingId),
+                  );
+                }}
+              >
+                View existing profile
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
       {error && (
         <p className="text-sm text-red-600" role="alert">
           {error}
@@ -957,15 +1016,47 @@ export function JobPipelineTab({
       ) : !hasAnyCandidate ? (
         <div className={`${karta.card} px-6 py-12 text-center`}>
           <Upload
-            className="mx-auto h-10 w-10 text-[#0D9488]"
+            className="mx-auto h-10 w-10 text-slate-300"
             aria-hidden
           />
           <h2 className="mt-6 text-[18px] font-semibold text-[#1E293B]">
             No candidates yet
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-[#64748B]">
-            Upload resumes above to start building your pipeline for this role.
+            Upload resumes or share your apply link to start building your
+            pipeline.
           </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <label
+              className={`inline-flex cursor-pointer items-center gap-2 ${karta.btnOutlineTeal}`}
+            >
+              <Upload className="h-4 w-4" />
+              Upload Resumes
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,.txt"
+                multiple
+                className="sr-only"
+                onChange={(e) => {
+                  void uploadFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            {(roleBrief.inbound_email ?? roleBrief.apply_link) && (
+              <button
+                type="button"
+                className="text-sm font-medium text-[#64748B] hover:text-[#1E293B]"
+                onClick={() => {
+                  const text =
+                    roleBrief.inbound_email ?? roleBrief.apply_link ?? "";
+                  void navigator.clipboard.writeText(text);
+                }}
+              >
+                Copy Apply Link
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <div className="space-y-4">

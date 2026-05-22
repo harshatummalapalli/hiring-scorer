@@ -390,6 +390,8 @@ export async function getCandidateById(id: string): Promise<CandidateDetail | nu
 
   return {
     ...candidate,
+    created_by:
+      data.created_by != null ? String(data.created_by) : null,
     notes: (notes ?? []).map((n) => {
       const row = n as Record<string, unknown>;
       return {

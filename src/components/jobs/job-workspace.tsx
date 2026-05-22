@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Settings, Share2 } from "lucide-react";
+import { ArrowLeft, Loader2, Mail, Settings, Share2 } from "lucide-react";
 import { useShareShortlist } from "@/components/jobs/share-shortlist-modal";
 import { JobPipelineTab } from "@/components/jobs/tabs/job-pipeline-tab";
 import { JobShortlistTab } from "@/components/jobs/tabs/job-shortlist-tab";
@@ -126,6 +126,19 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (job.inbound_email) {
+                void navigator.clipboard.writeText(job.inbound_email);
+              }
+            }}
+            title="Copy apply email for Naukri/LinkedIn"
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-[#64748B] hover:bg-slate-50"
+          >
+            <Mail className="h-4 w-4" />
+            Copy Apply Email
+          </button>
           <button
             type="button"
             onClick={() => void handleShare()}

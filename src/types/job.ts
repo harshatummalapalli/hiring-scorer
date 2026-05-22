@@ -1,6 +1,11 @@
 import type { RoleBrief } from "@/types/role-brief";
 
-export type JobStatus = "active" | "paused" | "filled";
+export type JobStatus =
+  | "active"
+  | "paused"
+  | "on_hold"
+  | "filled"
+  | "cancelled";
 
 export type AutoScoreMode = "needs_scoring" | "auto" | "manual";
 
@@ -45,12 +50,29 @@ export type JobListItem = Job & JobListStats & {
 export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
   active: "Active",
   paused: "Paused",
+  on_hold: "On Hold",
   filled: "Filled",
+  cancelled: "Cancelled",
+};
+
+export const JOB_STATUS_COLORS: Record<JobStatus, string> = {
+  active: "bg-emerald-100 text-emerald-800",
+  paused: "bg-amber-100 text-amber-800",
+  on_hold: "bg-blue-100 text-blue-800",
+  filled: "bg-slate-100 text-slate-600",
+  cancelled: "bg-red-100 text-red-700",
 };
 
 export function parseJobStatus(value: unknown): JobStatus {
   const s = String(value ?? "active").toLowerCase();
-  if (s === "paused" || s === "filled") return s;
+  if (
+    s === "paused" ||
+    s === "on_hold" ||
+    s === "filled" ||
+    s === "cancelled"
+  ) {
+    return s;
+  }
   return "active";
 }
 

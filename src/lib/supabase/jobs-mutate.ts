@@ -25,7 +25,13 @@ import type {
   RoleBriefAnalysis,
   RoleBriefAnalysisMeta,
 } from "@/types/role-brief";
+import { customAlphabet } from "nanoid";
 import { parseRoleBriefRow } from "@/types/role-brief";
+
+const inboundNanoid = customAlphabet(
+  "0123456789abcdefghijklmnopqrstuvwxyz",
+  8,
+);
 
 export type CreateJobInput = {
   title: string;
@@ -104,8 +110,21 @@ export async function createJobForUser(
   );
 
   const saved = await insertRoleBriefRow(supabase, row, input);
+  const shortId = inboundNanoid();
+  const inboundEmail = `apply.kharta+job${shortId}@gmail.com`;
+  const { data: withEmail, error: emailError } = await supabase
+    .from("role_briefs")
+    .update({
+      inbound_email: inboundEmail,
+      inbound_email_active: true,
+    })
+    .eq("id", saved.id)
+    .select("*")
+    .single();
+
   await incrementJobCount(supabase, userId, 1);
-  return saved;
+  if (emailError || !withEmail) return saved;
+  return parseRoleBriefRow(withEmail as Record<string, unknown>);
 }
 
 export async function deleteJobForUser(

@@ -102,6 +102,8 @@ export type RoleBrief = {
   status: JobStatus;
   share_token: string | null;
   share_enabled: boolean;
+  inbound_email: string | null;
+  inbound_email_active: boolean;
   created_by: string | null;
   created_at: string;
 };
@@ -405,6 +407,9 @@ export function parseRoleBriefRow(row: Record<string, unknown>): RoleBrief {
     status: parseJobStatus(row.status),
     share_token: row.share_token != null ? String(row.share_token) : null,
     share_enabled: row.share_enabled === true,
+    inbound_email:
+      row.inbound_email != null ? String(row.inbound_email) : null,
+    inbound_email_active: row.inbound_email_active !== false,
     created_by: row.created_by != null ? String(row.created_by) : null,
     created_at: String(row.created_at ?? new Date().toISOString()),
   };

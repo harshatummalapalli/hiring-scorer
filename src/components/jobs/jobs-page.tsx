@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Plus, Share2, X } from "lucide-react";
+import { Briefcase, Loader2, Mail, Plus, Share2, X } from "lucide-react";
+import { DashboardStrip } from "@/components/dashboard/dashboard-strip";
 import { ShareShortlistModal } from "@/components/jobs/share-shortlist-modal";
 import { RoleBriefCreator } from "@/components/role-briefs/role-brief-creator";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -12,20 +13,13 @@ import { formatKartaDate } from "@/lib/dates/format-karta-date";
 import { getErrorMessage } from "@/lib/errors";
 import { isUnlimitedWorkspaceCap } from "@/lib/workspace/limits";
 import type { JobListItem } from "@/types/job";
-import { JOB_STATUS_LABELS } from "@/types/job";
+import { JOB_STATUS_COLORS, JOB_STATUS_LABELS, type JobStatus } from "@/types/job";
 import type { JobPostingFields } from "@/types/job-posting";
 import type { RoleBriefAnalysis, RoleBriefAnalysisMeta } from "@/types/role-brief";
 import { useRouter } from "next/navigation";
 
 function statusBadgeClass(status: string): string {
-  switch (status) {
-    case "paused":
-      return "bg-amber-100 text-amber-800";
-    case "filled":
-      return "bg-slate-200 text-slate-700";
-    default:
-      return "bg-[#0D9488]/15 text-[#0D9488]";
-  }
+  return JOB_STATUS_COLORS[status as JobStatus] ?? JOB_STATUS_COLORS.active;
 }
 
 type WorkspaceUsage = {
@@ -43,6 +37,7 @@ export function JobsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [showJobLimitModal, setShowJobLimitModal] = useState(false);
   const [shareJob, setShareJob] = useState<JobListItem | null>(null);
+  const [jobFilter, setJobFilter] = useState<"active" | "all">("active");
 
   const loadUsage = useCallback(async () => {
     try {
@@ -149,6 +144,8 @@ export function JobsPage() {
         </button>
       </div>
 
+      <DashboardStrip />
+
       {error && (
         <p className="text-sm text-red-600" role="alert">
           {error}
@@ -162,8 +159,8 @@ export function JobsPage() {
       ) : jobs.length === 0 ? (
         <EmptyState
           illustration="briefcase"
-          heading="Your first role is waiting"
-          subtitle="Post a job and Kharta will start building your talent intelligence."
+          heading="Post your first job"
+          subtitle="Add a job description and Kharta will extract the role requirements automatically."
           action={
             <button
               type="button"
@@ -176,13 +173,49 @@ export function JobsPage() {
           }
         />
       ) : (
-        <ul className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {jobs.map((job) => (
+        <>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setJobFilter("active")}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
+                jobFilter === "active"
+                  ? "bg-[#0D9488] text-white"
+                  : "bg-slate-100 text-[#64748B] hover:bg-slate-200"
+              }`}
+            >
+              Active & Paused
+            </button>
+            <button
+              type="button"
+              onClick={() => setJobFilter("all")}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
+                jobFilter === "all"
+                  ? "bg-[#0D9488] text-white"
+                  : "bg-slate-100 text-[#64748B] hover:bg-slate-200"
+              }`}
+            >
+              All Jobs
+            </button>
+          </div>
+          <ul className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {jobs
+            .filter((job) =>
+              jobFilter === "all"
+                ? true
+                : job.status === "active" ||
+                  job.status === "paused" ||
+                  job.status === "on_hold",
+            )
+            .map((job) => {
+              const archived =
+                job.status === "filled" || job.status === "cancelled";
+              return (
             <li
               key={job.id}
-              className={`flex h-full min-h-[280px] flex-col ${karta.card} ${karta.cardHover} p-5 ${
-                job.status === "active" ? karta.jobCardActive : ""
-              }`}
+              className={`flex h-full min-h-[280px] flex-col ${karta.card} p-5 ${
+                archived ? "opacity-60" : karta.cardHover
+              } ${job.status === "active" && !archived ? karta.jobCardActive : ""}`}
             >
               <div className="flex min-h-[3rem] flex-wrap items-start gap-2">
                 <h2 className={`${karta.cardTitle} leading-snug`}>{job.title}</h2>
@@ -219,6 +252,24 @@ export function JobsPage() {
                   </dd>
                 </div>
               </dl>
+              {job.inbound_email && (
+                <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3">
+                  <Mail className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]" />
+                  <span className="truncate text-[11px] text-[#94A3B8]">
+                    {job.inbound_email}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void navigator.clipboard.writeText(job.inbound_email ?? "");
+                    }}
+                    className="shrink-0 text-[11px] font-medium text-[#0D9488] hover:underline"
+                  >
+                    Copy
+                  </button>
+                </div>
+              )}
               <div className="mt-auto flex flex-col gap-2 pt-4">
                 <button
                   type="button"
@@ -228,16 +279,27 @@ export function JobsPage() {
                   <Share2 className="h-4 w-4" />
                   Share Shortlist
                 </button>
-                <Link
-                  href={`/jobs/${job.id}`}
-                  className="block w-full rounded-lg border border-[#0D9488] bg-white py-2.5 text-center text-sm font-semibold text-[#0D9488] transition hover:bg-[#F0FDFA]"
-                >
-                  Open Job
-                </Link>
+                {archived ? (
+                  <Link
+                    href={`/jobs/${job.id}`}
+                    className="block w-full rounded-lg border border-slate-200 py-2.5 text-center text-sm font-medium text-[#64748B] hover:bg-slate-50"
+                  >
+                    View
+                  </Link>
+                ) : (
+                  <Link
+                    href={`/jobs/${job.id}`}
+                    className="block w-full rounded-lg border border-[#0D9488] bg-white py-2.5 text-center text-sm font-semibold text-[#0D9488] transition hover:bg-[#F0FDFA]"
+                  >
+                    Open Job
+                  </Link>
+                )}
               </div>
             </li>
-          ))}
+          );
+          })}
         </ul>
+        </>
       )}
 
       {showPost && (

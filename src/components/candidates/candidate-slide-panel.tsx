@@ -1,7 +1,15 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Download, Loader2, X } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Download,
+  Loader2,
+  Trash2,
+  X,
+} from "lucide-react";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import type { CandidateDetail, CandidateSignalProfile } from "@/types/candidate";
 import type { RoleBrief } from "@/types/role-brief";
 import type { FitVerdict } from "@/types/score";
@@ -253,6 +261,9 @@ export function CandidateSlidePanel({
   const [insightsAnimateKey, setInsightsAnimateKey] = useState(0);
   const [inShortlist, setInShortlist] = useState(false);
   const [signalBreakdownOpen, setSignalBreakdownOpen] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [noteFilter, setNoteFilter] = useState<"all" | "role">(
     contextJobId ? "role" : "all",
   );
@@ -269,8 +280,15 @@ export function CandidateSlidePanel({
     if (candidateId) {
       setPanelExiting(false);
       setInsightsAnimateKey((k) => k + 1);
+      setDeleteConfirm(false);
     }
   }, [candidateId]);
+
+  useEffect(() => {
+    void createSupabaseBrowserClient()
+      .auth.getUser()
+      .then(({ data }) => setCurrentUserId(data.user?.id ?? null));
+  }, []);
 
   const load = useCallback(async () => {
     if (!candidateId) {
@@ -473,6 +491,29 @@ export function CandidateSlidePanel({
       );
     } finally {
       setCvDownloadBusy(false);
+    }
+  };
+
+  const handleDeleteCandidate = async () => {
+    if (!candidateId) return;
+    setDeleteBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/candidates/${candidateId}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Delete failed");
+      window.dispatchEvent(
+        new CustomEvent("karta:candidate-deleted", {
+          detail: { id: candidateId },
+        }),
+      );
+      handlePanelClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setDeleteBusy(false);
     }
   };
 
@@ -1075,6 +1116,48 @@ export function CandidateSlidePanel({
                   {noteBusy ? "Saving…" : "Add note"}
                 </button>
               </section>
+
+              {candidateId &&
+                candidate &&
+                candidate.created_by === currentUserId && (
+                  <section className="border-t border-slate-200 pt-6">
+                    {!deleteConfirm ? (
+                      <button
+                        type="button"
+                        onClick={() => setDeleteConfirm(true)}
+                        className="inline-flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete candidate
+                      </button>
+                    ) : (
+                      <div className="space-y-3 rounded-lg border border-red-200 bg-red-50/50 p-4">
+                        <p className="text-sm text-[#334155]">
+                          This will permanently remove this candidate and all
+                          their evaluation data. This cannot be undone.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={deleteBusy}
+                            onClick={() => void handleDeleteCandidate()}
+                            className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                          >
+                            {deleteBusy ? "Deleting…" : "Yes, delete"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={deleteBusy}
+                            onClick={() => setDeleteConfirm(false)}
+                            className="rounded-lg px-3 py-1.5 text-sm font-medium text-[#64748B] hover:bg-slate-100"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                )}
             </div>
           ) : candidate ? (
             <p className="text-sm text-[#64748B]">

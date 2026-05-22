@@ -150,12 +150,19 @@ export async function POST(request: Request) {
         displayName: display_name,
       });
       const primary = duplicates[0];
-      if (primary) {
+      const duplicateConfidence = (match: DuplicateMatch): number => {
+        if (match.level === "content_hash") return 1;
+        if (match.level === "email") return 0.95;
+        return match.similarity ?? 0;
+      };
+      if (primary && duplicateConfidence(primary) >= 0.85) {
         return NextResponse.json(
           {
-            error: "duplicate_candidate",
-            duplicate: primary as DuplicateMatch,
-            duplicates,
+            error: "duplicate",
+            message:
+              "This resume matches an existing candidate in your workspace.",
+            existingId: primary.candidateId,
+            existingName: primary.displayName,
           },
           { status: 409 },
         );

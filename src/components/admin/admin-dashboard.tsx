@@ -64,6 +64,68 @@ function MetricCard({
   );
 }
 
+function EmailInboundCard() {
+  const [stats, setStats] = useState<{
+    configured: boolean;
+    received?: number;
+    successful?: number;
+    failed?: number;
+    lastReceived?: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    void fetch("/api/admin/email-log")
+      .then((r) => r.json())
+      .then((json) => setStats(json))
+      .catch(() => setStats({ configured: false }));
+  }, []);
+
+  return (
+    <section className={`${karta.card} p-5`}>
+      <h3 className={karta.sectionHeading}>Email Inbound — Last 24 Hours</h3>
+      {!stats?.configured ? (
+        <p className="mt-2 text-sm text-[#64748B]">
+          Email inbound not configured. Add GMAIL_INBOUND_USER to environment
+          variables.
+        </p>
+      ) : (
+        <dl className="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+          <div>
+            <dt className="text-[#64748B]">Emails received</dt>
+            <dd className="text-xl font-semibold text-[#1E293B]">
+              {stats.received ?? 0}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[#64748B]">Processed OK</dt>
+            <dd className="text-xl font-semibold text-[#0D9488]">
+              {stats.successful ?? 0}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[#64748B]">Failed</dt>
+            <dd
+              className={`text-xl font-semibold ${
+                (stats.failed ?? 0) > 0 ? "text-red-600" : "text-[#1E293B]"
+              }`}
+            >
+              {stats.failed ?? 0}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[#64748B]">Last received</dt>
+            <dd className="text-sm font-medium text-[#1E293B]">
+              {stats.lastReceived
+                ? new Date(stats.lastReceived).toLocaleString()
+                : "—"}
+            </dd>
+          </div>
+        </dl>
+      )}
+    </section>
+  );
+}
+
 function DataQualityCard() {
   const [reparsing, setReparsing] = useState(false);
   const [reparseProgress, setReparseProgress] = useState("");
@@ -197,6 +259,7 @@ export function AdminDashboard() {
   return (
     <div className="space-y-10">
       <DataQualityCard />
+      <EmailInboundCard />
 
       <section>
         <h2 className={karta.pageTitle}>Platform overview</h2>

@@ -2,7 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, ChevronRight, Loader2, Search, Upload, X } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  Search,
+  Upload,
+  Users,
+  X,
+} from "lucide-react";
 import { CandidateIdentityCard } from "@/components/candidates/candidate-identity-card";
 import { CoreStrengthLabel } from "@/components/candidates/core-strength-label";
 import { ScoreRolePickerModal } from "@/components/candidates/score-role-picker-modal";
@@ -92,6 +100,9 @@ export function TalentPoolWorkspace() {
   const { activeBriefId } = useActiveRoleBrief();
   const [showUpload, setShowUpload] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [duplicateNotices, setDuplicateNotices] = useState<
+    { fileName: string; existingId: string; existingName: string }[]
+  >([]);
 
   const uploading = uploadUi.phase === "processing";
 
@@ -133,6 +144,21 @@ export function TalentPoolWorkspace() {
   useEffect(() => {
     void loadCandidates();
   }, [loadCandidates]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { id } = (e as CustomEvent<{ id: string }>).detail;
+      setCandidates((prev) => prev.filter((c) => c.id !== id));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    };
+    window.addEventListener("karta:candidate-deleted", handler);
+    return () =>
+      window.removeEventListener("karta:candidate-deleted", handler);
+  }, []);
 
   // Fix #2: sync inline edits made inside the slide panel back to this list
   useEffect(() => {
@@ -206,6 +232,17 @@ export function TalentPoolWorkspace() {
       source: "uploaded",
     });
     const json = await res.json();
+    if (res.status === 409 && json.error === "duplicate") {
+      setDuplicateNotices((prev) => [
+        ...prev,
+        {
+          fileName: pending.resumeFilename,
+          existingId: String(json.existingId),
+          existingName: String(json.existingName ?? "Existing candidate"),
+        },
+      ]);
+      throw new Error("duplicate");
+    }
     if (!res.ok) throw new Error(json.error ?? "Upload failed");
   };
 
@@ -461,21 +498,24 @@ export function TalentPoolWorkspace() {
           <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
         </div>
       ) : candidates.length === 0 ? (
-        <EmptyState
-          illustration="network"
-          heading="Your talent pool starts here"
-          subtitle="Every resume you score becomes part of your permanent talent intelligence."
-          action={
-            <button
-              type="button"
-              onClick={() => setShowUpload(true)}
-              className={`inline-flex items-center gap-2 ${karta.btnPrimary}`}
-            >
-              <Upload className="h-4 w-4" />
-              Upload Resumes
-            </button>
-          }
-        />
+        <div className={`${karta.card} px-6 py-12 text-center`}>
+          <Users className="mx-auto h-10 w-10 text-[#0D9488]" aria-hidden />
+          <h2 className="mt-6 text-[18px] font-semibold text-[#1E293B]">
+            Your talent pool is empty
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-[#64748B]">
+            Upload candidate resumes to build your pool. They stay here across all
+            your roles.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowUpload(true)}
+            className={`mt-6 inline-flex items-center gap-2 ${karta.btnPrimary}`}
+          >
+            <Upload className="h-4 w-4" />
+            Upload Resumes
+          </button>
+        </div>
       ) : filtered.length === 0 ? (
         <EmptyState
           illustration="filters"

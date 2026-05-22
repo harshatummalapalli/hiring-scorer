@@ -179,6 +179,7 @@ export type CandidateListItem = Omit<CandidateRow, "resume_text"> & {
 };
 
 export type CandidateDetail = CandidateRow & {
+  created_by: string | null;
   notes: CandidateNote[];
   role_fit_scores: CandidateRoleFitScore[];
 };

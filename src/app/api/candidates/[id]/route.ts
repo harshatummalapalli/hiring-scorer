@@ -4,7 +4,9 @@ import {
   enrichGithubProfile,
   extractGithubUsername,
 } from "@/lib/candidates/github-enrichment";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCandidateById, updateCandidate } from "@/lib/supabase/candidates";
+import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import type { CandidateSignalProfile, VerifiedSkill } from "@/types/candidate";
 
 type Params = { params: Promise<{ id: string }> };
@@ -134,6 +136,64 @@ export async function PATCH(request: Request, { params }: Params) {
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to update candidate";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+    }
+
+    const { data: candidate } = await supabase
+      .from("candidates")
+      .select("created_by, resume_file_path")
+      .eq("id", id)
+      .single();
+
+    if (!candidate || candidate.created_by !== user.id) {
+      return NextResponse.json(
+        { error: "Not found or not authorised" },
+        { status: 404 },
+      );
+    }
+
+    await supabase
+      .from("candidate_role_fit_scores")
+      .delete()
+      .eq("candidate_id", id);
+
+    await supabase.from("saved_scores").delete().eq("candidate_id", id);
+
+    await supabase
+      .from("pipeline_candidates")
+      .delete()
+      .eq("candidate_id", id);
+
+    await supabase.from("candidate_notes").delete().eq("candidate_id", id);
+
+    if (candidate.resume_file_path) {
+      const adminClient = createSupabaseAdminClient();
+      await adminClient.storage
+        .from("resumes")
+        .remove([candidate.resume_file_path]);
+    }
+
+    await supabase.from("candidates").delete().eq("id", id);
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Failed to delete candidate";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

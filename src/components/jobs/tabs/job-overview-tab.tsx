@@ -154,6 +154,19 @@ export function JobOverviewTab({ job, onJobUpdated }: JobOverviewTabProps) {
   };
 
   const handleSave = async () => {
+    if (form.status === "filled" && job.status !== "filled") {
+      const ok = window.confirm(
+        "Mark this role as filled? Candidates will remain in your pipeline but the role will be archived from your active view.",
+      );
+      if (!ok) return;
+    }
+    if (form.status === "cancelled" && job.status !== "cancelled") {
+      const ok = window.confirm(
+        "Cancel this role? This cannot be easily undone.",
+      );
+      if (!ok) return;
+    }
+
     setSaving(true);
     setSaveError(null);
     setContentStaleNotice(null);
