@@ -106,16 +106,32 @@ export async function POST(request: Request) {
       "candidate-resume.pdf";
 
     let ingested;
-    if (resumeFile) {
-      const bytes = await resumeFile.arrayBuffer();
-      ingested = await ingestResumeFromBytes(
-        bytes,
-        resumeFilename,
-        resumeFile.type,
-        resumeText,
+    try {
+      if (resumeFile) {
+        const bytes = await resumeFile.arrayBuffer();
+        ingested = await ingestResumeFromBytes(
+          bytes,
+          resumeFilename,
+          resumeFile.type,
+          resumeText,
+        );
+      } else {
+        ingested = await ingestResumeFromText(resumeText, resumeFilename);
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Resume parsing failed";
+      console.error("[candidates/route] Ingest error:", message);
+      return NextResponse.json(
+        {
+          error:
+            "Could not process this resume. " +
+            "The parsing service may be unavailable. " +
+            "Please try again in a moment.",
+          detail: message,
+        },
+        { status: 422 },
       );
-    } else {
-      ingested = await ingestResumeFromText(resumeText, resumeFilename);
     }
     const signal_profile = ingested.signalProfile;
     const resumeTextFinal = ingested.resumeText;

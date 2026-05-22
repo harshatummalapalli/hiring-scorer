@@ -82,12 +82,57 @@ export async function reparseCandidateRecord(
         parse_confidence: ingested.structuredResume?.metadata.parse_confidence,
         ingestion_errors,
       };
-    } catch {
-      /* fall through to text-only reparse */
+    } catch (err) {
+      console.error(
+        "[reparse] Parser failed for candidate",
+        row.id,
+        err instanceof Error ? err.message : err,
+      );
+      const existingProfile = row.signal_profile as Record<string, unknown>;
+      return {
+        id: row.id,
+        display_name:
+          (typeof existingProfile?.display_name === "string"
+            ? existingProfile.display_name
+            : null) ?? "Unknown",
+        resume_text: resumeText,
+        signal_profile: row.signal_profile,
+        application_email: null,
+        application_phone: null,
+        linkedin_url: null,
+        ingestion_errors: [
+          err instanceof Error ? err.message : "Parser failed",
+        ],
+      };
     }
   }
 
-  const ingested = await ingestResumeFromText(resumeText, filename);
+  let ingested;
+  try {
+    ingested = await ingestResumeFromText(resumeText, filename);
+  } catch (err) {
+    console.error(
+      "[reparse] Parser failed for candidate",
+      row.id,
+      err instanceof Error ? err.message : err,
+    );
+    const existingProfile = row.signal_profile as Record<string, unknown>;
+    return {
+      id: row.id,
+      display_name:
+        (typeof existingProfile?.display_name === "string"
+          ? existingProfile.display_name
+          : null) ?? "Unknown",
+      resume_text: resumeText,
+      signal_profile: row.signal_profile,
+      application_email: null,
+      application_phone: null,
+      linkedin_url: null,
+      ingestion_errors: [
+        err instanceof Error ? err.message : "Parser failed",
+      ],
+    };
+  }
   const { patch } = extractAndBuildPatch(
     resumeText,
     filename,

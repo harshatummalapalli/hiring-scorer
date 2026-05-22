@@ -1,4 +1,8 @@
 import type { CandidateSignalProfile, ExperienceEntry } from "@/types/candidate";
+import {
+  sanitizeDisplayCompany,
+  sanitizeDisplayTitle,
+} from "@/lib/candidates/candidate-identity-display";
 import { formatTitleAtCompany } from "@/lib/candidates/extract-resume-header";
 import { isBadDisplayName } from "@/lib/candidates/resolve-display-name";
 
@@ -260,7 +264,10 @@ export function formatTitleAtCompanySubtitle(
   currentTitle: string | null | undefined,
   currentCompany: string | null | undefined,
 ): string | null {
-  return formatTitleAtCompany(currentTitle, currentCompany);
+  return formatTitleAtCompany(
+    sanitizeDisplayTitle(currentTitle),
+    sanitizeDisplayCompany(currentCompany),
+  );
 }
 
 export function evidenceContainsRedaction(text: string): boolean {

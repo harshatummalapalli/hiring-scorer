@@ -64,79 +64,66 @@ function MetricCard({
   );
 }
 
-function ReparseAllCandidatesCard() {
-  const [running, setRunning] = useState(false);
-  const [progress, setProgress] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+function DataQualityCard() {
+  const [reparsing, setReparsing] = useState(false);
+  const [reparseProgress, setReparseProgress] = useState("");
+  const [reparseResult, setReparseResult] = useState<string | null>(null);
+  const [reparseError, setReparseError] = useState<string | null>(null);
 
-  const run = async () => {
-    setRunning(true);
-    setError(null);
-    setProgress("Starting…");
+  const triggerReparse = async () => {
+    setReparsing(true);
+    setReparseResult(null);
+    setReparseError(null);
+    setReparseProgress("starting...");
     try {
-      let offset = 0;
-      let total = 0;
-      let done = false;
-      let updatedTotal = 0;
-      while (!done) {
-        const res = await fetch(
-          `/api/admin/reparse-candidates?offset=${offset}&limit=25`,
-          { method: "POST" },
+      const res = await fetch("/api/candidates/reparse", { method: "POST" });
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!contentType.includes("application/json")) {
+        throw new Error(
+          "Server returned an unexpected response. Sign in again and retry.",
         );
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error ?? "Reparse failed");
-        total = Number(json.total ?? 0);
-        const processed = Number(json.processed ?? 0);
-        updatedTotal += Number(json.updatedInBatch ?? 0);
-        done = Boolean(json.done);
-        offset = processed;
-        setProgress(`Reparsed ${processed} of ${total} candidates…`);
-        if (!done && (json.batchSize ?? 0) === 0) break;
       }
-      setProgress(
-        `Done. Reparsed ${total} candidates. Updated ${updatedTotal} display names.`,
-      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Reparse failed");
+      setReparseResult(`Done — ${json.total} candidates updated.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Reparse failed");
-      setProgress(null);
+      setReparseError(
+        err instanceof Error ? err.message : "Reparse failed",
+      );
     } finally {
-      setRunning(false);
+      setReparsing(false);
+      setReparseProgress("");
     }
   };
 
   return (
-    <section
-      className={`${karta.card} border-2 border-[#0D9488]/30 bg-gradient-to-br from-[#0D9488]/5 to-white p-6 shadow-sm`}
-    >
-      <h2 className="text-lg font-semibold text-[#1E293B]">Reparse All Candidates</h2>
-      <p className="mt-2 text-sm text-[#64748B]">
-        Re-run improved name extraction on every candidate with stored resume text:
-        header scan, email fallback, and filename cleanup. Fixes glued or numeric
-        display names (e.g. Tushar886, Jimmykrgrd).
+    <section className={`${karta.card} p-5`}>
+      <h3 className={karta.sectionHeading}>Data Quality</h3>
+      <p className="mt-1 text-sm text-[#64748B]">
+        Reparse all candidate records using the Python parser service. This fixes
+        names, strips PII from resume text, and improves extraction quality for
+        all existing candidates.
       </p>
-      {progress && (
-        <p className="mt-3 text-sm font-medium text-[#0D9488]">{progress}</p>
-      )}
-      {error && (
+      <div className="mt-4 flex flex-wrap items-center gap-4">
+        <button
+          type="button"
+          onClick={() => void triggerReparse()}
+          disabled={reparsing}
+          className="rounded-lg bg-[#0D9488] px-4 py-2 text-sm font-medium text-white hover:bg-[#0f766e] disabled:opacity-60"
+        >
+          {reparsing
+            ? `Reparsing... (${reparseProgress})`
+            : "Reparse All Candidates"}
+        </button>
+        {reparseResult && (
+          <span className="text-sm text-[#64748B]">{reparseResult}</span>
+        )}
+      </div>
+      {reparseError && (
         <p className="mt-2 text-sm text-red-600" role="alert">
-          {error}
+          {reparseError}
         </p>
       )}
-      <button
-        type="button"
-        disabled={running}
-        onClick={() => void run()}
-        className={`mt-5 w-full sm:w-auto ${karta.btnPrimary} px-8 py-3 text-base font-semibold`}
-      >
-        {running ? (
-          <span className="inline-flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Reparsing…
-          </span>
-        ) : (
-          "Reparse All Candidates"
-        )}
-      </button>
     </section>
   );
 }
@@ -209,7 +196,7 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-10">
-      <ReparseAllCandidatesCard />
+      <DataQualityCard />
 
       <section>
         <h2 className={karta.pageTitle}>Platform overview</h2>

@@ -1,4 +1,3 @@
-import { buildSignalProfile } from "@/lib/candidates/build-signal-profile";
 import { normalizeResumeText } from "@/lib/resume/normalize-resume-text";
 import type { CandidateSignalProfile } from "@/types/candidate";
 import type { ParseRunResult, StructuredResume } from "@/types/structured-resume";
@@ -14,41 +13,58 @@ export type IngestResumeResult = {
   signalProfile: CandidateSignalProfile;
   structuredResume: StructuredResume | null;
   parseResult: ParseRunResult | null;
-  ingestionSource: "parser_service" | "legacy_typescript";
+  ingestionSource: "parser_service";
 };
 
 export async function ingestResumeFromBytes(
   bytes: ArrayBuffer,
   filename: string,
   mimeType?: string,
-  fallbackText?: string,
+  _fallbackText?: string,
 ): Promise<IngestResumeResult> {
-  if (isResumeParserConfigured()) {
-    const parseResult = await parseResumeFile(bytes, filename, mimeType);
-    if (parseResult?.success && parseResult.structured_resume) {
-      const structured = parseResult.structured_resume;
-      const resumeText = normalizeResumeText(
-        structured.pii_stripped_text || structured.raw_text,
-      );
-      const signalProfile = structuredResumeToSignalProfile(structured, filename);
-      return {
-        resumeText,
-        signalProfile,
-        structuredResume: structured,
-        parseResult,
-        ingestionSource: "parser_service",
-      };
-    }
+  if (!isResumeParserConfigured()) {
+    throw new Error(
+      "Resume parser service is not configured. " +
+        "Set RESUME_PARSER_URL environment variable.",
+    );
   }
 
-  const resumeText = normalizeResumeText(fallbackText ?? "");
-  const signalProfile = buildSignalProfile(resumeText, filename);
+  const parseResult = await parseResumeFile(bytes, filename, mimeType);
+
+  if (!parseResult) {
+    throw new Error(
+      "Parser service did not respond. " +
+        "Check RESUME_PARSER_URL and PARSER_SECRET_KEY.",
+    );
+  }
+
+  if (!parseResult.success || !parseResult.structured_resume) {
+    console.error(
+      "[ingest] Parser returned failure:",
+      parseResult.error,
+      "Warnings:",
+      parseResult.warnings,
+    );
+    throw new Error(
+      `Parser failed: ${parseResult.error ?? "Unknown error"}. ` +
+        `Warnings: ${parseResult.warnings.join(", ")}`,
+    );
+  }
+
+  const structured = parseResult.structured_resume;
+  const resumeText = normalizeResumeText(
+    structured.pii_stripped_text || structured.raw_text,
+  );
+  const signalProfile = structuredResumeToSignalProfile(structured, filename);
+
+  console.log("[ingest] ingestionSource: parser_service");
+
   return {
     resumeText,
     signalProfile,
-    structuredResume: null,
-    parseResult: null,
-    ingestionSource: "legacy_typescript",
+    structuredResume: structured,
+    parseResult,
+    ingestionSource: "parser_service",
   };
 }
 
@@ -57,28 +73,37 @@ export async function ingestResumeFromText(
   filename: string,
 ): Promise<IngestResumeResult> {
   const normalized = normalizeResumeText(text);
-  if (isResumeParserConfigured()) {
-    const parseResult = await parseResumeText(normalized, filename);
-    if (parseResult?.success && parseResult.structured_resume) {
-      const structured = parseResult.structured_resume;
-      const resumeText = normalizeResumeText(
-        structured.pii_stripped_text || structured.raw_text,
-      );
-      return {
-        resumeText,
-        signalProfile: structuredResumeToSignalProfile(structured, filename),
-        structuredResume: structured,
-        parseResult,
-        ingestionSource: "parser_service",
-      };
-    }
+
+  if (!isResumeParserConfigured()) {
+    throw new Error("Resume parser service is not configured.");
   }
 
+  const parseResult = await parseResumeText(normalized, filename);
+
+  if (!parseResult?.success || !parseResult.structured_resume) {
+    console.error(
+      "[ingest] Parser returned failure:",
+      parseResult?.error,
+      "Warnings:",
+      parseResult?.warnings,
+    );
+    throw new Error(
+      `Parser failed: ${parseResult?.error ?? "No response"}`,
+    );
+  }
+
+  const structured = parseResult.structured_resume;
+  const resumeText = normalizeResumeText(
+    structured.pii_stripped_text || structured.raw_text,
+  );
+
+  console.log("[ingest] ingestionSource: parser_service");
+
   return {
-    resumeText: normalized,
-    signalProfile: buildSignalProfile(normalized, filename),
-    structuredResume: null,
-    parseResult: null,
-    ingestionSource: "legacy_typescript",
+    resumeText,
+    signalProfile: structuredResumeToSignalProfile(structured, filename),
+    structuredResume: structured,
+    parseResult,
+    ingestionSource: "parser_service",
   };
 }

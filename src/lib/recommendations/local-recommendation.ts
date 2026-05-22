@@ -7,7 +7,9 @@ import {
   domainIdFromLabel,
   hasNonTechnicalCoreStrength,
   hasNonTechnicalSignals,
+  hasQaTestingProfile,
   isSoftwareEngineeringRole,
+  roleRequiresTesting,
   primaryRoleDomains,
 } from "@/lib/intelligence/skill-domains";
 import type { CandidateSignalProfile } from "@/types/candidate";
@@ -112,6 +114,14 @@ export function passesCoreStrengthFilter(
     ) {
       return false;
     }
+  }
+
+  if (
+    isEngRole &&
+    hasQaTestingProfile(profile) &&
+    !roleRequiresTesting(roleBrief)
+  ) {
+    return false;
   }
 
   if (roleDomains.length === 0) {

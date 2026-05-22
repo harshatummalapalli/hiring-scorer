@@ -1,35 +1,47 @@
-import { type NextRequest, NextResponse } from "next/server";
-import { resolvePostLoginUrl } from "@/lib/auth/resolve-post-login-url";
-import { createSupabaseRouteHandlerClient } from "@/lib/supabase/route-handler-client";
-import { ensureWorkspaceSettingsForUser } from "@/lib/workspace/settings";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import { NextResponse, type NextRequest } from "next/server";
+import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/jobs";
+  const requestUrl = new URL(request.url);
+  const code = requestUrl.searchParams.get("code");
+  const next = requestUrl.searchParams.get("next") ?? "/";
+  const origin = requestUrl.origin;
 
   if (code) {
-    const probeResponse = new NextResponse();
-    const supabase = createSupabaseRouteHandlerClient(request, probeResponse);
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error && data.user) {
-      try {
-        await ensureWorkspaceSettingsForUser(supabase, data.user);
-      } catch {
-        // Workspace bootstrap is best-effort
-      }
-      const landing = await resolvePostLoginUrl(supabase, data.user, next);
-      const response = NextResponse.redirect(new URL(landing, request.url));
-      const supabaseWithCookies = createSupabaseRouteHandlerClient(
-        request,
-        response,
-      );
-      await supabaseWithCookies.auth.getUser();
-      return response;
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      getSupabaseUrl(),
+      getSupabaseAnonKey(),
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+          setAll(cookiesToSet) {
+            try {
+              cookiesToSet.forEach(({ name, value, options }) =>
+                cookieStore.set(name, value, options),
+              );
+            } catch {
+              // Ignore cookie errors in Server Components
+            }
+          },
+        },
+      },
+    );
+
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (!error) {
+      return NextResponse.redirect(`${origin}${next}`);
     }
+
+    console.error("[auth/callback] Exchange error:", error.message);
   }
 
-  const signInUrl = new URL("/auth/signin", request.url);
-  signInUrl.searchParams.set("error", "auth_callback");
-  return NextResponse.redirect(signInUrl);
+  return NextResponse.redirect(
+    `${origin}/auth/signin?error=auth_callback_failed`,
+  );
 }

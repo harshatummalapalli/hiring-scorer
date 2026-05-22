@@ -1,3 +1,8 @@
+/**
+ * @deprecated Name and title extraction is now handled by the Python parser
+ * service. This file is kept for the displayNameFromFilename utility and
+ * formatTitleAtCompany only.
+ */
 import {
   cleanDisplayName,
   isBadDisplayName,

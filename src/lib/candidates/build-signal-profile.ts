@@ -1,3 +1,10 @@
+/**
+ * @deprecated The ingestion pipeline no longer uses TypeScript-based profile
+ * building directly. All parsing goes through the Python parser service.
+ * These functions remain for signal computation only (ownership ratios, skill
+ * classification, trajectory) which structuredResumeToSignalProfile calls
+ * internally.
+ */
 import { analyseResumeSignals } from "@/lib/intelligence/beyond-keywords";
 import { extractResumeLinks } from "@/lib/candidates/parse-resume-links";
 import { parseResumeIdentity } from "@/lib/candidates/parse-resume-identity";

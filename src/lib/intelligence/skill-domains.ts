@@ -250,6 +250,10 @@ export function coreStrengthOverlapsRole(
 const NON_TECH_STRENGTH_PATTERN =
   /\b(?:recruit(?:ing|ment|er)?|talent\s+acquisition|hr\b|human\s+resources|sales|marketing|finance|accounting|operations|sourcing|staffing)\b/i;
 
+/** QA/testing titles — technical but not pure engineering or AI/ML unless role requires QA. */
+const QA_TESTING_PATTERN =
+  /\b(?:sdet|qa\s+engineer|quality\s+assurance|quality\s+engineer|test\s+engineer|test\s+automation|automation\s+tester|manual\s+tester|software\s+tester|testing\s+engineer|qe\b)\b/i;
+
 export function isSoftwareEngineeringRole(roleBrief: {
   title?: string | null;
   deal_breakers?: string[];
@@ -292,6 +296,44 @@ export function hasNonTechnicalSignals(profile: {
     .filter(Boolean)
     .join(" ");
   return NON_TECH_STRENGTH_PATTERN.test(titleBlob);
+}
+
+/**
+ * Returns true if candidate profile is primarily a QA/testing profile.
+ * Used to filter QA candidates from pure engineering or AI/ML roles unless
+ * the role explicitly requires testing skills.
+ */
+export function hasQaTestingProfile(profile: {
+  core_strength_primary: string | null;
+  core_strength_secondary: string | null;
+  most_recent_title?: string | null;
+  current_title?: string | null;
+}): boolean {
+  const blob = [
+    profile.core_strength_primary,
+    profile.core_strength_secondary,
+    profile.most_recent_title,
+    profile.current_title,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return QA_TESTING_PATTERN.test(blob);
+}
+
+/**
+ * Returns true if the role explicitly requires QA or testing skills — in which
+ * case QA profiles should NOT be filtered out.
+ */
+export function roleRequiresTesting(roleBrief: {
+  title?: string | null;
+  deal_breakers?: string[];
+  core_signals?: { skill: string; equivalents?: string[] }[];
+}): boolean {
+  const titleBlob = roleBrief.title?.toLowerCase() ?? "";
+  const signalBlob = (roleBrief.core_signals ?? [])
+    .map((s) => s.skill.toLowerCase())
+    .join(" ");
+  return QA_TESTING_PATTERN.test(`${titleBlob} ${signalBlob}`);
 }
 
 export function formatCoreStrengthLabel(

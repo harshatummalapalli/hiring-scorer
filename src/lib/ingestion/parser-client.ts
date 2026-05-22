@@ -124,6 +124,12 @@ export async function parseResumeFile(
     return result;
   } catch (err) {
     const message = err instanceof Error ? err.message : "Parser request failed";
+    console.error(
+      "[parser-client] Parser call failed:",
+      message,
+      "URL:",
+      base,
+    );
     void logParserUsage(0, false, "unreachable", 0, 0);
     return {
       success: false,
@@ -173,6 +179,12 @@ export async function parseResumeText(
     return result;
   } catch (err) {
     const message = err instanceof Error ? err.message : "Parser request failed";
+    console.error(
+      "[parser-client] Parser call failed:",
+      message,
+      "URL:",
+      base,
+    );
     void logParserUsage(0, false, "unreachable", text.length, 0);
     return {
       success: false,

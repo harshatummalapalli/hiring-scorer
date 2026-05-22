@@ -12,6 +12,25 @@ const RESUME_BULLET_VERB =
 const GARBAGE_TITLE_AT =
   /\s+at\s+(?:Contributed|Delivered|Developed|Implemented|Title|Environment|VIAPLUS|The|A)\b/i;
 
+const PHONE_IN_SUBTITLE = /\+?\d[\d\s\-().]{8,}/;
+const EMAIL_IN_SUBTITLE =
+  /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/;
+const AT_DATE_PATTERN =
+  /\bat\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{4})/i;
+
+/** Strip PII and date-range garbage from subtitle/company lines. */
+export function sanitizeSubtitle(
+  raw: string | null | undefined,
+): string | null {
+  if (!raw) return null;
+  const s = raw.trim();
+  if (PHONE_IN_SUBTITLE.test(s)) return null;
+  if (EMAIL_IN_SUBTITLE.test(s)) return null;
+  if (AT_DATE_PATTERN.test(s)) return null;
+  if (s.length > 80) return null;
+  return s;
+}
+
 /** Reject resume section headers and bullet lines masquerading as job titles. */
 export function isInvalidDisplayTitle(title: string | null | undefined): boolean {
   const t = title?.trim();
@@ -64,7 +83,7 @@ export function sanitizeDisplayCompany(
   company: string | null | undefined,
 ): string | null {
   if (isInvalidDisplayCompany(company)) return null;
-  return company!.trim();
+  return sanitizeSubtitle(company!.trim());
 }
 
 export function formatIdentityExperienceYears(

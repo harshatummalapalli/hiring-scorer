@@ -23,6 +23,7 @@ export function SignInForm({
   forceGoogleAccountPicker = false,
 }: SignInFormProps) {
   const searchParams = useSearchParams();
+  const authError = searchParams.get("error");
   const signedOut = searchParams.get("signed_out") === "1";
   const next =
     signedOut
@@ -77,6 +78,14 @@ export function SignInForm({
 
   return (
     <div className="space-y-6">
+      {authError && (
+        <div
+          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          role="alert"
+        >
+          Sign in failed. Please try again or use email and password.
+        </div>
+      )}
       <div className="rounded-lg border border-[#0D9488]/25 bg-teal-50/80 px-4 py-3 text-sm text-[#0F766E]">
         <p className="font-medium text-[#134E4A]">Testing onboarding?</p>
         <p className="mt-1 text-[#0F766E]">

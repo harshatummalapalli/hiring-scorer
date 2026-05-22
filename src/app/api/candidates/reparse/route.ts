@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { reparseCandidateRecord } from "@/lib/candidates/reparse-candidate-record";
 import { listCandidates, updateCandidate } from "@/lib/supabase/candidates";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 export async function POST() {
   try {
@@ -11,6 +11,12 @@ export async function POST() {
 
     for (const row of rows) {
       const update = await reparseCandidateRecord(row);
+      console.log(
+        `[reparse] ${results.length + 1}/${rows.length}:`,
+        update.display_name,
+        "source:",
+        update.ingestion_errors?.length ? "fallback" : "parser",
+      );
       await updateCandidate(update.id, {
         display_name: update.display_name,
         resume_text: update.resume_text,
