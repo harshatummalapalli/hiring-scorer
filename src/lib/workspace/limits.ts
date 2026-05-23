@@ -4,9 +4,12 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 /** Workspaces at or above this cap are treated as unlimited in UI and enforcement. */
 export const UNLIMITED_WORKSPACE_CAP = 1_000_000;
 
-const UNLIMITED_WORKSPACE_EMAILS = new Set([
-  "recruiter.harsha@gmail.com",
-]);
+const UNLIMITED_WORKSPACE_EMAILS = new Set(
+  (process.env.SUPER_ADMIN_EMAILS ?? "recruiter.harsha@gmail.com")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
+);
 
 export function isUnlimitedWorkspaceCap(max: number): boolean {
   return max >= UNLIMITED_WORKSPACE_CAP;

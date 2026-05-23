@@ -14,6 +14,8 @@ export type InboundEmail = {
   }>;
 };
 
+const RESUME_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+
 const RESUME_TYPES = [
   "application/pdf",
   "application/msword",
@@ -24,7 +26,9 @@ const RESUME_TYPES = [
 function isResumeAttachment(
   contentType: string,
   filename: string,
+  size?: number,
 ): boolean {
+  if (size !== undefined && size > RESUME_MAX_BYTES) return false;
   if (RESUME_TYPES.includes(contentType)) return true;
   return /\.(pdf|doc|docx|txt)$/i.test(filename);
 }
@@ -39,7 +43,6 @@ export async function fetchUnprocessedEmails(
       host: "imap.gmail.com",
       port: 993,
       tls: true,
-      tlsOptions: { rejectUnauthorized: false },
     });
 
     const emails: InboundEmail[] = [];
@@ -84,6 +87,7 @@ export async function fetchUnprocessedEmails(
                       isResumeAttachment(
                         a.contentType,
                         a.filename ?? "",
+                        a.size,
                       ),
                     )
                     .map((a) => ({

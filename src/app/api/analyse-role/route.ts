@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { logWorkspaceActivityIfAuthed } from "@/lib/activity/log";
 import { resolveJobDescriptionAnalysis } from "@/lib/role-brief/resolve-jd-analysis";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
+import { getAnalyseRatelimiter, checkRateLimit } from "@/lib/rate-limit";
 import { deriveTitleFromAnalysis, parseRoleBriefRow } from "@/types/role-brief";
 import type { JdRecruiterContext } from "@/types/job-posting";
 import type { JdSessionCache } from "@/lib/role-brief/resolve-jd-analysis";
@@ -17,6 +18,23 @@ type AnalyseRoleBody = {
 
 export async function POST(request: Request) {
   try {
+    const supabase = await createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    }
+
+    const rl = await checkRateLimit(getAnalyseRatelimiter(), user.id);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Too many requests. Please wait a moment and try again." },
+        {
+          status: 429,
+          headers: rl.retryAfter ? { "Retry-After": String(rl.retryAfter) } : {},
+        },
+      );
+    }
+
     const body = (await request.json()) as AnalyseRoleBody;
 
     if (!body.jobDescription?.trim()) {

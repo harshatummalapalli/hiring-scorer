@@ -8,6 +8,7 @@ import { buildScoringRunPayloadFromResult } from "@/lib/scoring/build-scoring-ru
 import { insertScoringRun } from "@/lib/supabase/server";
 import type { RoleBrief } from "@/types/role-brief";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
+import { getScoreRatelimiter, checkRateLimit } from "@/lib/rate-limit";
 
 export const maxDuration = 120;
 
@@ -35,6 +36,17 @@ export async function POST(request: Request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    }
+
+    const rl = await checkRateLimit(getScoreRatelimiter(), user.id);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Too many requests. Please wait a moment and try again." },
+        {
+          status: 429,
+          headers: rl.retryAfter ? { "Retry-After": String(rl.retryAfter) } : {},
+        },
+      );
     }
 
     const body = (await request.json()) as ScoreRequestBody;

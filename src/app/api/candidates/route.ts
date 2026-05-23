@@ -29,11 +29,16 @@ export const maxDuration = 60;
 
 export async function GET() {
   try {
+    const supabase = await createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    }
+
     const candidates = await listCandidatesWithSummaries();
     return NextResponse.json({ candidates });
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Failed to list candidates";
+    const message = err instanceof Error ? err.message : "Failed to list candidates";
     const status = message.includes("Supabase") ? 503 : 500;
     return NextResponse.json({ error: message }, { status });
   }
