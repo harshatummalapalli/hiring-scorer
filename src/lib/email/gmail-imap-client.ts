@@ -55,13 +55,13 @@ export async function fetchUnprocessedEmails(
         const since = new Date();
         since.setDate(since.getDate() - 7);
 
-        imap.search(["UNSEEN", ["SINCE", since]], (searchErr, results) => {
+        imap.search([["SINCE", since]], (searchErr, results) => {
           if (searchErr || !results?.length) {
             imap.end();
             return resolve([]);
           }
 
-          const fetch = imap.fetch(results, { bodies: "", markSeen: true });
+          const fetch = imap.fetch(results, { bodies: "", markSeen: false });
           let pending = 0;
 
           fetch.on("message", (msg) => {

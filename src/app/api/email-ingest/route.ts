@@ -22,6 +22,30 @@ export async function POST(request: Request) {
     );
   }
 
+  const parserBase = process.env.RESUME_PARSER_URL ?? "";
+  if (!parserBase) {
+    return NextResponse.json({
+      processed: 0,
+      successful: 0,
+      results: [],
+      note: "Parser URL not configured",
+    });
+  }
+
+  try {
+    const health = await fetch(`${parserBase}/health`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!health.ok) throw new Error("Not healthy");
+  } catch {
+    return NextResponse.json({
+      processed: 0,
+      successful: 0,
+      results: [],
+      note: "Parser not ready — will retry next run",
+    });
+  }
+
   const adminSupabase = createSupabaseAdminClient();
 
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -110,18 +134,19 @@ export async function POST(request: Request) {
         console.error("[email-ingest] Failed:", errorMessage);
       }
 
-      await adminSupabase.from("email_ingestion_log").upsert(
-        {
-          message_id: email.messageId,
-          job_id: jobId,
-          candidate_id: candidateId,
-          success,
-          error_message: errorMessage,
-          sender_email: email.from,
-          attachment_name: attachment.filename,
-        },
-        { onConflict: "message_id", ignoreDuplicates: true },
-      );
+      if (success) {
+        await adminSupabase.from("email_ingestion_log").upsert(
+          {
+            message_id: email.messageId,
+            job_id: jobId,
+            candidate_id: candidateId,
+            success: true,
+            sender_email: email.from,
+            attachment_name: attachment.filename,
+          },
+          { onConflict: "message_id", ignoreDuplicates: true },
+        );
+      }
 
       results.push({
         messageId: email.messageId,
