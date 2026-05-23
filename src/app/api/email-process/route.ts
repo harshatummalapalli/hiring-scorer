@@ -98,7 +98,6 @@ export async function POST(request: Request) {
     const ingested = await ingestResumeFromBytes(
       arrayBuffer,
       item.attachment_filename,
-      undefined,
     );
 
     const candidate = await insertApplicationCandidate(

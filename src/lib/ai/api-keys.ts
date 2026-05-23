@@ -8,6 +8,10 @@ export function normalizeAnthropicKey(key: string): string {
   return trimmed;
 }
 
+export function getGeminiModel(): string {
+  return process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
+}
+
 export function getApiKey(provider: AiProvider): string {
   switch (provider) {
     case "anthropic": {
@@ -79,7 +83,7 @@ export function formatProviderAuthError(
     if (provider === "google") {
       return (
         "Gemini API quota exceeded. Enable billing at https://aistudio.google.com/apikey " +
-        "or set GEMINI_MODEL=gemini-2.0-flash-lite in .env.local, then restart npm run dev."
+        "or set GEMINI_MODEL=gemini-2.5-flash in .env.local, then restart npm run dev."
       );
     }
     return `${provider} rate limit or quota exceeded. Wait a minute and retry, or check your API plan.`;

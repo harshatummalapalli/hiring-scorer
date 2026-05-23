@@ -578,8 +578,15 @@ export function TalentPoolWorkspace() {
                             experienceYears={c.signal_profile.experience_years}
                             location={c.signal_profile.location}
                             topSkills={profileTopSkills(c.signal_profile)}
-                            sourceLabel={sourceBadgeLabel(c.source)}
                             enforceMinHeight
+                            education={c.signal_profile?.education ?? []}
+                            careerGaps={
+                              (
+                                c.signal_profile as typeof c.signal_profile & {
+                                  career_gaps?: Array<{ months: number }>;
+                                }
+                              )?.career_gaps ?? []
+                            }
                           />
                         </td>
                         <td className="px-4 py-3 align-top">
@@ -697,7 +704,14 @@ export function TalentPoolWorkspace() {
                               experienceYears={c.signal_profile.experience_years}
                               location={c.signal_profile.location}
                               topSkills={profileTopSkills(c.signal_profile)}
-                              sourceLabel={sourceBadgeLabel(c.source)}
+                              education={c.signal_profile?.education ?? []}
+                              careerGaps={
+                                (
+                                  c.signal_profile as typeof c.signal_profile & {
+                                    career_gaps?: Array<{ months: number }>;
+                                  }
+                                )?.career_gaps ?? []
+                              }
                             />
                           </td>
                           <td className="px-4 py-3 align-top">

@@ -383,7 +383,11 @@ export function JobShortlistTab({
                       displayName={row.candidate_name}
                       candidateId={row.candidate_id}
                       panelOptions={panelOptions}
+                      compact
                       showMetaRow={false}
+                      education={[]}
+                      careerGaps={[]}
+                      topSkills={[]}
                     />
                   </td>
                   <td className="px-4 py-3 align-top text-slate-600">

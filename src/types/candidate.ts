@@ -75,6 +75,7 @@ export type CandidateSignalProfile = {
   education: EducationEntry[];
   skills_verified: VerifiedSkill[];
   skills_listed_only: string[];
+  top_skills?: string[] | null;
   title_band: string | null;
   core_strength_primary: string | null;
   core_strength_secondary: string | null;

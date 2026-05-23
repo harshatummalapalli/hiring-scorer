@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Briefcase, Loader2, Mail, Plus, Share2, X } from "lucide-react";
+import { Loader2, Mail, MoreVertical, Pause, Play, Plus, Trash2, X } from "lucide-react";
 import { DashboardStrip } from "@/components/dashboard/dashboard-strip";
-import { ShareShortlistModal } from "@/components/jobs/share-shortlist-modal";
+import { CopyButton } from "@/components/ui/copy-button";
 import { RoleBriefCreator } from "@/components/role-briefs/role-brief-creator";
 import { EmptyState } from "@/components/ui/empty-state";
 import { JobLimitModal } from "@/components/workspace/job-limit-modal";
@@ -27,6 +27,187 @@ type WorkspaceUsage = {
   candidates: { current: number; max: number };
 };
 
+function JobCard({
+  job,
+  onReload,
+  onError,
+}: {
+  job: JobListItem;
+  onReload: () => void;
+  onError: (message: string) => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
+  }, [menuOpen]);
+
+  const archived =
+    job.status === "filled" || job.status === "cancelled";
+
+  const handleStatusChange = async (newStatus: "active" | "paused") => {
+    setMenuOpen(false);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to update job");
+      onReload();
+    } catch (err) {
+      onError(getErrorMessage(err, "Failed to update job"));
+    }
+  };
+
+  const handleDelete = async () => {
+    setMenuOpen(false);
+    const confirmed = window.confirm(
+      "Delete this role? This cannot be undone. Candidates already evaluated will remain in your Talent Pool.",
+    );
+    if (!confirmed) return;
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to delete job");
+      onReload();
+    } catch (err) {
+      onError(getErrorMessage(err, "Failed to delete job"));
+    }
+  };
+
+  return (
+    <li
+      className={`relative flex h-full min-h-[280px] flex-col ${karta.card} p-5 ${
+        archived ? "opacity-60" : karta.cardHover
+      } ${job.status === "active" && !archived ? karta.jobCardActive : ""}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-h-[3rem] min-w-0 flex-1 flex-wrap items-start gap-2">
+          <h2 className={`${karta.cardTitle} leading-snug`}>{job.title}</h2>
+          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+            {job.title_band && (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-[#64748B]">
+                {job.title_band}
+              </span>
+            )}
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(job.status)}`}
+            >
+              {JOB_STATUS_LABELS[job.status]}
+            </span>
+          </div>
+        </div>
+        <div ref={menuRef} className="relative shrink-0">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setMenuOpen((open) => !open);
+            }}
+            className="rounded-md p-1 text-[#64748B] hover:bg-slate-100 hover:text-[#1E293B]"
+            aria-label="Job actions"
+            aria-expanded={menuOpen}
+          >
+            <MoreVertical className="h-4 w-4" />
+          </button>
+          {menuOpen && (
+            <div className="absolute top-8 right-0 z-20 min-w-[160px] rounded-lg border border-slate-200 bg-white shadow-lg">
+              {job.status === "active" && (
+                <button
+                  type="button"
+                  onClick={() => void handleStatusChange("paused")}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                >
+                  <Pause className="h-4 w-4 shrink-0" />
+                  Pause Role
+                </button>
+              )}
+              {job.status === "paused" && (
+                <button
+                  type="button"
+                  onClick={() => void handleStatusChange("active")}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                >
+                  <Play className="h-4 w-4 shrink-0" />
+                  Resume Role
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => void handleDelete()}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+              >
+                <Trash2 className="h-4 w-4 shrink-0" />
+                Delete Role
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+        <div>
+          <dt className="text-xs text-[#64748B]">Applicants</dt>
+          <dd className="font-semibold text-[#1E293B]">{job.applicantCount}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-[#64748B]">Strong matches</dt>
+          <dd className="font-semibold text-[#0D9488]">{job.strongMatches}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-[#64748B]">Potential matches</dt>
+          <dd className="font-semibold text-amber-700">{job.potentialMatches}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-[#64748B]">Posted</dt>
+          <dd className="font-semibold text-[#1E293B]">
+            {formatKartaDate(job.created_at)}
+          </dd>
+        </div>
+      </dl>
+      {job.inbound_email && (
+        <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3">
+          <Mail className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]" />
+          <span className="min-w-0 flex-1 truncate text-[11px] text-[#94A3B8]">
+            {job.inbound_email}
+          </span>
+          <CopyButton
+            text={job.inbound_email}
+            label="Copy"
+            className="relative z-10 shrink-0 !gap-1 text-[11px] [&_svg]:h-3 [&_svg]:w-3"
+          />
+        </div>
+      )}
+      <div className="mt-auto flex flex-col gap-2 pt-4">
+        {archived ? (
+          <Link
+            href={`/jobs/${job.id}`}
+            className="block w-full rounded-lg border border-slate-200 py-2.5 text-center text-sm font-medium text-[#64748B] hover:bg-slate-50"
+          >
+            View
+          </Link>
+        ) : (
+          <Link
+            href={`/jobs/${job.id}`}
+            className="block w-full rounded-lg border border-[#0D9488] bg-white py-2.5 text-center text-sm font-semibold text-[#0D9488] transition hover:bg-[#F0FDFA]"
+          >
+            Open Job
+          </Link>
+        )}
+      </div>
+    </li>
+  );
+}
+
 export function JobsPage() {
   const router = useRouter();
   const [jobs, setJobs] = useState<JobListItem[]>([]);
@@ -36,7 +217,6 @@ export function JobsPage() {
   const [showPost, setShowPost] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showJobLimitModal, setShowJobLimitModal] = useState(false);
-  const [shareJob, setShareJob] = useState<JobListItem | null>(null);
   const [jobFilter, setJobFilter] = useState<"active" | "all">("active");
 
   const loadUsage = useCallback(async () => {
@@ -207,98 +387,15 @@ export function JobsPage() {
                   job.status === "paused" ||
                   job.status === "on_hold",
             )
-            .map((job) => {
-              const archived =
-                job.status === "filled" || job.status === "cancelled";
-              return (
-            <li
-              key={job.id}
-              className={`flex h-full min-h-[280px] flex-col ${karta.card} p-5 ${
-                archived ? "opacity-60" : karta.cardHover
-              } ${job.status === "active" && !archived ? karta.jobCardActive : ""}`}
-            >
-              <div className="flex min-h-[3rem] flex-wrap items-start gap-2">
-                <h2 className={`${karta.cardTitle} leading-snug`}>{job.title}</h2>
-                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                  {job.title_band && (
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-[#64748B]">
-                      {job.title_band}
-                    </span>
-                  )}
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(job.status)}`}
-                  >
-                    {JOB_STATUS_LABELS[job.status]}
-                  </span>
-                </div>
-              </div>
-              <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <dt className="text-xs text-[#64748B]">Applicants</dt>
-                  <dd className="font-semibold text-[#1E293B]">{job.applicantCount}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-[#64748B]">Strong matches</dt>
-                  <dd className="font-semibold text-[#0D9488]">{job.strongMatches}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-[#64748B]">Potential matches</dt>
-                  <dd className="font-semibold text-amber-700">{job.potentialMatches}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-[#64748B]">Posted</dt>
-                  <dd className="font-semibold text-[#1E293B]">
-                    {formatKartaDate(job.created_at)}
-                  </dd>
-                </div>
-              </dl>
-              {job.inbound_email && (
-                <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3">
-                  <Mail className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]" />
-                  <span className="truncate text-[11px] text-[#94A3B8]">
-                    {job.inbound_email}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void navigator.clipboard.writeText(job.inbound_email ?? "");
-                    }}
-                    className="shrink-0 text-[11px] font-medium text-[#0D9488] hover:underline"
-                  >
-                    Copy
-                  </button>
-                </div>
-              )}
-              <div className="mt-auto flex flex-col gap-2 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShareJob(job)}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 py-2 text-sm text-[#64748B] hover:bg-slate-50"
-                >
-                  <Share2 className="h-4 w-4" />
-                  Share Shortlist
-                </button>
-                {archived ? (
-                  <Link
-                    href={`/jobs/${job.id}`}
-                    className="block w-full rounded-lg border border-slate-200 py-2.5 text-center text-sm font-medium text-[#64748B] hover:bg-slate-50"
-                  >
-                    View
-                  </Link>
-                ) : (
-                  <Link
-                    href={`/jobs/${job.id}`}
-                    className="block w-full rounded-lg border border-[#0D9488] bg-white py-2.5 text-center text-sm font-semibold text-[#0D9488] transition hover:bg-[#F0FDFA]"
-                  >
-                    Open Job
-                  </Link>
-                )}
-              </div>
-            </li>
-          );
-          })}
-        </ul>
+            .map((job) => (
+              <JobCard
+                key={job.id}
+                job={job}
+                onReload={() => void loadJobs()}
+                onError={setError}
+              />
+            ))}
+          </ul>
         </>
       )}
 
@@ -358,15 +455,6 @@ export function JobsPage() {
         open={showJobLimitModal}
         onClose={() => setShowJobLimitModal(false)}
       />
-
-      {shareJob && (
-        <ShareShortlistModal
-          jobId={shareJob.id}
-          initialToken={shareJob.share_token}
-          initialEnabled={shareJob.share_enabled}
-          onClose={() => setShareJob(null)}
-        />
-      )}
     </div>
   );
 }

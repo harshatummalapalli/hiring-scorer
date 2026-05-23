@@ -44,8 +44,6 @@ export async function reparseCandidateRecord(
       const ingested = await ingestResumeFromBytes(
         bytes,
         filename,
-        undefined,
-        resumeText,
       );
       resumeText = ingested.resumeText || resumeText;
       const { patch } = extractAndBuildPatch(

@@ -90,8 +90,11 @@ function FileRow({ file }: { file: ResumeUploadFileItem }) {
             <Loader2 className="h-4 w-4 animate-spin text-[#0D9488]" aria-hidden />
           </>
         ) : file.status === "error" ? (
-          <span className="text-red-600" title={file.error}>
-            Failed
+          <span
+            className="max-w-[10rem] truncate text-red-600"
+            title={file.error ?? "Failed"}
+          >
+            {file.error ?? "Failed"}
           </span>
         ) : (
           <span>{STAGE_LABELS.extracting}</span>

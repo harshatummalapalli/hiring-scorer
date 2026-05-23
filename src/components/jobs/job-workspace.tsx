@@ -31,12 +31,28 @@ function statusBadgeClass(status: string): string {
   }
 }
 
+function fallbackCopy(text: string) {
+  const el = document.createElement("textarea");
+  el.value = text;
+  el.style.position = "fixed";
+  el.style.opacity = "0";
+  document.body.appendChild(el);
+  el.focus();
+  el.select();
+  try {
+    document.execCommand("copy");
+  } finally {
+    document.body.removeChild(el);
+  }
+}
+
 export function JobWorkspace({ jobId }: { jobId: string }) {
   const [job, setJob] = useState<Job | null>(null);
   const [tab, setTab] = useState<JobTab>("pipeline");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [emailCopied, setEmailCopied] = useState(false);
 
   const loadJob = useCallback(async () => {
     setLoading(true);
@@ -120,15 +136,27 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
           <button
             type="button"
             onClick={() => {
-              if (job.inbound_email) {
-                void navigator.clipboard.writeText(job.inbound_email);
+              const email = job.inbound_email;
+              if (!email) return;
+              const onCopied = () => {
+                setEmailCopied(true);
+                setTimeout(() => setEmailCopied(false), 2000);
+              };
+              if (navigator.clipboard?.writeText) {
+                navigator.clipboard.writeText(email).then(onCopied).catch(() => {
+                  fallbackCopy(email);
+                  onCopied();
+                });
+              } else {
+                fallbackCopy(email);
+                onCopied();
               }
             }}
             title="Copy apply email for Naukri/LinkedIn"
             className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-[#64748B] hover:bg-slate-50"
           >
             <Mail className="h-4 w-4" />
-            Copy Apply Email
+            {emailCopied ? "Copied!" : "Copy Apply Email"}
           </button>
           <button
             type="button"

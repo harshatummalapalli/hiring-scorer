@@ -112,16 +112,16 @@ export async function POST(request: Request) {
 
     let ingested;
     try {
-      if (resumeFile) {
-        const bytes = await resumeFile.arrayBuffer();
-        ingested = await ingestResumeFromBytes(
-          bytes,
-          resumeFilename,
-          resumeFile.type,
-          resumeText,
-        );
-      } else {
+      if (resumeText && resumeText.length >= 150) {
         ingested = await ingestResumeFromText(resumeText, resumeFilename);
+      } else if (resumeFile) {
+        const bytes = await resumeFile.arrayBuffer();
+        ingested = await ingestResumeFromBytes(bytes, resumeFilename);
+      } else {
+        return NextResponse.json(
+          { error: "Resume text or file is required." },
+          { status: 400 },
+        );
       }
     } catch (err) {
       const message =
@@ -140,6 +140,7 @@ export async function POST(request: Request) {
     }
     const signal_profile = ingested.signalProfile;
     const resumeTextFinal = ingested.resumeText;
+    const strippedText = ingested.strippedResumeText ?? ingested.resumeText;
     if (resumeTextFinal.length > 50000) {
       return NextResponse.json(
         { error: "Resume text exceeds 50,000 characters." },
@@ -215,12 +216,12 @@ export async function POST(request: Request) {
     const { id } = await insertCandidate({
       display_name,
       resume_filename: resumeFilename,
-      resume_text: resumeTextFinal,
+      resume_text: strippedText,
       signal_profile: profile,
       activity,
-      application_email: profile.extracted_email ?? null,
-      application_phone: profile.extracted_phone ?? null,
-      linkedin_url: profile.linkedin_url ?? null,
+      application_email: ingested.signalProfile.extracted_email ?? null,
+      application_phone: ingested.signalProfile.extracted_phone ?? null,
+      linkedin_url: ingested.signalProfile.linkedin_url ?? null,
       ...(jobId
         ? {
             job_id: jobId,
@@ -245,6 +246,7 @@ export async function POST(request: Request) {
       }
     }
 
+    let storageWarning: string | undefined;
     if (resumeFile) {
       const supabase = await createSupabaseServerClient();
       const userId = await getAuthenticatedUserId(supabase);
@@ -261,13 +263,11 @@ export async function POST(request: Request) {
           storageErr instanceof Error
             ? storageErr.message
             : "Failed to store resume file";
-        return NextResponse.json(
-          {
-            error: `Candidate created but resume file could not be stored: ${message}`,
-            id,
-          },
-          { status: 500 },
+        console.warn(
+          `[candidates] Resume storage failed for ${id}:`,
+          message,
         );
+        storageWarning = `Candidate saved but file storage failed: ${message}`;
       }
     }
 
@@ -280,6 +280,7 @@ export async function POST(request: Request) {
       display_name,
       signal_profile: profile,
       extractionSource: ingested.ingestionSource,
+      ...(storageWarning ? { warning: storageWarning } : {}),
     });
   } catch (err) {
     const limited = limitErrorResponse(err);

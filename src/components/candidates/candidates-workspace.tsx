@@ -26,13 +26,26 @@ import type {
 } from "@/types/candidate";
 import type { RoleBrief } from "@/types/role-brief";
 import { karta } from "@/lib/brand/karta";
+import { CandidateIdentityCard } from "@/components/candidates/candidate-identity-card";
 import { VerdictBadge } from "./profile-shared";
 import { useCandidatePanel } from "@/contexts/candidate-panel-context";
 
-function experienceLabel(candidate: CandidateListItem): string {
-  const t = candidate.signal_profile.total_years_experience?.trim();
-  if (!t || t === "0") return "—";
-  return t;
+function identityTopSkills(c: CandidateListItem): string[] {
+  const profile = c.signal_profile;
+  const withTop = profile as typeof profile & { top_skills?: string[] };
+  return (
+    withTop.top_skills ??
+    (profile.skills_verified ?? []).map((s) =>
+      typeof s === "string" ? s : s.skill,
+    )
+  );
+}
+
+function identityCareerGaps(c: CandidateListItem): Array<{ months: number }> {
+  const profile = c.signal_profile as typeof c.signal_profile & {
+    career_gaps?: Array<{ months: number }>;
+  };
+  return profile.career_gaps ?? [];
 }
 
 const TABS: { id: CandidatePoolFilter; label: string }[] = [
@@ -481,8 +494,7 @@ export function CandidatesWorkspace() {
                     className="h-4 w-4 rounded border-slate-300"
                   />
                 </th>
-                <th className="px-3 py-2">Name</th>
-                <th className="px-3 py-2">Experience</th>
+                <th className="px-3 py-2">Candidate</th>
                 <th className="px-3 py-2">Match</th>
                 <th className="px-3 py-2 w-28">Action</th>
               </tr>
@@ -506,11 +518,23 @@ export function CandidatesWorkspace() {
                         className="h-4 w-4 rounded border-slate-300"
                       />
                     </td>
-                    <td className="px-3 py-2 font-medium text-slate-900">
-                      {c.display_name}
-                    </td>
-                    <td className="px-3 py-2 text-slate-600">
-                      {experienceLabel(c)}
+                    <td className="px-3 py-2">
+                      <CandidateIdentityCard
+                        displayName={c.display_name}
+                        candidateId={c.id}
+                        panelOptions={panelOptions}
+                        currentTitle={c.current_title}
+                        currentCompany={c.current_company}
+                        yearsExperience={
+                          c.signal_profile.total_years_experience
+                        }
+                        experienceYears={c.signal_profile.experience_years}
+                        location={c.signal_profile.location}
+                        topSkills={identityTopSkills(c)}
+                        education={c.signal_profile?.education ?? []}
+                        careerGaps={identityCareerGaps(c)}
+                        scoredJobTitle={activeBrief?.title}
+                      />
                     </td>
                     <td className="px-3 py-2">
                       <VerdictBadge verdict={score?.verdict ?? null} compact />

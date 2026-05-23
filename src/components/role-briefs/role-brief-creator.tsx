@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, Loader2, Sparkles } from "lucide-react";
 import { AnalysisCards } from "@/components/role-briefs/analysis-cards";
+import { JobOverviewCalibrate } from "@/components/jobs/tabs/job-overview-calibrate";
 import { JdAnalysisLoading } from "@/components/role-briefs/jd-analysis-loading";
 import { karta } from "@/lib/brand/karta";
 import { getErrorMessage } from "@/lib/errors";
@@ -20,6 +21,7 @@ import {
   type JobPostingFields,
   type SeniorityLevel,
 } from "@/types/job-posting";
+import type { Job } from "@/types/job";
 import type {
   RoleBrief,
   RoleBriefAnalysis,
@@ -47,6 +49,8 @@ type RoleBriefCreatorProps = {
   initialAnalysisMeta?: RoleBriefAnalysisMeta | null;
   initialAnalysedJobDescription?: string;
   editingId?: string | null;
+  job?: Job | null;
+  onJobUpdated?: (job: Job) => void;
   onSave: (data: SavePayload) => Promise<void>;
   isSaving: boolean;
   onCancel?: () => void;
@@ -72,6 +76,8 @@ export function RoleBriefCreator({
   initialAnalysisMeta = null,
   initialAnalysedJobDescription = "",
   editingId = null,
+  job = null,
+  onJobUpdated,
   onSave,
   isSaving,
   onCancel,
@@ -222,6 +228,12 @@ export function RoleBriefCreator({
           recruiterContext: jobPostingToJdContext(buildJobPosting()),
         }),
       });
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!contentType.includes("application/json")) {
+        throw new Error(
+          "Server returned an unexpected response. Sign in again and retry Read JD.",
+        );
+      }
       const data = (await res.json()) as {
         error?: string;
         analysis?: RoleBriefAnalysis;
@@ -437,17 +449,6 @@ export function RoleBriefCreator({
           </div>
         </div>
 
-        <textarea
-          id="job-description"
-          value={jobDescription}
-          onChange={(e) => setJobDescription(e.target.value)}
-          rows={14}
-          placeholder="Paste the complete job description here — include the title, responsibilities, requirements, and any context about the team or company."
-          className={`mt-6 w-full resize-y ${karta.input} leading-relaxed`}
-          aria-label="Job description"
-          disabled={analysing}
-        />
-
         <div className="mt-8 flex flex-wrap items-center gap-3">
           <button
             type="button"
@@ -500,18 +501,49 @@ export function RoleBriefCreator({
             Review and edit the extracted signals below, then save.
           </p>
         )}
+
+        <div
+          className={`mt-6 grid gap-6 ${analysis ? "lg:grid-cols-2" : "grid-cols-1"} items-start`}
+        >
+          <div>
+            <label
+              htmlFor="job-description"
+              className="block text-sm font-medium text-[#334155]"
+            >
+              Job Description
+              <textarea
+                id="job-description"
+                value={jobDescription}
+                onChange={(e) => setJobDescription(e.target.value)}
+                rows={14}
+                placeholder="Paste the complete job description here — include the title, responsibilities, requirements, and any context about the team or company."
+                className={`mt-1 w-full resize-y ${karta.input} leading-relaxed`}
+                disabled={analysing}
+              />
+            </label>
+          </div>
+
+          {analysis && !analysing && (
+            <div className="space-y-4 lg:max-h-[70vh] lg:overflow-y-auto lg:pr-1">
+              <label className="block text-sm font-medium text-[#334155]">
+                Requirements & Hiring Bar
+              </label>
+              <AnalysisCards
+                analysis={analysis}
+                onChange={setAnalysis}
+                extractedTitle={title}
+                onTitleChange={setTitle}
+              />
+              {job && onJobUpdated ? (
+                <JobOverviewCalibrate job={job} onJobUpdated={onJobUpdated} />
+              ) : null}
+            </div>
+          )}
+        </div>
       </section>
 
       {analysis && !analysing && (
-        <>
-          <AnalysisCards
-            analysis={analysis}
-            onChange={setAnalysis}
-            extractedTitle={title}
-            onTitleChange={setTitle}
-          />
-
-          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 pt-8">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 pt-8">
             <p className="text-sm text-[#64748B]">
               {editingId ? "Update this job role." : "Save as a new job role."}
             </p>
@@ -536,8 +568,7 @@ export function RoleBriefCreator({
                 {isSaving ? "Saving…" : "Save Job Role"}
               </button>
             </div>
-          </div>
-        </>
+        </div>
       )}
     </div>
   );

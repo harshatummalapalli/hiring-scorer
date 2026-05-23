@@ -375,10 +375,10 @@ function validateDimensionQuotes(
     if (!quoteOk) {
       validated[key] = {
         ...row,
-        score: 55,
+        score: Math.min(row.score, 72),
         assessment_note: row.assessment_note
-          ? `${row.assessment_note} unverified quote`
-          : "unverified quote",
+          ? `${row.assessment_note} (quote unverified)`
+          : "(quote unverified)",
       };
     }
   }
@@ -718,7 +718,14 @@ export async function scoreCandidate(
   );
 
   if (absentMustHaves.length > 0 && overallScore > 54) {
-    overallScore = 54;
+    const totalMustHaves = (roleBrief.deal_breakers ?? []).length;
+    if (totalMustHaves <= 2 || absentMustHaves.length > 1) {
+      // Strict: missing 1 of 2, or missing multiple — hard cap at 54
+      overallScore = Math.min(overallScore, 54);
+    } else {
+      // Lenient: missing 1 of 3 or more — cap at 70, show warning
+      overallScore = Math.min(overallScore, 70);
+    }
   }
 
   return mapToCandidateScoreResult(

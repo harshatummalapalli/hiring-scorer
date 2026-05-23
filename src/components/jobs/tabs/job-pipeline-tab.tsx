@@ -6,6 +6,8 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import {
   ChevronDown,
   ChevronRight,
+  Layers,
+  LayoutList,
   Loader2,
   Upload,
   X,
@@ -26,6 +28,7 @@ import {
 import type { DuplicateMatch } from "@/lib/candidates/duplicate-messages";
 import { formatTotalExperienceDisplay } from "@/lib/candidates/format-total-experience";
 import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
+import { CopyButton } from "@/components/ui/copy-button";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
 import { karta } from "@/lib/brand/karta";
 import {
@@ -176,6 +179,7 @@ export function JobPipelineTab({
         ]),
       ) as Record<SectionKey, boolean>,
   );
+  const [groupedView, setGroupedView] = useState(false);
 
   const { openPanel, refreshPanel, candidateId: openPanelId } =
     useCandidatePanel();
@@ -376,6 +380,23 @@ export function JobPipelineTab({
       notAMatch,
     };
   }, [candidates, jobId, pipelineIds, optimisticShortlistedIds]);
+
+  const flatList = useMemo(() => {
+    const ex = (c: CandidateListItem) =>
+      isExcluded(c, pipelineIds, optimisticShortlistedIds);
+
+    const scored = [
+      ...groups.exceptionalMatch,
+      ...groups.strongMatch,
+      ...groups.potentialMatch,
+      ...groups.weakMatch,
+      ...groups.notAMatch,
+    ].filter((c) => !ex(c));
+
+    const pending = groups.pendingEvaluation.filter((c) => !ex(c));
+
+    return [...scored, ...pending];
+  }, [groups, pipelineIds, optimisticShortlistedIds]);
 
   const visibleApplicants = useMemo(
     () =>
@@ -608,7 +629,13 @@ export function JobPipelineTab({
       setPendingUpload(pending);
       throw new Error("duplicate");
     }
-    if (!res.ok) throw new Error(json.error ?? "Upload failed");
+    if (!res.ok) {
+      if (json.id) return;
+      const detail =
+        typeof json.detail === "string" ? json.detail : undefined;
+      const msg = String(json.error ?? "Upload failed");
+      throw new Error(detail ? `${msg} (${detail})` : msg);
+    }
   };
 
   const uploadFiles = async (files: FileList | null) => {
@@ -659,7 +686,11 @@ export function JobPipelineTab({
       if (successCount > 0) await load();
 
       if (successCount === 0 && !duplicateMatch) {
-        setError("No resumes could be processed. Check the files and try again.");
+        const firstError = nextFiles.find((f) => f.status === "error")?.error;
+        setError(
+          firstError ??
+            "No resumes could be processed. Check the files and try again.",
+        );
         setUploadUi({ phase: "idle" });
         return;
       }
@@ -709,10 +740,29 @@ export function JobPipelineTab({
     return best;
   }, [groups.notAMatch]);
 
+  function verdictBorderClass(c: CandidateListItem): string {
+    const verdict = pipelineVerdictForRole(c, jobId);
+    switch (verdict) {
+      case "EXCEPTIONAL MATCH":
+        return "border-l-4 border-l-violet-400";
+      case "STRONG MATCH":
+        return "border-l-4 border-l-emerald-400";
+      case "POTENTIAL MATCH":
+        return "border-l-4 border-l-amber-400";
+      case "WEAK MATCH":
+        return "border-l-4 border-l-orange-300";
+      case "NOT A MATCH":
+        return "border-l-4 border-l-red-300";
+      default:
+        return "border-l-4 border-l-slate-200";
+    }
+  }
+
   const renderEvaluatedRow = (
     c: CandidateListItem,
     showShortlist: boolean,
     showRejectionReason = false,
+    flatMode = false,
   ) => {
     const score = getScoreForRole(c, jobId);
     const isSelected = selected.has(c.id);
@@ -732,7 +782,7 @@ export function JobPipelineTab({
             openPanel(c.id, panelOptions);
           }
         }}
-        className="flex flex-wrap items-center gap-3 border-b border-[#F1F5F9] px-4 py-3 last:border-0 hover:bg-slate-50/80 cursor-pointer"
+        className={`flex flex-wrap items-center gap-3 border-b border-[#F1F5F9] px-4 py-3 last:border-0 hover:bg-slate-50/80 cursor-pointer ${flatMode ? verdictBorderClass(c) : ""}`}
       >
         <input
           type="checkbox"
@@ -755,6 +805,24 @@ export function JobPipelineTab({
             scoredJobTitle={jobTitle}
             showMetaRow={false}
             enforceMinHeight
+            education={c.signal_profile?.education ?? []}
+            careerGaps={
+              (
+                c.signal_profile as typeof c.signal_profile & {
+                  career_gaps?: Array<{ months: number }>;
+                }
+              )?.career_gaps ?? []
+            }
+            topSkills={
+              (
+                c.signal_profile as typeof c.signal_profile & {
+                  top_skills?: string[];
+                }
+              )?.top_skills ??
+              (c.signal_profile.skills_verified ?? []).map((s) =>
+                typeof s === "string" ? s : s.skill,
+              )
+            }
           />
           <CoreStrengthLabel
             primary={c.signal_profile.core_strength_primary}
@@ -855,6 +923,24 @@ export function JobPipelineTab({
             location={c.signal_profile.location}
             scoredJobTitle={jobTitle}
             showMetaRow={false}
+            education={c.signal_profile?.education ?? []}
+            careerGaps={
+              (
+                c.signal_profile as typeof c.signal_profile & {
+                  career_gaps?: Array<{ months: number }>;
+                }
+              )?.career_gaps ?? []
+            }
+            topSkills={
+              (
+                c.signal_profile as typeof c.signal_profile & {
+                  top_skills?: string[];
+                }
+              )?.top_skills ??
+              (c.signal_profile.skills_verified ?? []).map((s) =>
+                typeof s === "string" ? s : s.skill,
+              )
+            }
           />
           <CoreStrengthLabel
             primary={c.signal_profile.core_strength_primary}
@@ -883,6 +969,18 @@ export function JobPipelineTab({
         )}
       </div>
     );
+  };
+
+  const renderFlatRow = (c: CandidateListItem) => {
+    const isPending = isPipelinePendingEvaluation(c, jobId);
+    if (isPending) return renderPendingRow(c);
+    const verdict = pipelineVerdictForRole(c, jobId);
+    const showShortlist =
+      verdict === "EXCEPTIONAL MATCH" ||
+      verdict === "STRONG MATCH" ||
+      verdict === "POTENTIAL MATCH";
+    const showRejection = verdict === "NOT A MATCH";
+    return renderEvaluatedRow(c, showShortlist, showRejection, true);
   };
 
   const renderSection = (
@@ -939,6 +1037,34 @@ export function JobPipelineTab({
   return (
     <div className="space-y-6 pb-24">
       <div className="flex flex-wrap items-center justify-end gap-3">
+        <div className="flex items-center rounded-lg border border-slate-200 p-0.5">
+          <button
+            type="button"
+            onClick={() => setGroupedView(false)}
+            title="Flat list — ranked by score"
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              !groupedView
+                ? "bg-[#1E293B] text-white"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <LayoutList className="h-4 w-4" />
+            Ranked
+          </button>
+          <button
+            type="button"
+            onClick={() => setGroupedView(true)}
+            title="Grouped by verdict band"
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              groupedView
+                ? "bg-[#1E293B] text-white"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <Layers className="h-4 w-4" />
+            Grouped
+          </button>
+        </div>
         <label
           className={`inline-flex cursor-pointer items-center gap-2 ${karta.btnPrimary} ${
             uploading ? "pointer-events-none opacity-70" : ""
@@ -1052,21 +1178,15 @@ export function JobPipelineTab({
               />
             </label>
             {(roleBrief.inbound_email ?? roleBrief.apply_link) && (
-              <button
-                type="button"
-                className="text-sm font-medium text-[#64748B] hover:text-[#1E293B]"
-                onClick={() => {
-                  const text =
-                    roleBrief.inbound_email ?? roleBrief.apply_link ?? "";
-                  void navigator.clipboard.writeText(text);
-                }}
-              >
-                Copy Apply Link
-              </button>
+              <CopyButton
+                text={roleBrief.inbound_email ?? roleBrief.apply_link ?? ""}
+                label="Copy Apply Link"
+                className="text-sm"
+              />
             )}
           </div>
         </div>
-      ) : (
+      ) : groupedView ? (
         <div className="space-y-4">
           {renderSection("exceptional", groups.exceptionalMatch, (c) =>
             renderEvaluatedRow(c, true),
@@ -1084,6 +1204,16 @@ export function JobPipelineTab({
           {renderSection("notAMatch", groups.notAMatch, (c) =>
             renderEvaluatedRow(c, false, true),
           )}
+        </div>
+      ) : (
+        <div className={`${karta.card} overflow-hidden`}>
+          {pollingActive && (
+            <div className="flex items-center gap-2 border-b border-[#F1F5F9] px-4 py-2 text-xs text-[#64748B]">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-teal-500" />
+              Evaluating candidates — scores updating automatically
+            </div>
+          )}
+          {flatList.length === 0 ? null : flatList.map((c) => renderFlatRow(c))}
         </div>
       )}
 

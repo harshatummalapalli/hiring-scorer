@@ -715,12 +715,117 @@ export function CandidateSlidePanel({
 
               {panelTab === "resume" ? (
                 <div className="space-y-4">
+
+                  {/* Contact & Identity */}
                   <section className={`${karta.card} p-4`}>
-                    <h3 className={karta.sectionHeading}>Resume text</h3>
-                    <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap text-xs text-[#334155]">
-                      {candidate.resume_text}
-                    </pre>
+                    <h3 className={karta.sectionHeading}>Candidate Profile</h3>
+                    <dl className="mt-3 grid grid-cols-1 gap-y-2 text-sm sm:grid-cols-2">
+                      {candidate.application_email && (
+                        <div>
+                          <dt className="text-xs text-[#94A3B8]">Email</dt>
+                          <dd className="font-medium text-[#1E293B]">{candidate.application_email}</dd>
+                        </div>
+                      )}
+                      {candidate.application_phone && (
+                        <div>
+                          <dt className="text-xs text-[#94A3B8]">Phone</dt>
+                          <dd className="font-medium text-[#1E293B]">{candidate.application_phone}</dd>
+                        </div>
+                      )}
+                      {candidate.signal_profile?.location && (
+                        <div>
+                          <dt className="text-xs text-[#94A3B8]">Location</dt>
+                          <dd className="font-medium text-[#1E293B]">{candidate.signal_profile.location}</dd>
+                        </div>
+                      )}
+                      {candidate.signal_profile?.total_years_experience && (
+                        <div>
+                          <dt className="text-xs text-[#94A3B8]">Experience</dt>
+                          <dd className="font-medium text-[#1E293B]">{candidate.signal_profile.total_years_experience}</dd>
+                        </div>
+                      )}
+                      {candidate.linkedin_url && (
+                        <div className="sm:col-span-2">
+                          <dt className="text-xs text-[#94A3B8]">LinkedIn</dt>
+                          <dd>
+                            <a
+                              href={candidate.linkedin_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[#0D9488] hover:underline break-all text-sm"
+                            >
+                              {candidate.linkedin_url}
+                            </a>
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
                   </section>
+
+                  {/* Work History */}
+                  {(candidate.signal_profile?.experience?.length ?? 0) > 0 && (
+                    <section className={`${karta.card} p-4`}>
+                      <h3 className={karta.sectionHeading}>Work History</h3>
+                      <ol className="mt-3 space-y-4">
+                        {candidate.signal_profile.experience.map((exp, i) => (
+                          <li key={i} className="border-l-2 border-slate-100 pl-3">
+                            <p className="font-semibold text-sm text-[#1E293B]">{exp.title}</p>
+                            <p className="text-xs text-[#64748B]">
+                              {exp.company}
+                              {exp.start_date ? ` · ${exp.start_date}` : ""}
+                              {exp.end_date ? ` – ${exp.end_date}` : ""}
+                            </p>
+                            {(exp.bullets?.length ?? 0) > 0 && (
+                              <ul className="mt-1.5 space-y-1">
+                                {exp.bullets.slice(0, 4).map((b, j) => (
+                                  <li key={j} className="text-xs text-[#334155] leading-relaxed">
+                                    · {b}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </li>
+                        ))}
+                      </ol>
+                    </section>
+                  )}
+
+                  {/* Education */}
+                  {(candidate.signal_profile?.education?.length ?? 0) > 0 && (
+                    <section className={`${karta.card} p-4`}>
+                      <h3 className={karta.sectionHeading}>Education</h3>
+                      <ul className="mt-3 space-y-2">
+                        {candidate.signal_profile.education.map((ed, i) => (
+                          <li key={i} className="text-sm">
+                            <p className="font-medium text-[#1E293B]">{ed.institution}</p>
+                            <p className="text-xs text-[#64748B]">
+                              {[ed.degree, ed.field, ed.year].filter(Boolean).join(" · ")}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+
+                  {/* Skills */}
+                  {(candidate.signal_profile?.skills_verified?.length ?? 0) > 0 && (
+                    <section className={`${karta.card} p-4`}>
+                      <h3 className={karta.sectionHeading}>Skills</h3>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {candidate.signal_profile.skills_verified
+                          .slice(0, 20)
+                          .map((s, i) => (
+                            <span
+                              key={i}
+                              className="rounded-full bg-teal-50 px-2.5 py-0.5 text-xs font-medium text-[#0D9488]"
+                            >
+                              {typeof s === "string" ? s : s.skill}
+                            </span>
+                          ))}
+                      </div>
+                    </section>
+                  )}
+
                   <CandidateDetailsSection
                     candidate={candidate}
                     onSaved={() => void load()}

@@ -75,13 +75,18 @@ export function briefRowToJobPosting(
     : "Mid";
 
   const sizeRaw = row.client_company_size;
-  const companySize =
-    sizeRaw === "1-50" ||
-    sizeRaw === "51-200" ||
-    sizeRaw === "201-1000" ||
-    sizeRaw === "1000+"
-      ? sizeRaw
-      : undefined;
+  const validSizes = [
+    "1-10",
+    "11-50",
+    "51-200",
+    "201-500",
+    "501-1000",
+    "1001-5000",
+    "5000+",
+  ] as const satisfies readonly CompanySize[];
+  const companySize = validSizes.includes(sizeRaw as CompanySize)
+    ? (sizeRaw as CompanySize)
+    : undefined;
 
   return {
     jobTitle: String(row.title ?? fallbackTitle).trim(),

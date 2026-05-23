@@ -171,6 +171,92 @@ function EmailInboundCard() {
   );
 }
 
+function WorkspaceResetCard({
+  onResetComplete,
+}: {
+  onResetComplete: () => void;
+}) {
+  const [confirmText, setConfirmText] = useState("");
+  const [resetting, setResetting] = useState(false);
+  const [resetResult, setResetResult] = useState<string | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
+
+  const triggerReset = async () => {
+    setResetting(true);
+    setResetResult(null);
+    setResetError(null);
+    try {
+      const res = await fetch("/api/admin/reset-workspace-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: "RESET_ALL_WORKSPACE_DATA" }),
+      });
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!contentType.includes("application/json")) {
+        throw new Error(
+          "Server returned an unexpected response. Sign in again and retry.",
+        );
+      }
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Reset failed");
+      const deleted = json.deleted as Record<string, number> | undefined;
+      const totalRows = deleted
+        ? Object.values(deleted).reduce((a, b) => a + b, 0)
+        : 0;
+      setResetResult(
+        `Clean slate — removed ${totalRows} rows across jobs/candidates; ${json.storageFilesRemoved ?? 0} storage files cleared.`,
+      );
+      setConfirmText("");
+      onResetComplete();
+    } catch (err) {
+      setResetError(err instanceof Error ? err.message : "Reset failed");
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const canReset = confirmText === "RESET" && !resetting;
+
+  return (
+    <section className={`${karta.card} border-red-200 p-5`}>
+      <h3 className={karta.sectionHeading}>Reset all workspace data</h3>
+      <p className="mt-1 text-sm text-[#64748B]">
+        Permanently deletes every job, candidate, score, pipeline row, email queue
+        item, and resume file. Login accounts and workspace profiles are kept.
+      </p>
+      <label className="mt-4 block text-sm font-medium text-[#334155]">
+        Type <span className="font-mono text-red-700">RESET</span> to enable
+        <input
+          type="text"
+          value={confirmText}
+          onChange={(e) => setConfirmText(e.target.value)}
+          placeholder="RESET"
+          className={`mt-1 w-full max-w-xs ${karta.input}`}
+          autoComplete="off"
+        />
+      </label>
+      <div className="mt-4 flex flex-wrap items-center gap-4">
+        <button
+          type="button"
+          onClick={() => void triggerReset()}
+          disabled={!canReset}
+          className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+        >
+          {resetting ? "Resetting…" : "Delete all jobs & candidates"}
+        </button>
+        {resetResult && (
+          <span className="text-sm text-[#64748B]">{resetResult}</span>
+        )}
+      </div>
+      {resetError && (
+        <p className="mt-2 text-sm text-red-600" role="alert">
+          {resetError}
+        </p>
+      )}
+    </section>
+  );
+}
+
 function DataQualityCard() {
   const [reparsing, setReparsing] = useState(false);
   const [reparseProgress, setReparseProgress] = useState("");
@@ -303,6 +389,7 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-10">
+      <WorkspaceResetCard onResetComplete={() => void load(search)} />
       <DataQualityCard />
       <EmailInboundCard />
 

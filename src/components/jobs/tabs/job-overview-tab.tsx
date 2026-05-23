@@ -475,7 +475,12 @@ export function JobOverviewTab({ job, onJobUpdated }: JobOverviewTabProps) {
       </section>
 
       <section className={`${karta.card} p-6`}>
-        <h3 className={karta.sectionHeading}>Must Haves</h3>
+        <h3 className={karta.sectionHeading}>Hiring Bar — Must Haves</h3>
+        <p className="mt-1 mb-3 text-xs text-[#64748B]">
+          These are non-negotiable. A candidate who cannot demonstrate any one of
+          these will be flagged regardless of their overall score. Set these before
+          candidates arrive.
+        </p>
         {editing ? (
           <div className="mt-3">
             <StringListEditor

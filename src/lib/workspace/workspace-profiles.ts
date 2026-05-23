@@ -2,14 +2,71 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type RecruiterType = "inhouse" | "agency";
 
-export type CompanySize = "1-50" | "51-200" | "201-1000" | "1000+";
+export type CompanySize =
+  | "1-10"
+  | "11-50"
+  | "51-200"
+  | "201-500"
+  | "501-1000"
+  | "1001-5000"
+  | "5000+";
 
 export const COMPANY_SIZE_OPTIONS: { value: CompanySize; label: string }[] = [
-  { value: "1-50", label: "1–50" },
-  { value: "51-200", label: "51–200" },
-  { value: "201-1000", label: "201–1,000" },
-  { value: "1000+", label: "1,000+" },
+  { value: "1-10", label: "1–10 employees" },
+  { value: "11-50", label: "11–50 employees" },
+  { value: "51-200", label: "51–200 employees" },
+  { value: "201-500", label: "201–500 employees" },
+  { value: "501-1000", label: "501–1,000 employees" },
+  { value: "1001-5000", label: "1,001–5,000 employees" },
+  { value: "5000+", label: "5,000+ employees" },
 ];
+
+export const DEFAULT_WEIGHT_PROFILES: Record<
+  string,
+  {
+    weight_skills: number;
+    weight_trajectory: number;
+    weight_domain: number;
+    weight_seniority: number;
+    weight_tenure: number;
+  }
+> = {
+  engineering: {
+    weight_skills: 9,
+    weight_trajectory: 7,
+    weight_domain: 6,
+    weight_seniority: 6,
+    weight_tenure: 4,
+  },
+  product: {
+    weight_skills: 6,
+    weight_trajectory: 8,
+    weight_domain: 7,
+    weight_seniority: 6,
+    weight_tenure: 5,
+  },
+  gtm: {
+    weight_skills: 5,
+    weight_trajectory: 8,
+    weight_domain: 8,
+    weight_seniority: 5,
+    weight_tenure: 4,
+  },
+  operations: {
+    weight_skills: 6,
+    weight_trajectory: 6,
+    weight_domain: 7,
+    weight_seniority: 6,
+    weight_tenure: 7,
+  },
+  default: {
+    weight_skills: 7,
+    weight_trajectory: 6,
+    weight_domain: 6,
+    weight_seniority: 6,
+    weight_tenure: 5,
+  },
+};
 
 export type WorkspaceProfileRow = {
   id: string;
@@ -43,9 +100,16 @@ function parseRecruiterType(value: unknown): RecruiterType {
 
 function parseCompanySize(value: unknown): CompanySize | null {
   const v = String(value ?? "").trim();
-  if (v === "1-50" || v === "51-200" || v === "201-1000" || v === "1000+") {
-    return v;
-  }
+  const valid: CompanySize[] = [
+    "1-10",
+    "11-50",
+    "51-200",
+    "201-500",
+    "501-1000",
+    "1001-5000",
+    "5000+",
+  ];
+  if (valid.includes(v as CompanySize)) return v as CompanySize;
   return null;
 }
 

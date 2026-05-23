@@ -155,10 +155,11 @@ export function JobOverviewCalibrate({
 
   return (
     <section className={`${karta.card} p-6`}>
-      <h3 className="text-base font-semibold text-[#1E293B]">Calibrate This Role</h3>
+      <h3 className="text-base font-semibold text-[#1E293B]">Set Ranking Preferences</h3>
       <p className="mt-1 text-sm text-[#64748B]">
-        Set what matters most. These priorities shape how every candidate is
-        evaluated for this role.
+        Set how much each signal matters for ranking. These preferences reorder
+        candidates instantly — no re-scoring needed. For best results, set these
+        before reviewing candidates.
       </p>
 
       <div className="mt-6 space-y-6">
@@ -217,7 +218,7 @@ export function JobOverviewCalibrate({
             Saving…
           </span>
         ) : (
-          "Calibrate Your Hiring Bar"
+          "Save Ranking Preferences"
         )}
       </button>
 
