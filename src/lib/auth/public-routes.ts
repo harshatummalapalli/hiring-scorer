@@ -8,6 +8,8 @@ export function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith("/api/apply/")) return true;
   if (/^\/share\/[^/]+$/.test(pathname)) return true;
   if (pathname === "/api/email-ingest") return true;
+  if (pathname === "/api/email-fetch") return true;
+  if (pathname === "/api/email-process") return true;
   return false;
 }
 

@@ -71,14 +71,36 @@ function EmailInboundCard() {
     successful?: number;
     failed?: number;
     lastReceived?: string | null;
+    queuePending?: number;
+    queueFailed?: number;
+    queueDone?: number;
   } | null>(null);
+  const [retrying, setRetrying] = useState(false);
 
-  useEffect(() => {
+  const loadStats = useCallback(() => {
     void fetch("/api/admin/email-log")
       .then((r) => r.json())
       .then((json) => setStats(json))
       .catch(() => setStats({ configured: false }));
   }, []);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
+
+  const retryFailed = async () => {
+    setRetrying(true);
+    try {
+      const res = await fetch("/api/email-process", { method: "GET" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Retry failed");
+      loadStats();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   return (
     <section className={`${karta.card} p-5`}>
@@ -89,38 +111,61 @@ function EmailInboundCard() {
           variables.
         </p>
       ) : (
-        <dl className="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-          <div>
-            <dt className="text-[#64748B]">Emails received</dt>
-            <dd className="text-xl font-semibold text-[#1E293B]">
-              {stats.received ?? 0}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[#64748B]">Processed OK</dt>
-            <dd className="text-xl font-semibold text-[#0D9488]">
-              {stats.successful ?? 0}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[#64748B]">Failed</dt>
-            <dd
-              className={`text-xl font-semibold ${
-                (stats.failed ?? 0) > 0 ? "text-red-600" : "text-[#1E293B]"
-              }`}
-            >
-              {stats.failed ?? 0}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[#64748B]">Last received</dt>
-            <dd className="text-sm font-medium text-[#1E293B]">
-              {stats.lastReceived
-                ? new Date(stats.lastReceived).toLocaleString()
-                : "—"}
-            </dd>
-          </div>
-        </dl>
+        <>
+          <dl className="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+            <div>
+              <dt className="text-[#64748B]">Emails received</dt>
+              <dd className="text-xl font-semibold text-[#1E293B]">
+                {stats.received ?? 0}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[#64748B]">Processed OK</dt>
+              <dd className="text-xl font-semibold text-[#0D9488]">
+                {stats.successful ?? 0}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[#64748B]">Failed</dt>
+              <dd
+                className={`text-xl font-semibold ${
+                  (stats.failed ?? 0) > 0 ? "text-red-600" : "text-[#1E293B]"
+                }`}
+              >
+                {stats.failed ?? 0}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[#64748B]">Last received</dt>
+              <dd className="text-sm font-medium text-[#1E293B]">
+                {stats.lastReceived
+                  ? new Date(stats.lastReceived).toLocaleString()
+                  : "—"}
+              </dd>
+            </div>
+          </dl>
+          <p
+            className={`mt-4 text-sm ${
+              (stats.queueFailed ?? 0) > 0
+                ? "text-red-600"
+                : "text-[#64748B]"
+            }`}
+          >
+            Queue: {stats.queuePending ?? 0} pending ·{" "}
+            {stats.queueDone ?? 0} processed today ·{" "}
+            {stats.queueFailed ?? 0} failed
+            {(stats.queueFailed ?? 0) > 0 && (
+              <button
+                type="button"
+                onClick={() => void retryFailed()}
+                disabled={retrying}
+                className="ml-3 rounded border border-red-300 bg-white px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
+              >
+                {retrying ? "Retrying…" : "Retry failed"}
+              </button>
+            )}
+          </p>
+        </>
       )}
     </section>
   );
