@@ -7,6 +7,7 @@ import { stripPII } from "@/lib/resume/strip-pii";
 import { buildScoringRunPayloadFromResult } from "@/lib/scoring/build-scoring-run-payload";
 import { insertScoringRun } from "@/lib/supabase/server";
 import type { RoleBrief } from "@/types/role-brief";
+import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 
 export const maxDuration = 120;
 
@@ -30,6 +31,12 @@ function signalsFromResumeText(resumeText: string): BeyondKeywordSignals {
 
 export async function POST(request: Request) {
   try {
+    const supabase = await createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    }
+
     const body = (await request.json()) as ScoreRequestBody;
 
     if (!body.resumeText?.trim()) {

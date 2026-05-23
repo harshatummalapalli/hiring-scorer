@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Mail, Settings, Share2 } from "lucide-react";
-import { useShareShortlist } from "@/components/jobs/share-shortlist-modal";
+import { ArrowLeft, Loader2, Mail, Settings } from "lucide-react";
 import { JobPipelineTab } from "@/components/jobs/tabs/job-pipeline-tab";
 import { JobShortlistTab } from "@/components/jobs/tabs/job-shortlist-tab";
 import { JobSettingsPanel } from "@/components/jobs/job-settings-panel";
@@ -65,14 +64,6 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
   useEffect(() => {
     void loadJob();
   }, [loadJob]);
-
-  const { handleShare, shareModal } = useShareShortlist(
-    job ?? {
-      id: jobId,
-      share_token: null,
-      share_enabled: false,
-    },
-  );
 
   if (loading) {
     return (
@@ -141,14 +132,6 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
           </button>
           <button
             type="button"
-            onClick={() => void handleShare()}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-[#64748B] hover:bg-slate-50"
-          >
-            <Share2 className="h-4 w-4" />
-            Share Shortlist
-          </button>
-          <button
-            type="button"
             onClick={() => setSettingsOpen(true)}
             className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50 hover:text-slate-700"
             aria-label="Job settings"
@@ -157,7 +140,6 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
           </button>
         </div>
       </div>
-      {shareModal}
 
       <SlidingTabs
         tabs={TABS.map(([id, label]) => ({ id, label }))}

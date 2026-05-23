@@ -1,23 +1,21 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Download, Loader2, Star } from "lucide-react";
 import { CandidateIdentityCard } from "@/components/candidates/candidate-identity-card";
 import { VerdictBadge } from "@/components/candidates/profile-shared";
 import type { Job } from "@/types/job";
-import { EmptyState } from "@/components/ui/empty-state";
 import { karta } from "@/lib/brand/karta";
-import { formatInsightsText } from "@/lib/pipeline/insights-from-score";
 import {
   buildPipelineWorkbook,
   downloadPipelineExcel,
 } from "@/lib/pipeline/export-excel";
-import { CandidatePitchCard } from "@/components/pipeline/candidate-pitch-card";
-import type { CandidateRoleFitScore } from "@/types/candidate";
-import { pickDefaultScoreId } from "@/lib/candidates/pick-panel-score";
 import type { PipelineCandidateRow, PipelineRoleSection } from "@/types/pipeline";
 import type { TitleBand } from "@/types/role-brief";
 
+/**
+ * Inline-editable single-line cell (for Relocation, Present CTC, Expected CTC).
+ */
 function EditableCell({
   value,
   onSave,
@@ -80,7 +78,89 @@ function EditableCell({
   );
 }
 
-const SHORTLIST_COLUMN_COUNT = 10;
+/**
+ * Multi-line editable textarea for Recruiter Notes.
+ * Pre-filled with the AI-generated summary on shortlist. Recruiter can edit freely.
+ */
+function EditableNotesCell({
+  value,
+  onSave,
+}: {
+  value: string | null;
+  onSave: (next: string) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value ?? "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setDraft(value ?? "");
+  }, [value]);
+
+  const commit = async () => {
+    setSaving(true);
+    try {
+      await onSave(draft);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <div className="flex flex-col gap-1">
+        <textarea
+          autoFocus
+          disabled={saving}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          rows={6}
+          className={`w-full min-w-[14rem] resize-y ${karta.input} py-1 text-sm font-mono leading-relaxed`}
+          style={{ minHeight: "7rem" }}
+        />
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => void commit()}
+            className={`text-xs font-medium ${karta.btnPrimary} px-3 py-1`}
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setDraft(value ?? "");
+              setEditing(false);
+            }}
+            className="text-xs text-slate-500 hover:text-slate-700"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const preview = draft.trim();
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      className="w-full min-h-[3.5rem] rounded px-1 py-1 text-left text-sm text-slate-700 hover:bg-slate-50 whitespace-pre-line"
+      style={{ minWidth: "14rem" }}
+    >
+      {preview ? (
+        <span className="line-clamp-4">{preview}</span>
+      ) : (
+        <span className="text-slate-400">Add notes…</span>
+      )}
+    </button>
+  );
+}
+
+const SHORTLIST_COLUMN_COUNT = 9;
 
 type JobShortlistTabProps = {
   jobId: string;
@@ -104,10 +184,6 @@ export function JobShortlistTab({
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checked, setChecked] = useState<Set<number>>(new Set());
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [scoresByCandidateId, setScoresByCandidateId] = useState<
-    Map<string, CandidateRoleFitScore | null>
-  >(new Map());
 
   const cannotAssess = roleBrief.cannot_assess ?? [];
   const totalCannotAssess = cannotAssess.length;
@@ -152,52 +228,6 @@ export function JobShortlistTab({
   }, [load]);
 
   const rows = section?.candidates ?? [];
-
-  useEffect(() => {
-    if (rows.length === 0) {
-      setScoresByCandidateId(new Map());
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      const next = new Map<string, CandidateRoleFitScore | null>();
-      await Promise.all(
-        rows.map(async (row) => {
-          try {
-            const res = await fetch(
-              `/api/candidates/${encodeURIComponent(row.candidate_id)}`,
-            );
-            const json = await res.json();
-            if (!res.ok) return;
-            const fits = (json.candidate?.role_fit_scores ??
-              []) as CandidateRoleFitScore[];
-            const fitId = pickDefaultScoreId(fits, jobId);
-            const fit =
-              fits.find((f) => f.id === fitId) ??
-              fits.find((f) => f.role_brief_id === jobId) ??
-              fits[0] ??
-              null;
-            next.set(row.candidate_id, fit);
-          } catch {
-            next.set(row.candidate_id, null);
-          }
-        }),
-      );
-      if (!cancelled) setScoresByCandidateId(next);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [rows, jobId]);
-
-  const togglePitch = (candidateId: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(candidateId)) next.delete(candidateId);
-      else next.add(candidateId);
-      return next;
-    });
-  };
 
   const patchRow = async (
     id: string,
@@ -245,6 +275,7 @@ export function JobShortlistTab({
 
   return (
     <div className="space-y-4">
+      {/* Verify Before Submitting checklist */}
       {totalCannotAssess > 0 && (
         <section className={`${karta.card} mb-6 p-5`}>
           <div className="flex items-start justify-between">
@@ -285,12 +316,18 @@ export function JobShortlistTab({
         </section>
       )}
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between">
+        {rows.length > 0 && (
+          <p className="text-sm text-[#64748B]">
+            <span className="font-medium text-[#1E293B]">{rows.length}</span>{" "}
+            {rows.length === 1 ? "candidate" : "candidates"} shortlisted
+          </p>
+        )}
         <button
           type="button"
           disabled={exporting || rows.length === 0}
           onClick={() => void handleExport()}
-          className={`inline-flex items-center gap-2 ${karta.btnOutlineTeal}`}
+          className={`ml-auto inline-flex items-center gap-2 ${karta.btnOutlineTeal}`}
         >
           {exporting ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -322,26 +359,25 @@ export function JobShortlistTab({
           <table className="w-full min-w-[960px] text-left text-sm">
             <thead>
               <tr className={karta.tableHeadRow}>
-                <th className="px-4 py-3">Name</th>
-                <th className="min-w-[180px] px-4 py-3">Email</th>
+                <th className="px-4 py-3">Candidate</th>
+                <th className="min-w-[160px] px-4 py-3">Email</th>
                 <th className="px-4 py-3">Phone</th>
                 <th className="px-4 py-3">Location</th>
-                <th className="max-w-[12rem] px-4 py-3">Insights</th>
                 <th className="px-4 py-3">Match</th>
                 <th className="px-4 py-3">Relocation</th>
                 <th className="px-4 py-3">Present CTC</th>
                 <th className="px-4 py-3">Expected CTC</th>
-                <th className="px-4 py-3">Recruiter Notes</th>
+                <th className="min-w-[240px] px-4 py-3">
+                  Recruiter Summary
+                  <span className="ml-1 text-[10px] font-normal text-[#64748B]">
+                    (auto-filled · editable)
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => {
-                const pitchExpanded = expandedIds.has(row.candidate_id);
-                const fitScore =
-                  scoresByCandidateId.get(row.candidate_id) ?? null;
-                return (
-                <Fragment key={row.id}>
-                <tr className="border-b border-slate-100">
+              {rows.map((row) => (
+                <tr key={row.id} className="border-b border-slate-100">
                   <td className="px-4 py-3 align-top">
                     <CandidateIdentityCard
                       displayName={row.candidate_name}
@@ -349,74 +385,52 @@ export function JobShortlistTab({
                       panelOptions={panelOptions}
                       showMetaRow={false}
                     />
-                    <button
-                      type="button"
-                      onClick={() => togglePitch(row.candidate_id)}
-                      className="mt-2 cursor-pointer text-xs text-[#0D9488] hover:underline"
-                    >
-                      {pitchExpanded
-                        ? "▾ Hide summary"
-                        : "▸ View pitch summary"}
-                    </button>
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{row.email ?? "—"}</td>
-                  <td className="px-4 py-3 text-slate-600">{row.phone ?? "—"}</td>
-                  <td className="px-4 py-3 text-slate-600">{row.location ?? "—"}</td>
-                  <td className="max-w-[14rem] px-4 py-3 text-xs text-slate-600">
-                    {formatInsightsText(row.insights) || "—"}
+                  <td className="px-4 py-3 align-top text-slate-600">
+                    {row.email ?? "—"}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 align-top text-slate-600">
+                    {row.phone ?? "—"}
+                  </td>
+                  <td className="px-4 py-3 align-top text-slate-600">
+                    {row.location ?? "—"}
+                  </td>
+                  <td className="px-4 py-3 align-top">
                     <VerdictBadge
                       verdict={row.fit_verdict}
                       score={row.fit_score}
                       showScore
                     />
                   </td>
-                  <td className="px-4 py-2">
+                  <td className="px-4 py-2 align-top">
                     <EditableCell
                       value={row.relocation}
                       placeholder="Relocation"
                       onSave={(v) => patchRow(row.id, "relocation", v)}
                     />
                   </td>
-                  <td className="px-4 py-2">
+                  <td className="px-4 py-2 align-top">
                     <EditableCell
                       value={row.present_salary}
                       placeholder="Present CTC"
                       onSave={(v) => patchRow(row.id, "present_salary", v)}
                     />
                   </td>
-                  <td className="px-4 py-2">
+                  <td className="px-4 py-2 align-top">
                     <EditableCell
                       value={row.expected_salary}
                       placeholder="Expected CTC"
                       onSave={(v) => patchRow(row.id, "expected_salary", v)}
                     />
                   </td>
-                  <td className="px-4 py-2 min-w-[10rem]">
-                    <EditableCell
+                  <td className="px-4 py-2 align-top">
+                    <EditableNotesCell
                       value={row.recruiter_notes}
-                      placeholder="Notes"
                       onSave={(v) => patchRow(row.id, "recruiter_notes", v)}
                     />
                   </td>
                 </tr>
-                {pitchExpanded && (
-                  <tr className="border-b border-slate-100">
-                    <td
-                      colSpan={SHORTLIST_COLUMN_COUNT}
-                      className="border-b border-slate-100 bg-slate-50 px-4 pb-4 pt-2 align-top"
-                    >
-                      <CandidatePitchCard
-                        candidate={row}
-                        score={fitScore}
-                      />
-                    </td>
-                  </tr>
-                )}
-                </Fragment>
-              );
-              })}
+              ))}
             </tbody>
           </table>
         </div>

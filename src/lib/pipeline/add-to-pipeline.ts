@@ -67,6 +67,133 @@ async function loadLatestScoreAnyRole(
   };
 }
 
+function buildAutoRecruiterSummary(
+  name: string,
+  score: { overall_score: number; verdict: string; score_snapshot: CandidateScoreResult | null } | null,
+  profile: {
+    current_title?: string | null;
+    total_years_experience?: string | null;
+    core_strength_primary?: string | null;
+    core_strength_secondary?: string | null;
+    top_skills?: string[] | null;
+    skills?: string[] | null;
+  },
+): string | null {
+  if (!score?.score_snapshot) return null;
+
+  const snap = score.score_snapshot as CandidateScoreResult & {
+    why_this_candidate?: {
+      summary?: string;
+      strengths?: Array<{ signal?: string; supporting_quote?: string | null }>;
+      watch_points?: Array<{ concern?: string; evidence_basis?: string }>;
+    };
+    green_flags?: Array<{ text?: string }>;
+    watch_signals?: Array<{ text?: string }>;
+    recruiter_card?: {
+      worth_exploring?: string[];
+    };
+  };
+
+  // Fix verdict capitalisation: "POTENTIAL_MATCH" → "Potential Match"
+  const verdictLabel = score.verdict
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
+  const scoreNum = Math.round(score.overall_score);
+
+  // --- Opening sentence ---
+  const exp = profile.total_years_experience?.trim() ?? null;
+  const domain =
+    profile.core_strength_primary?.trim() ??
+    profile.current_title?.trim() ??
+    null;
+
+  const skills: string[] = (
+    profile.top_skills ??
+    profile.skills ??
+    []
+  ).slice(0, 5);
+
+  const skillPhrase = skills.length > 0 ? skills.join(", ") : null;
+
+  let openingSentence = `${name} is a ${verdictLabel} (${scoreNum}/100).`;
+  if (exp && domain && skillPhrase) {
+    openingSentence = `${name} has ${exp} of experience in ${domain} with strong emphasis on ${skillPhrase}.`;
+  } else if (exp && domain) {
+    openingSentence = `${name} has ${exp} of experience in ${domain}.`;
+  } else if (exp && skillPhrase) {
+    openingSentence = `${name} has ${exp} of experience with strong emphasis on ${skillPhrase}.`;
+  }
+
+  const lines: string[] = [];
+  lines.push(openingSentence);
+
+  // --- Scoring insights (strengths / AI summary) ---
+  const aiSummary = snap.why_this_candidate?.summary?.trim() ?? null;
+  const strengths = snap.why_this_candidate?.strengths ?? [];
+  const greenFlags = snap.green_flags ?? [];
+
+  const insightLines: string[] = [];
+  if (aiSummary) insightLines.push(aiSummary);
+
+  for (const s of strengths) {
+    const text = s.signal?.trim();
+    if (text && !insightLines.includes(text)) insightLines.push(text);
+    if (insightLines.length >= 3) break;
+  }
+
+  if (insightLines.length < 2) {
+    for (const g of greenFlags) {
+      const text = g.text?.trim();
+      if (text && !insightLines.includes(text)) insightLines.push(text);
+      if (insightLines.length >= 3) break;
+    }
+  }
+
+  if (insightLines.length > 0) {
+    lines.push("");
+    for (const line of insightLines.slice(0, 3)) {
+      lines.push(`• ${line}`);
+    }
+  }
+
+  // --- Watch points (2–3) ---
+  const watchPoints: string[] = [];
+
+  for (const w of snap.why_this_candidate?.watch_points ?? []) {
+    const concern = w.concern?.trim();
+    if (concern) watchPoints.push(concern);
+    if (watchPoints.length >= 3) break;
+  }
+
+  if (watchPoints.length < 2) {
+    for (const w of snap.watch_signals ?? []) {
+      const text = w.text?.trim();
+      if (text && !watchPoints.includes(text)) watchPoints.push(text);
+      if (watchPoints.length >= 3) break;
+    }
+  }
+
+  if (watchPoints.length < 2 && snap.recruiter_card?.worth_exploring) {
+    for (const w of snap.recruiter_card.worth_exploring) {
+      const text = w.trim();
+      if (text && !watchPoints.includes(text)) watchPoints.push(text);
+      if (watchPoints.length >= 3) break;
+    }
+  }
+
+  if (watchPoints.length > 0) {
+    lines.push("");
+    lines.push("Watch points:");
+    for (const w of watchPoints) {
+      lines.push(`• ${w}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
 export async function addCandidateToPipeline(
   candidateId: string,
   roleBriefId: string,
@@ -101,10 +228,22 @@ export async function addCandidateToPipeline(
     score?.verdict ??
     (fit_score != null ? scoreToVerdict(fit_score) : null);
 
+  const displayName = getCandidateHeaderName(profile);
+  const autoNotes = buildAutoRecruiterSummary(displayName, score, {
+    current_title: profile.current_title,
+    total_years_experience: profile.total_years_experience,
+    core_strength_primary: profile.core_strength_primary,
+    core_strength_secondary: profile.core_strength_secondary,
+    top_skills: (profile as { top_skills?: string[] | null }).top_skills,
+    skills: profile.skills_listed_only?.length
+      ? profile.skills_listed_only
+      : profile.skills_verified?.map((s) => s.skill),
+  });
+
   const row = await insertPipelineCandidate({
     role_brief_id: roleBriefId,
     candidate_id: candidateId,
-    candidate_name: getCandidateHeaderName(profile),
+    candidate_name: displayName,
     email: contact.email,
     phone: contact.phone,
     location: profile.location,
@@ -112,6 +251,7 @@ export async function addCandidateToPipeline(
     fit_verdict,
     insights,
     shortlist_reason: shortlistReason,
+    recruiter_notes: autoNotes,
   });
 
   return { row, created: true };
