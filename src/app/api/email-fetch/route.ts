@@ -1,13 +1,23 @@
 import { NextResponse } from "next/server";
+import { requireSuperAdmin } from "@/lib/admin/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
-  const auth = request.headers.get("authorization");
+function isCronAuthorised(request: Request): boolean {
   const secret = process.env.CRON_SECRET ?? "";
-  if (!secret || auth !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+  if (!secret) return false;
+  const auth = request.headers.get("authorization");
+  return auth === `Bearer ${secret}`;
+}
+
+export async function POST(request: Request) {
+  if (!isCronAuthorised(request)) {
+    try {
+      await requireSuperAdmin();
+    } catch {
+      return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+    }
   }
 
   if (!process.env.GMAIL_INBOUND_USER || !process.env.GMAIL_INBOUND_APP_PASSWORD) {

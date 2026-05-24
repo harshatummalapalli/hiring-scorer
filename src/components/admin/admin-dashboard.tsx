@@ -76,6 +76,7 @@ function EmailInboundCard() {
     queueDone?: number;
   } | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [fetching, setFetching] = useState(false);
   const [processingQueue, setProcessingQueue] = useState(false);
   const [queueProgress, setQueueProgress] = useState("");
 
@@ -104,12 +105,51 @@ function EmailInboundCard() {
     }
   };
 
+  const fetchFromGmail = async () => {
+    setFetching(true);
+    setQueueProgress("");
+    try {
+      const res = await fetch("/api/email-fetch", { method: "POST" });
+      const json = (await res.json()) as {
+        error?: string;
+        fetched?: number;
+        queued?: number;
+      };
+      if (!res.ok) throw new Error(json.error ?? "Fetch failed");
+      setQueueProgress(
+        `Fetched ${json.fetched ?? 0} email(s), queued ${json.queued ?? 0} attachment(s).`,
+      );
+      window.setTimeout(() => setQueueProgress(""), 5000);
+      loadStats();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Fetch failed";
+      setQueueProgress(message);
+      window.setTimeout(() => setQueueProgress(""), 5000);
+    } finally {
+      setFetching(false);
+    }
+  };
+
   const processEmailQueue = async () => {
     setProcessingQueue(true);
     setQueueProgress("");
     let hadError = false;
     try {
-      let remaining = stats?.queuePending ?? 0;
+      const statsRes = await fetch("/api/admin/email-log");
+      const freshStats = (await statsRes.json()) as {
+        queuePending?: number;
+      };
+      let remaining = freshStats.queuePending ?? 0;
+      setStats((prev) =>
+        prev ? { ...prev, queuePending: remaining } : prev,
+      );
+      if (remaining === 0) {
+        setQueueProgress(
+          "Queue is empty. Use Fetch from Gmail first, then process.",
+        );
+        window.setTimeout(() => setQueueProgress(""), 5000);
+        return;
+      }
       while (true) {
         setQueueProgress(`Processing... (${remaining} remaining)`);
         const res = await fetch("/api/email-process", { method: "POST" });
@@ -141,7 +181,6 @@ function EmailInboundCard() {
       window.setTimeout(() => setQueueProgress(""), 5000);
     } finally {
       setProcessingQueue(false);
-      if (!hadError) setQueueProgress("");
     }
   };
 
@@ -201,12 +240,16 @@ function EmailInboundCard() {
             </p>
             <button
               type="button"
+              onClick={() => void fetchFromGmail()}
+              disabled={fetching || processingQueue || retrying}
+              className="rounded-lg border border-[#0D9488] bg-white px-3 py-1.5 text-xs font-medium text-[#0D9488] hover:bg-[#F0FDFA] disabled:opacity-60"
+            >
+              {fetching ? "Fetching…" : "Fetch from Gmail"}
+            </button>
+            <button
+              type="button"
               onClick={() => void processEmailQueue()}
-              disabled={
-                processingQueue ||
-                retrying ||
-                (stats.queuePending ?? 0) === 0
-              }
+              disabled={processingQueue || retrying || fetching}
               className="rounded-lg bg-[#0D9488] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#0f766e] disabled:opacity-60"
             >
               {processingQueue ? queueProgress || "Processing…" : "Process Email Queue"}
@@ -215,20 +258,28 @@ function EmailInboundCard() {
               <button
                 type="button"
                 onClick={() => void retryFailed()}
-                disabled={retrying || processingQueue}
+                disabled={retrying || processingQueue || fetching}
                 className="rounded border border-red-300 bg-white px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
               >
                 {retrying ? "Retrying…" : "Retry failed"}
               </button>
             )}
           </div>
-          {queueProgress &&
-            !processingQueue &&
-            !queueProgress.startsWith("Processing") && (
-              <p className="mt-2 text-sm text-red-600" role="alert">
-                {queueProgress}
-              </p>
-            )}
+          {queueProgress && !processingQueue && (
+            <p
+              className={`mt-2 text-sm ${
+                queueProgress.startsWith("Processing") ||
+                queueProgress.includes("Fetched")
+                  ? "text-[#64748B]"
+                  : queueProgress.includes("empty")
+                    ? "text-amber-700"
+                    : "text-red-600"
+              }`}
+              role="status"
+            >
+              {queueProgress}
+            </p>
+          )}
         </>
       )}
     </section>
