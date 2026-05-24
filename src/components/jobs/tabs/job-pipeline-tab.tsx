@@ -190,8 +190,8 @@ export function JobPipelineTab({
 
   const uploading = uploadUi.phase === "processing";
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) setLoading(true);
     try {
       await fetch(`/api/jobs/${jobId}/reclassify-applicants`, { method: "POST" });
       const [candRes, pipeRes] = await Promise.all([
@@ -211,11 +211,15 @@ export function JobPipelineTab({
         }
         setPipelineIds(ids);
       }
-      setOptimisticShortlistedIds(new Set());
+      if (!options?.silent) {
+        setOptimisticShortlistedIds(new Set());
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
+      if (!options?.silent) {
+        setError(err instanceof Error ? err.message : "Failed to load");
+      }
     } finally {
-      setLoading(false);
+      if (!options?.silent) setLoading(false);
     }
   }, [jobId]);
 
@@ -664,6 +668,7 @@ export function JobPipelineTab({
           });
           nextFiles[i] = { name: file.name, status: "done" };
           successCount += 1;
+          await load({ silent: true });
         } catch (err) {
           if (err instanceof Error && err.message === "duplicate") {
             nextFiles[i] = {
@@ -671,18 +676,19 @@ export function JobPipelineTab({
               status: "error",
               error: "Duplicate — resolve prompt",
             };
-            break;
+          } else {
+            nextFiles[i] = {
+              name: file.name,
+              status: "error",
+              error: err instanceof Error ? err.message : "Upload failed",
+            };
           }
-          nextFiles[i] = {
-            name: file.name,
-            status: "error",
-            error: err instanceof Error ? err.message : "Upload failed",
-          };
         }
         setUploadUi({ phase: "processing", files: [...nextFiles] });
+        if (i < fileList.length - 1) {
+          await new Promise((r) => setTimeout(r, 200));
+        }
       }
-
-      if (successCount > 0) await load();
 
       if (successCount === 0 && !duplicateMatch) {
         const firstError = nextFiles.find((f) => f.status === "error")?.error;

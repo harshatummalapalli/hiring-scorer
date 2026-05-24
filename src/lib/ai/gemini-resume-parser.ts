@@ -153,6 +153,36 @@ function parseGeminiResumeJson(text: string): GeminiParsedResume {
   }
 }
 
+async function callGeminiWithRetry(
+  model: ReturnType<GoogleGenerativeAI["getGenerativeModel"]>,
+  prompt: string,
+  maxAttempts = 3,
+): Promise<string> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const result = await model.generateContent(prompt);
+      const text = result.response.text().trim();
+
+      // Detect non-JSON error responses from Gemini
+      if (
+        text.startsWith("An error") ||
+        text.startsWith("I'm sorry") ||
+        text.startsWith("Sorry") ||
+        !text.includes("{")
+      ) {
+        throw new Error(`Gemini returned non-JSON: ${text.slice(0, 100)}`);
+      }
+
+      return text;
+    } catch (err) {
+      if (attempt === maxAttempts) throw err;
+      // Wait before retrying: 1s, 2s, 4s
+      await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+    }
+  }
+  throw new Error("Gemini parse failed after all retries");
+}
+
 async function requestGeminiParse(
   rawResumeText: string,
   compact: boolean,
@@ -222,19 +252,10 @@ Return a JSON object matching this exact schema:
   ]
 }`;
 
-  const result = await model.generateContent(prompt);
-  const response = result.response;
-  const finishReason = response.candidates?.[0]?.finishReason;
-  const text = response.text().trim();
+  const text = await callGeminiWithRetry(model, prompt);
 
   if (!text) {
     throw new Error("Gemini resume parser returned an empty response.");
-  }
-
-  if (finishReason === "MAX_TOKENS") {
-    throw new Error(
-      `Gemini resume parser hit the output token limit. First 200 chars: ${text.slice(0, 200)}`,
-    );
   }
 
   return parseGeminiResumeJson(text);
@@ -242,7 +263,11 @@ Return a JSON object matching this exact schema:
 
 export async function parseResumeWithGemini(
   rawResumeText: string,
+  stallMs = 0,
 ): Promise<GeminiParsedResume> {
+  if (stallMs > 0) {
+    await new Promise((r) => setTimeout(r, stallMs));
+  }
   let lastError: Error | null = null;
   let lastRecord: GeminiParsedResume | null = null;
 

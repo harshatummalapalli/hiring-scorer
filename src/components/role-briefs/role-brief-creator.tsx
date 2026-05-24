@@ -17,7 +17,6 @@ import {
 import {
   briefRowToJobPosting,
   jobPostingToJdContext,
-  SENIORITY_LEVELS,
   type JobPostingFields,
   type SeniorityLevel,
 } from "@/types/job-posting";
@@ -26,7 +25,9 @@ import type {
   RoleBrief,
   RoleBriefAnalysis,
   RoleBriefAnalysisMeta,
+  TitleBand,
 } from "@/types/role-brief";
+import { TITLE_BANDS } from "@/types/role-brief";
 import {
   analysisFromRoleBrief,
   deriveTitleFromAnalysis,
@@ -93,10 +94,18 @@ export function RoleBriefCreator({
   const [jobLocation, setJobLocation] = useState(
     initialJobPosting?.jobLocation ?? "",
   );
-  const [seniority, setSeniority] = useState<SeniorityLevel>(
-    initialJobPosting?.seniorityOverride ?? "Mid",
-  );
-  const [department, setDepartment] = useState(initialJobPosting?.department ?? "");
+  const [selectedBands, setSelectedBands] = useState<TitleBand[]>(() => {
+    if (initialJobPosting?.titleBands?.length) {
+      return initialJobPosting.titleBands;
+    }
+    if (initialJobPosting?.seniorityOverride) {
+      const band = initialJobPosting.seniorityOverride;
+      if ((TITLE_BANDS as string[]).includes(band)) {
+        return [band as TitleBand];
+      }
+    }
+    return ["Mid"];
+  });
   const [recruiterType, setRecruiterType] = useState<RecruiterType>("inhouse");
   const [clientContextOpen, setClientContextOpen] = useState(false);
   const [clientCompanyName, setClientCompanyName] = useState(
@@ -163,8 +172,8 @@ export function RoleBriefCreator({
   const buildJobPosting = (): JobPostingFields => ({
     jobTitle: jobTitle.trim(),
     jobLocation: jobLocation.trim(),
-    seniorityOverride: seniority,
-    department: department.trim() || undefined,
+    titleBands: selectedBands,
+    seniorityOverride: (selectedBands[0] ?? "Mid") as SeniorityLevel,
     clientCompanyName: clientCompanyName.trim() || undefined,
     clientCompanyBrief: clientCompanyBrief.trim() || undefined,
     clientCompanySize: clientCompanySize || undefined,
@@ -175,7 +184,9 @@ export function RoleBriefCreator({
     const next: FieldErrors = {};
     if (!jobTitle.trim()) next.jobTitle = "Job title is required.";
     if (!jobLocation.trim()) next.jobLocation = "Job location is required.";
-    if (!seniority) next.seniority = "Seniority level is required.";
+    if (selectedBands.length === 0) {
+      next.seniority = "Select at least one seniority band.";
+    }
     if (!clientCompanyName.trim()) {
       next.clientCompanyName = "Hiring company name is required.";
     }
@@ -331,38 +342,45 @@ export function RoleBriefCreator({
             )}
           </label>
 
-          <label className="block text-sm font-medium text-[#334155]">
-            Seniority Level
-            <select
-              value={seniority}
-              onChange={(e) =>
-                setSeniority(e.target.value as SeniorityLevel)
-              }
-              className={`mt-1 w-full ${karta.input}`}
-              disabled={analysing}
-            >
-              {SENIORITY_LEVELS.map((level) => (
-                <option key={level} value={level}>
-                  {level}
-                </option>
+          <div className="block text-sm font-medium text-[#334155]">
+            Seniority Band
+            <span className="ml-1 font-normal text-[#94A3B8]">
+              (select one or more)
+            </span>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {TITLE_BANDS.filter(
+                (b) => !["Intern", "C-Suite"].includes(b),
+              ).map((band) => (
+                <button
+                  key={band}
+                  type="button"
+                  onClick={() => {
+                    setSelectedBands((prev) =>
+                      prev.includes(band)
+                        ? prev.filter((b) => b !== band)
+                        : [...prev, band],
+                    );
+                  }}
+                  className={`rounded-full border px-3 py-1 text-sm font-medium transition-colors ${
+                    selectedBands.includes(band)
+                      ? "border-[#0D9488] bg-[#0D9488] text-white"
+                      : "border-slate-200 bg-white text-[#64748B] hover:border-[#0D9488] hover:text-[#0D9488]"
+                  }`}
+                  disabled={analysing}
+                >
+                  {band}
+                </button>
               ))}
-            </select>
+            </div>
+            {selectedBands.length === 0 && (
+              <p className="mt-1 text-sm text-red-600">
+                Select at least one seniority band.
+              </p>
+            )}
             {fieldErrors.seniority && (
               <p className="mt-1 text-sm text-red-600">{fieldErrors.seniority}</p>
             )}
-          </label>
-
-          <label className="block text-sm font-medium text-[#334155]">
-            Department{" "}
-            <span className="font-normal text-[#94A3B8]">(optional)</span>
-            <input
-              type="text"
-              value={department}
-              onChange={(e) => setDepartment(e.target.value)}
-              className={`mt-1 w-full ${karta.input}`}
-              disabled={analysing}
-            />
-          </label>
+          </div>
 
           <div className="rounded-lg border border-slate-200">
             <button

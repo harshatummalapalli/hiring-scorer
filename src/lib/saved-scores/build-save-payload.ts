@@ -38,6 +38,7 @@ function minimalRoleBrief(
     cannot_assess: [],
     equivalent_titles: [],
     title_band: null,
+    title_bands: [],
     semantic_clusters: {},
     weight_skills: partial.weight_skills ?? DEFAULT_SCORING_WEIGHTS.weight_skills,
     weight_trajectory:

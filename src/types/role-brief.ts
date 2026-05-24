@@ -87,6 +87,7 @@ export type RoleBrief = {
   cannot_assess: string[];
   equivalent_titles: string[];
   title_band: TitleBand | null;
+  title_bands: TitleBand[];
   semantic_clusters: Record<string, string[]>;
   weight_skills: number;
   weight_trajectory: number;
@@ -312,6 +313,19 @@ function parseTitleBand(value: unknown): TitleBand | null {
   return null;
 }
 
+export function parseTitleBands(
+  value: unknown,
+  fallbackBand?: unknown,
+): TitleBand[] {
+  if (Array.isArray(value)) {
+    return (value as string[]).filter((b) =>
+      (TITLE_BANDS as string[]).includes(b),
+    ) as TitleBand[];
+  }
+  const single = parseTitleBand(fallbackBand);
+  return single ? [single] : [];
+}
+
 /** Map Supabase row (new or legacy) to RoleBrief. */
 export function parseRoleBriefRow(row: Record<string, unknown>): RoleBrief {
   const legacyRequired = row.required_skills
@@ -389,6 +403,13 @@ export function parseRoleBriefRow(row: Record<string, unknown>): RoleBrief {
     cannot_assess: parseJsonArray(row.cannot_assess),
     equivalent_titles: parseJsonArray(row.equivalent_titles),
     title_band: parseTitleBand(row.title_band),
+    title_bands: Array.isArray(row.title_bands)
+      ? (row.title_bands as string[]).filter((b) =>
+          (TITLE_BANDS as string[]).includes(b),
+        ) as TitleBand[]
+      : row.title_band
+        ? ([parseTitleBand(row.title_band)].filter(Boolean) as TitleBand[])
+        : [],
     semantic_clusters: parseSemanticClusters(row.semantic_clusters),
     weight_skills: clamp(row.weight_skills, 5),
     weight_trajectory: clamp(row.weight_trajectory, 5),

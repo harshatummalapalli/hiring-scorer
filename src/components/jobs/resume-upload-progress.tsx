@@ -110,8 +110,10 @@ export function ResumeUploadProgress({
   successCount,
 }: ResumeUploadProgressProps) {
   const total = files.length;
-  const doneCount = files.filter((f) => f.status === "done").length;
-  const percent = total > 0 ? Math.round((doneCount / total) * 100) : 0;
+  const processedCount = files.filter(
+    (f) => f.status === "done" || f.status === "error",
+  ).length;
+  const percent = total > 0 ? Math.round((processedCount / total) * 100) : 0;
 
   if (phase === "success" && successCount != null) {
     return (
@@ -137,7 +139,7 @@ export function ResumeUploadProgress({
         <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#0D9488]" />
         <span>Processing resumes</span>
         <span className="font-normal text-[#64748B]">
-          ({doneCount} of {total})
+          ({processedCount} of {total})
         </span>
       </div>
 

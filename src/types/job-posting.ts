@@ -1,4 +1,5 @@
 import type { CompanySize } from "@/lib/workspace/workspace-profiles";
+import { parseTitleBands, type TitleBand } from "@/types/role-brief";
 
 export const SENIORITY_LEVELS = [
   "Entry",
@@ -16,8 +17,8 @@ export type SeniorityLevel = (typeof SENIORITY_LEVELS)[number];
 export type JobPostingFields = {
   jobTitle: string;
   jobLocation: string;
+  titleBands: TitleBand[];
   seniorityOverride: SeniorityLevel;
-  department?: string;
   clientCompanyName?: string;
   clientCompanyBrief?: string;
   clientCompanySize?: CompanySize;
@@ -38,11 +39,14 @@ export type JdRecruiterContext = {
 export function jobPostingToJdContext(
   fields: Partial<JobPostingFields>,
 ): JdRecruiterContext {
+  const bandLabel =
+    fields.titleBands && fields.titleBands.length > 0
+      ? fields.titleBands.join(" / ")
+      : fields.seniorityOverride?.trim() || null;
   return {
     job_title: fields.jobTitle?.trim() || null,
     job_location: fields.jobLocation?.trim() || null,
-    seniority_override: fields.seniorityOverride?.trim() || null,
-    department: fields.department?.trim() || null,
+    seniority_override: bandLabel,
     client_company_name: fields.clientCompanyName?.trim() || null,
     client_company_size: fields.clientCompanySize ?? null,
     client_company_brief: fields.clientCompanyBrief?.trim() || null,
@@ -53,11 +57,13 @@ export function jobPostingToJdContext(
 export function jobPostingToBriefColumns(
   fields: JobPostingFields,
 ): Record<string, unknown> {
+  const primaryBand = fields.titleBands[0] ?? fields.seniorityOverride;
   return {
     title: fields.jobTitle.trim(),
     job_location: fields.jobLocation.trim(),
-    seniority_override: fields.seniorityOverride,
-    department: fields.department?.trim() || null,
+    seniority_override: primaryBand,
+    title_bands: fields.titleBands,
+    title_band: primaryBand,
     client_company_name: fields.clientCompanyName?.trim() || null,
     client_company_brief: fields.clientCompanyBrief?.trim() || null,
     client_company_size: fields.clientCompanySize ?? null,
@@ -88,11 +94,19 @@ export function briefRowToJobPosting(
     ? (sizeRaw as CompanySize)
     : undefined;
 
+  const titleBands = parseTitleBands(row.title_bands, row.title_band);
+  const primaryBand = titleBands[0];
+  const seniorityFromBands =
+    primaryBand &&
+    (SENIORITY_LEVELS as readonly string[]).includes(primaryBand)
+      ? (primaryBand as SeniorityLevel)
+      : level;
+
   return {
     jobTitle: String(row.title ?? fallbackTitle).trim(),
     jobLocation: String(row.job_location ?? "").trim(),
-    seniorityOverride: level,
-    department: row.department != null ? String(row.department) : undefined,
+    titleBands,
+    seniorityOverride: seniorityFromBands,
     clientCompanyName:
       row.client_company_name != null
         ? String(row.client_company_name)

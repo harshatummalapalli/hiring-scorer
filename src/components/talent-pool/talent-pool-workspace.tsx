@@ -283,6 +283,9 @@ export function TalentPoolWorkspace() {
           };
         }
         setUploadUi({ phase: "processing", files: [...nextFiles] });
+        if (i < fileList.length - 1) {
+          await new Promise((r) => setTimeout(r, 200));
+        }
       }
 
       if (successCount > 0) {

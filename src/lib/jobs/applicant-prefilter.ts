@@ -14,6 +14,32 @@ import type { CandidateSignalProfile } from "@/types/candidate";
 import type { CandidateScoringStatus } from "@/types/job";
 import type { RoleBrief } from "@/types/role-brief";
 
+function parseExperienceYears(exp: string | null | undefined): number | null {
+  if (!exp) return null;
+
+  // Handles: "8 years", "3.5 years", "4 yr 11 mo",
+  //          "2 years 3 months", "11 yr 4 mo"
+  const yearMatch = exp.match(/(\d+(?:\.\d+)?)\s*(?:yr|year)/i);
+  const monthMatch = exp.match(/(\d+)\s*mo/i);
+
+  let total = 0;
+  if (yearMatch) total += parseFloat(yearMatch[1]);
+  if (monthMatch) total += parseInt(monthMatch[1]) / 12;
+
+  return total > 0 ? total : null;
+}
+
+function parseTitleBandMinYears(titleBand: string | null): number | null {
+  if (!titleBand) return null;
+  const band = titleBand.toLowerCase();
+  if (band.includes("entry") || band.includes("junior")) return 0;
+  if (band.includes("mid")) return 3;
+  if (band.includes("senior")) return 5;
+  if (band.includes("staff")) return 8;
+  if (band.includes("principal")) return 12;
+  return null;
+}
+
 function buildPrefilterHaystack(
   profile: CandidateSignalProfile,
   resumeText: string,
@@ -62,13 +88,32 @@ export function classifyApplicantPrefilter(
   profile: CandidateSignalProfile,
   resumeText: string,
 ): CandidateScoringStatus {
+  // Experience floor check
+  const candidateYears = parseExperienceYears(
+    profile.total_years_experience,
+  );
+  const minYears = parseTitleBandMinYears(roleBrief.title_band);
+
   if (
-    roleBrief.title_band &&
-    profile.title_band &&
-    hasSeniorityGap(profile.title_band, roleBrief.title_band)
+    candidateYears !== null &&
+    minYears !== null &&
+    candidateYears < minYears - 1.5 // 1.5 year tolerance
   ) {
     return "low_relevance";
   }
+
+  const roleBands = roleBrief.title_bands?.length
+    ? roleBrief.title_bands
+    : roleBrief.title_band
+      ? [roleBrief.title_band]
+      : [];
+
+  const seniorityFiltered =
+    roleBands.length > 0 &&
+    profile.title_band &&
+    roleBands.every((band) => hasSeniorityGap(profile.title_band, band));
+
+  if (seniorityFiltered) return "low_relevance";
 
   if (
     isSoftwareEngineeringRole(roleBrief) &&
