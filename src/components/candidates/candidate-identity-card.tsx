@@ -5,10 +5,12 @@ import { useState } from "react";
 import { ClickableCandidateName } from "@/components/candidates/clickable-candidate-name";
 import type { OpenCandidatePanelOptions } from "@/contexts/candidate-panel-context";
 import {
-  sanitizeDisplayCompany,
-  sanitizeDisplayTitle,
+  isInvalidDisplayTitle,
+  resolveDisplayRole,
+  topSkillsForDisplay,
 } from "@/lib/candidates/candidate-identity-display";
-import type { EducationEntry } from "@/types/candidate";
+import { estimateYearsExperience } from "@/lib/candidates/parse-resume-structure";
+import type { EducationEntry, ExperienceEntry } from "@/types/candidate";
 
 // ─── Helpers (duplicated from candidate-panel-header to keep
 //     components self-contained) ──────────────────────────────
@@ -171,7 +173,10 @@ export type CandidateIdentityCardProps = {
   experienceYears?: number | null;
   location?: string | null;
   topSkills?: string[] | null;
+  skillsVerified?: Array<{ skill: string } | string> | null;
+  professionalSummary?: string | null;
   education?: EducationEntry[] | null;
+  experience?: ExperienceEntry[] | null;
   careerGaps?: Array<{ months: number }> | null;
   scoredJobTitle?: string | null;
   verdictBadge?: ReactNode;
@@ -190,16 +195,21 @@ export function CandidateIdentityCard({
   currentCompany,
   yearsExperience,
   topSkills,
+  skillsVerified,
+  professionalSummary,
   education,
+  experience,
   careerGaps,
   scoredJobTitle,
   verdictBadge,
   compact = false,
 }: CandidateIdentityCardProps) {
-  const title = sanitizeDisplayTitle(currentTitle, {
+  const { title, company } = resolveDisplayRole({
+    currentTitle,
+    currentCompany,
+    experience: experience ?? [],
     roleBriefTitle: scoredJobTitle,
   });
-  const company = sanitizeDisplayCompany(currentCompany);
 
   const roleLine =
     title && company
@@ -210,19 +220,40 @@ export function CandidateIdentityCard({
           ? company
           : null;
 
-  // Experience
+  const summaryLine =
+    !roleLine &&
+    professionalSummary?.trim() &&
+    professionalSummary.length <= 140 &&
+    !isInvalidDisplayTitle(professionalSummary)
+      ? professionalSummary.trim()
+      : null;
+
+  const subtitleLine = roleLine ?? summaryLine;
+
   const gapMonths = (careerGaps ?? []).reduce(
     (s, g) => s + (g.months ?? 0),
     0,
   );
+  let claimedYears = yearsExperience ?? null;
+  if (isMissingExperience(claimedYears ?? "") && (experience?.length ?? 0) > 0) {
+    const estimated = estimateYearsExperience(experience ?? []);
+    if (!isMissingExperience(estimated)) claimedYears = estimated;
+  }
   const { display: expDisplay, isCalculated } = calcVerifiedExperience(
     education ?? [],
     gapMonths,
-    yearsExperience ?? null,
+    claimedYears,
   );
 
-  // Skills — already density-ordered by Gemini
-  const allSkills = (topSkills ?? []).filter(Boolean);
+  const verifiedSkills = (skillsVerified ?? []).map((s) =>
+    typeof s === "string" ? { skill: s } : s,
+  );
+  const allSkills = topSkillsForDisplay(
+    topSkills,
+    verifiedSkills,
+    undefined,
+    5,
+  );
 
   // Education — highest degree
   const topEd = (education ?? []).reduce(
@@ -254,9 +285,9 @@ export function CandidateIdentityCard({
           </p>
           {verdictBadge}
         </div>
-        {roleLine && (
+        {subtitleLine && (
           <p className="mt-0.5 truncate text-[13px] text-[#334155]">
-            {roleLine}
+            {subtitleLine}
           </p>
         )}
         {expDisplay && !isMissingExperience(expDisplay) && (
@@ -307,9 +338,9 @@ export function CandidateIdentityCard({
             </span>
           </p>
         )}
-        {roleLine && (
+        {subtitleLine && (
           <p className="mt-0.5 truncate text-[13px] text-[#334155]">
-            {roleLine}
+            {subtitleLine}
           </p>
         )}
         <SkillsRow skills={allSkills} />

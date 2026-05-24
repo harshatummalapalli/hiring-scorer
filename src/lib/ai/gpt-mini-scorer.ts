@@ -89,9 +89,16 @@ type GptWatchRow = {
   evidence_basis: string;
 };
 
+type GptFitVerdict =
+  | "exceptional_match"
+  | "strong_match"
+  | "potential_match"
+  | "weak_match"
+  | "not_a_match";
+
 type GptMiniRawResponse = {
   overall_score?: number;
-  verdict?: string;
+  verdict?: GptFitVerdict;
   confidence?: string;
   confidence_reason?: string;
   dimension_scores?: Record<string, GptDimensionRow>;
@@ -305,6 +312,8 @@ Return this exact JSON schema with no preamble and no text outside the JSON:
 {
   "confidence": "high" | "medium" | "low",
   "confidence_reason": "one sentence explaining confidence from evidence (quote count, contradictions, chronology)",
+  "verdict": "exceptional_match" | "strong_match" | 
+             "potential_match" | "weak_match" | "not_a_match",
   "dimension_scores": {
     "skills": { "score": integer, "supporting_quote": "exact resume text or null", "assessment_note": "one sentence" },
     "trajectory": { "score": integer, "supporting_quote": "...", "assessment_note": "..." },
@@ -727,6 +736,15 @@ export async function scoreCandidate(
       overallScore = Math.min(overallScore, 70);
     }
   }
+
+  let verdict: GptFitVerdict;
+  const score = overallScore;
+  if (score >= 85) verdict = "exceptional_match";
+  else if (score >= 75) verdict = "strong_match";
+  else if (score >= 55) verdict = "potential_match";
+  else if (score >= 35) verdict = "weak_match";
+  else verdict = "not_a_match";
+  parsed.verdict = verdict;
 
   return mapToCandidateScoreResult(
     stripped,

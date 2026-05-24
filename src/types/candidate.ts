@@ -85,6 +85,8 @@ export type CandidateSignalProfile = {
   extracted_email?: string | null;
   extracted_phone?: string | null;
   experience_years?: number | null;
+  ingestion_source?: "gemini_parser" | "legacy_parser";
+  career_gaps?: Array<{ months: number }>;
 };
 
 export type CandidateActivityType =

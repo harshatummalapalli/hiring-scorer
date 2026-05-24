@@ -1,10 +1,41 @@
+import { isSummaryLikeTitle, isValidExperienceEntry } from "@/lib/candidates/profile-display";
 import { formatTotalExperienceDisplay } from "@/lib/candidates/format-total-experience";
-import { isSummaryLikeTitle } from "@/lib/candidates/profile-display";
+import type { ExperienceEntry } from "@/types/candidate";
 
 const SECTION_HEADER_IN_TITLE =
   /\b(?:education|post\s*graduate|postgraduate|certification|objective|summary|profile|curriculum|vitae|resume|cv|about\s*me|professional\s*summary|projects?|equinox|environment|highlights?|expertise|competencies|b\.?tech|m\.?tech|b\.?e\b|m\.?e\b|mca\b|mba\b|bca\b|b\.?sc\b|m\.?sc\b|ph\.?d\b|pgdm\b|bachelor|master|degree|diploma|graduate|undergraduate|computer\s+science|information\s+technology)\b/i;
 
 const BULLET_OR_HYPHEN_START = /^[\s•\-\*▪◦‣⁃]+/;
+
+const TITLE_ROLE_WORD =
+  /\b(?:engineer|developer|manager|director|lead|architect|analyst|consultant|specialist|administrator|designer|scientist|intern|kernel|linux|software|senior|staff|principal|head|vp|president|officer|associate|coordinator|programmer|devops|sre|qa|tester|recruiter|firmware|embedded|platform|infrastructure|security|data|cloud|systems?)\b/i;
+
+function isSentenceFragmentTitle(title: string): boolean {
+  const t = title.trim();
+  if (!t) return true;
+  if (/^(?:the|a|an)\s+[a-z]/i.test(t) && !TITLE_ROLE_WORD.test(t)) return true;
+  if (
+    !TITLE_ROLE_WORD.test(t) &&
+    t === t.toLowerCase() &&
+    t.split(/\s+/).length <= 4
+  ) {
+    return true;
+  }
+  if (/\.\s*$/.test(t) && t.length < 80 && !TITLE_ROLE_WORD.test(t)) return true;
+  if (/^(?:responsible|contributed|developed|implemented|delivered|worked|managed|built|designed)\b/i.test(t)) {
+    return true;
+  }
+  return false;
+}
+
+export function isInvalidDisplaySkill(skill: string | null | undefined): boolean {
+  const s = skill?.trim();
+  if (!s) return true;
+  if (s.length > 48) return true;
+  if (isInvalidDisplayTitle(s)) return true;
+  if (/\.\s*$/.test(s) && !TITLE_ROLE_WORD.test(s)) return true;
+  return false;
+}
 
 const RESUME_BULLET_VERB =
   /\b(?:implemented|developed|delivered|contributed|built|designed|managed|led|created|optimized|automated|maintained|worked|responsible|experience|environment|title|generation)\b/i;
@@ -62,6 +93,7 @@ export function sanitizeSubtitle(
 export function isInvalidDisplayTitle(title: string | null | undefined): boolean {
   const t = title?.trim();
   if (!t) return true;
+  if (isSentenceFragmentTitle(t)) return true;
   if (BULLET_OR_HYPHEN_START.test(t)) return true;
   if (SECTION_HEADER_IN_TITLE.test(t)) return true;
   if (GARBAGE_TITLE_AT.test(t)) return true;
@@ -110,6 +142,11 @@ export function sanitizeDisplayTitle(
   ) {
     return null;
   }
+  trimmed = trimmed
+    .replace(/\s*-\s*$/, "")
+    .replace(/(\w)-\s+(\w)/g, "$1 $2")
+    .replace(/\s{2,}/g, " ")
+    .trim();
   return trimmed;
 }
 
@@ -143,9 +180,40 @@ export function topSkillsForDisplay(
   limit = 5,
 ): string[] {
   if (topSkills?.length) {
-    return topSkills.filter(Boolean).slice(0, limit);
+    return topSkills
+      .filter((s) => !isInvalidDisplaySkill(s))
+      .slice(0, limit);
   }
-  const fromVerified = (verified ?? []).map((s) => s.skill).filter(Boolean);
-  const fromListed = listedOnly ?? [];
+  const fromVerified = (verified ?? [])
+    .map((s) => s.skill)
+    .filter((s) => !isInvalidDisplaySkill(s));
+  const fromListed = (listedOnly ?? []).filter((s) => !isInvalidDisplaySkill(s));
   return [...fromVerified, ...fromListed].slice(0, limit);
+}
+
+export function resolveDisplayRole(options: {
+  currentTitle?: string | null;
+  currentCompany?: string | null;
+  experience?: ExperienceEntry[];
+  roleBriefTitle?: string | null;
+}): { title: string | null; company: string | null } {
+  let title = sanitizeDisplayTitle(options.currentTitle, {
+    roleBriefTitle: options.roleBriefTitle,
+  });
+  let company = sanitizeDisplayCompany(options.currentCompany);
+
+  for (const role of options.experience ?? []) {
+    if (!isValidExperienceEntry(role)) continue;
+    if (title && company) break;
+    if (!title) {
+      title = sanitizeDisplayTitle(role.title, {
+        roleBriefTitle: options.roleBriefTitle,
+      });
+    }
+    if (!company) {
+      company = sanitizeDisplayCompany(role.company);
+    }
+  }
+
+  return { title, company };
 }

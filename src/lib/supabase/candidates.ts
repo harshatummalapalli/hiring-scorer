@@ -23,6 +23,7 @@ import type {
 import { normalizeSignalProfile } from "@/lib/candidates/build-signal-profile";
 import { getCandidateHeaderName } from "@/lib/candidates/profile-display";
 import {
+  resolveDisplayRole,
   sanitizeDisplayCompany,
   sanitizeDisplayTitle,
 } from "@/lib/candidates/candidate-identity-display";
@@ -63,8 +64,11 @@ function rowToCandidate(row: Record<string, unknown>): CandidateRow {
     display_name = "Unknown Candidate";
   }
 
-  const current_title = sanitizeDisplayTitle(signal_profile.current_title);
-  const current_company = sanitizeDisplayCompany(signal_profile.current_company);
+  const { title: current_title, company: current_company } = resolveDisplayRole({
+    currentTitle: signal_profile.current_title,
+    currentCompany: signal_profile.current_company,
+    experience: signal_profile.experience,
+  });
   const normalizedProfile = {
     ...signal_profile,
     display_name,

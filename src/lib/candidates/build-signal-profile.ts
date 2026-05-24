@@ -35,6 +35,7 @@ import { polishTitleAndCompany } from "./extract-resume-header";
 import { prepareSignalQuote, toStrippedResumeText } from "./resume-text";
 import { computeCoreStrengthFromVerifiedSkills } from "@/lib/intelligence/skill-domains";
 import { hashResumeContentPrefix } from "@/lib/candidates/resume-content-hash";
+import { profileFromStoredSignalProfile, shouldUseStoredSignalProfile } from "./normalize-stored-signal-profile";
 
 function skillInText(skill: string, text: string): { index: number; len: number } | null {
   const needle = skill.trim();
@@ -296,11 +297,14 @@ export function buildSignalProfile(
   };
 }
 
-/** Always re-parse resume text so list/detail stay in sync with the code parser. */
+/** Prefer persisted structured profile (Gemini ingest); fall back to legacy text parser. */
 export function normalizeSignalProfile(
-  _raw: unknown,
+  raw: unknown,
   resumeText: string,
   resumeFilename: string,
 ): CandidateSignalProfile {
+  if (shouldUseStoredSignalProfile(raw)) {
+    return profileFromStoredSignalProfile(raw, resumeText);
+  }
   return buildSignalProfile(resumeText, resumeFilename);
 }

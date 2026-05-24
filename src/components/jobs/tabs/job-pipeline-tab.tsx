@@ -13,7 +13,6 @@ import {
   X,
 } from "lucide-react";
 import { CandidateIdentityCard } from "@/components/candidates/candidate-identity-card";
-import { CoreStrengthLabel } from "@/components/candidates/core-strength-label";
 import { DuplicateWarningModal } from "@/components/candidates/duplicate-warning-modal";
 import { NotAFitModal } from "@/components/candidates/not-a-fit-modal";
 import { VerdictBadge } from "@/components/candidates/profile-shared";
@@ -806,6 +805,7 @@ export function JobPipelineTab({
             showMetaRow={false}
             enforceMinHeight
             education={c.signal_profile?.education ?? []}
+            experience={c.signal_profile?.experience ?? []}
             careerGaps={
               (
                 c.signal_profile as typeof c.signal_profile & {
@@ -823,17 +823,8 @@ export function JobPipelineTab({
                 typeof s === "string" ? s : s.skill,
               )
             }
-          />
-          <CoreStrengthLabel
-            primary={c.signal_profile.core_strength_primary}
-            secondary={c.signal_profile.core_strength_secondary}
-            topSkills={
-              (
-                c.signal_profile as typeof c.signal_profile & {
-                  top_skills?: string[];
-                }
-              ).top_skills
-            }
+            skillsVerified={c.signal_profile.skills_verified}
+            professionalSummary={c.signal_profile.professional_summary}
           />
           {showRejectionReason && c.manual_rejection_reason && (
             <span className="mt-0.5 inline-block rounded bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-600">
@@ -919,6 +910,7 @@ export function JobPipelineTab({
             scoredJobTitle={jobTitle}
             showMetaRow={false}
             education={c.signal_profile?.education ?? []}
+            experience={c.signal_profile?.experience ?? []}
             careerGaps={
               (
                 c.signal_profile as typeof c.signal_profile & {
@@ -936,10 +928,8 @@ export function JobPipelineTab({
                 typeof s === "string" ? s : s.skill,
               )
             }
-          />
-          <CoreStrengthLabel
-            primary={c.signal_profile.core_strength_primary}
-            secondary={c.signal_profile.core_strength_secondary}
+            skillsVerified={c.signal_profile.skills_verified}
+            professionalSummary={c.signal_profile.professional_summary}
           />
         </div>
         <div className="hidden shrink-0 text-sm text-slate-600 sm:block">

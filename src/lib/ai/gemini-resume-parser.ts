@@ -80,8 +80,82 @@ CURRENT TITLE AND COMPANY — strict rules:
 
 Return ONLY valid JSON. No markdown, no preamble, no backticks.`;
 
-export async function parseResumeWithGemini(
+const MAX_OUTPUT_TOKENS = 8192;
+
+function stripJsonFences(text: string): string {
+  return text
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
+}
+
+function normalizeGeminiParsedRecord(record: GeminiParsedResume): GeminiParsedResume {
+  return {
+    ...record,
+    full_name: record.full_name?.trim() || null,
+    email: record.email?.trim() || null,
+    phone: record.phone?.trim() || null,
+    linkedin_url: record.linkedin_url?.trim() || null,
+    github_url: record.github_url?.trim() || null,
+    current_title: record.current_title?.trim() || null,
+    current_company: record.current_company?.trim() || null,
+    total_years_experience: record.total_years_experience?.trim() || null,
+    location: record.location?.trim() || null,
+    career_summary: record.career_summary?.trim() || null,
+    work_history: (record.work_history ?? [])
+      .map((w) => ({
+        title: String(w.title ?? "").trim(),
+        company: String(w.company ?? "").trim(),
+        start: w.start?.trim() || null,
+        end: w.end?.trim() || null,
+        duration: w.duration?.trim() || null,
+        bullets: (w.bullets ?? []).map((b) => String(b).trim()).filter(Boolean),
+      }))
+      .filter((w) => w.title || w.company),
+    education: record.education ?? [],
+    skill_groups: (record.skill_groups ?? []).map((g) => ({
+      category: String(g.category ?? "").trim(),
+      skills: (g.skills ?? []).map((s) => String(s).trim()).filter(Boolean),
+    })),
+    career_gaps: record.career_gaps ?? [],
+  };
+}
+
+function hasUsefulParse(record: GeminiParsedResume): boolean {
+  return (
+    record.work_history.length > 0 ||
+    record.skill_groups.some((g) => g.skills.length > 0) ||
+    Boolean(record.current_title?.trim()) ||
+    Boolean(record.total_years_experience?.trim())
+  );
+}
+
+function parseGeminiResumeJson(text: string): GeminiParsedResume {
+  const cleaned = stripJsonFences(text);
+  try {
+    return normalizeGeminiParsedRecord(JSON.parse(cleaned) as GeminiParsedResume);
+  } catch {
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        return normalizeGeminiParsedRecord(
+          JSON.parse(cleaned.slice(start, end + 1)) as GeminiParsedResume,
+        );
+      } catch {
+        /* fall through */
+      }
+    }
+    throw new Error(
+      `Gemini resume parser returned invalid JSON. First 200 chars: ${text.slice(0, 200)}`,
+    );
+  }
+}
+
+async function requestGeminiParse(
   rawResumeText: string,
+  compact: boolean,
 ): Promise<GeminiParsedResume> {
   const apiKey = getApiKey("google");
   const genAI = new GoogleGenerativeAI(apiKey);
@@ -91,10 +165,20 @@ export async function parseResumeWithGemini(
     generationConfig: {
       responseMimeType: "application/json",
       temperature: 0,
+      maxOutputTokens: MAX_OUTPUT_TOKENS,
     },
   });
 
-  const prompt = `${SYSTEM_PROMPT}
+  const compactRules = compact
+    ? `
+
+Output size limits (strict):
+- Include at most 6 most recent work_history entries with max 3 bullets each
+- Keep career_summary to 2 sentences
+- Omit career_gaps if needed to produce complete valid JSON`
+    : "";
+
+  const prompt = `${SYSTEM_PROMPT}${compactRules}
 
 RESUME TEXT:
 ${rawResumeText.slice(0, 15000)}
@@ -139,18 +223,49 @@ Return a JSON object matching this exact schema:
 }`;
 
   const result = await model.generateContent(prompt);
-  const text = result.response.text().trim();
+  const response = result.response;
+  const finishReason = response.candidates?.[0]?.finishReason;
+  const text = response.text().trim();
 
-  try {
-    const clean = text
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/```$/i, "")
-      .trim();
-    return JSON.parse(clean) as GeminiParsedResume;
-  } catch {
+  if (!text) {
+    throw new Error("Gemini resume parser returned an empty response.");
+  }
+
+  if (finishReason === "MAX_TOKENS") {
     throw new Error(
-      `Gemini resume parser returned invalid JSON. First 200 chars: ${text.slice(0, 200)}`,
+      `Gemini resume parser hit the output token limit. First 200 chars: ${text.slice(0, 200)}`,
     );
   }
+
+  return parseGeminiResumeJson(text);
+}
+
+export async function parseResumeWithGemini(
+  rawResumeText: string,
+): Promise<GeminiParsedResume> {
+  let lastError: Error | null = null;
+  let lastRecord: GeminiParsedResume | null = null;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const record = await requestGeminiParse(rawResumeText, attempt === 1);
+      lastRecord = record;
+      if (hasUsefulParse(record) || attempt === 2) {
+        return record;
+      }
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      const retryable =
+        lastError.message.includes("invalid JSON") ||
+        lastError.message.includes("output token limit") ||
+        lastError.message.includes("empty response");
+      if (!retryable && attempt === 2) break;
+      if (attempt === 2 && lastRecord) return lastRecord;
+      if (attempt === 2) break;
+      await new Promise((resolve) => setTimeout(resolve, 750));
+    }
+  }
+
+  if (lastRecord) return lastRecord;
+  throw lastError ?? new Error("Gemini resume parser failed.");
 }
