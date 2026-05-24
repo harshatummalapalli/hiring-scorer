@@ -1,5 +1,16 @@
 import Imap from "imap";
 import { simpleParser } from "mailparser";
+import type { ConnectionOptions } from "tls";
+
+/** Gmail IMAP TLS. Default skips cert verify (Windows AV/proxy often breaks chain). Set GMAIL_IMAP_STRICT_TLS=true to enforce. */
+function gmailImapTlsOptions(): ConnectionOptions {
+  return {
+    host: "imap.gmail.com",
+    servername: "imap.gmail.com",
+    minVersion: "TLSv1.2",
+    rejectUnauthorized: process.env.GMAIL_IMAP_STRICT_TLS === "true",
+  };
+}
 
 export type InboundEmail = {
   messageId: string;
@@ -43,6 +54,7 @@ export async function fetchUnprocessedEmails(
       host: "imap.gmail.com",
       port: 993,
       tls: true,
+      tlsOptions: gmailImapTlsOptions(),
     });
 
     const emails: InboundEmail[] = [];
@@ -97,15 +109,44 @@ export async function fetchUnprocessedEmails(
                     }));
 
                   if (attachments.length > 0) {
+                    const headerGet = (name: string): string | undefined => {
+                      const raw = parsed.headers.get(name);
+                      if (typeof raw === "string") return raw;
+                      if (Array.isArray(raw)) return raw.join(", ");
+                      return undefined;
+                    };
+
+                    const toTexts: string[] = [];
+                    const pushAddr = (
+                      addr: typeof parsed.to | typeof parsed.cc,
+                    ) => {
+                      if (!addr) return;
+                      if (typeof addr === "string") {
+                        toTexts.push(addr);
+                        return;
+                      }
+                      if (Array.isArray(addr)) {
+                        for (const a of addr) toTexts.push(a.text);
+                        return;
+                      }
+                      toTexts.push(addr.text);
+                    };
+                    pushAddr(parsed.to);
+                    pushAddr(parsed.cc);
+                    for (const name of [
+                      "delivered-to",
+                      "x-original-to",
+                      "envelope-to",
+                    ]) {
+                      const v = headerGet(name);
+                      if (v) toTexts.push(v);
+                    }
+
                     emails.push({
                       messageId: msgId,
                       subject: parsed.subject ?? "",
                       from: parsed.from?.text ?? "",
-                      to: typeof parsed.to === "string"
-                        ? parsed.to
-                        : Array.isArray(parsed.to)
-                          ? parsed.to.map((t) => t.text).join(", ")
-                          : parsed.to?.text ?? "",
+                      to: toTexts.join(", "),
                       receivedAt: parsed.date ?? new Date(),
                       attachments,
                     });

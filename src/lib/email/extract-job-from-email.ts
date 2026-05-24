@@ -1,19 +1,29 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+const JOB_ADDRESS_RE = /apply\.kharta\+job([a-z0-9]+)@gmail\.com/i;
+const JOB_SUBJECT_RE = /job([a-z0-9]{6,})/i;
+
+function suffixFromText(text: string): string | null {
+  const match = text.match(JOB_ADDRESS_RE);
+  return match?.[1] ?? null;
+}
+
+/** Find job suffix from To/Delivered-To headers or subject line. */
 export function extractJobSuffixFromEmail(
-  toAddress: string,
+  addresses: string | string[],
   subject?: string,
 ): string | null {
-  // Primary: check To address
-  const toMatch = toAddress.match(
-    /apply\.kharta\+job([a-z0-9]+)@gmail\.com/i,
+  const hints = (Array.isArray(addresses) ? addresses : [addresses]).filter(
+    Boolean,
   );
-  if (toMatch?.[1]) return toMatch[1];
+  for (const hint of hints) {
+    const suffix = suffixFromText(hint);
+    if (suffix) return suffix;
+  }
 
-  // Fallback: check if subject contains the job suffix
-  // (for email clients that normalise the To address)
+  // Fallback: subject (some clients strip plus-addressing from To)
   if (subject) {
-    const subjectMatch = subject.match(/job([a-z0-9]{6,})/i);
+    const subjectMatch = subject.match(JOB_SUBJECT_RE);
     if (subjectMatch?.[1]) return subjectMatch[1];
   }
 

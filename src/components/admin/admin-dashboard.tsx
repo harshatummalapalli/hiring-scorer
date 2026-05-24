@@ -138,11 +138,26 @@ function EmailInboundCard() {
         error?: string;
         fetched?: number;
         queued?: number;
+        skippedNoSuffix?: number;
+        skippedUnknownJob?: number;
+        skippedUpload?: number;
       }>(res, "Gmail fetch failed");
       if (!res.ok) throw new Error(json.error ?? "Fetch failed");
-      setQueueProgress(
-        `Fetched ${json.fetched ?? 0} email(s), queued ${json.queued ?? 0} attachment(s).`,
-      );
+      const fetched = json.fetched ?? 0;
+      const queued = json.queued ?? 0;
+      let message = `Fetched ${fetched} email(s), queued ${queued} attachment(s).`;
+      if (queued === 0 && fetched > 0) {
+        if ((json.skippedNoSuffix ?? 0) > 0) {
+          message +=
+            " No job address found — emails must be sent to apply.kharta+job{id}@gmail.com (shown on each job’s pipeline tab).";
+        } else if ((json.skippedUnknownJob ?? 0) > 0) {
+          message +=
+            " Job address not recognised — check the job exists and inbound email is active.";
+        } else if ((json.skippedUpload ?? 0) > 0) {
+          message += " Storage upload failed — check Supabase resumes bucket.";
+        }
+      }
+      setQueueProgress(message);
       window.setTimeout(() => setQueueProgress(""), 5000);
       loadStats();
     } catch (err) {
@@ -217,8 +232,13 @@ function EmailInboundCard() {
       <h3 className={karta.sectionHeading}>Email Inbound — Last 24 Hours</h3>
       {!stats?.configured ? (
         <p className="mt-2 text-sm text-[#64748B]">
-          Email inbound not configured. Add GMAIL_INBOUND_USER to environment
-          variables.
+          Email inbound not configured. Add{" "}
+          <code className="text-xs">GMAIL_INBOUND_USER</code> and{" "}
+          <code className="text-xs">GMAIL_INBOUND_APP_PASSWORD</code> to{" "}
+          <code className="text-xs">.env.local</code>, save the file, restart{" "}
+          <code className="text-xs">npm run dev</code>, then refresh this page.
+          Use a Google App Password (2FA required), not your normal Gmail
+          password.
         </p>
       ) : (
         <>

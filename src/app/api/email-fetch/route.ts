@@ -54,15 +54,25 @@ export async function POST(request: Request) {
     await import("@/lib/email/extract-job-from-email");
 
   let queuedCount = 0;
+  let skippedNoSuffix = 0;
+  let skippedUnknownJob = 0;
+  let skippedUpload = 0;
 
   for (const email of emails) {
+    const suffix = extractJobSuffixFromEmail(email.to, email.subject);
+    if (!suffix) {
+      skippedNoSuffix += email.attachments.length;
+      continue;
+    }
+
+    const jobId = await resolveJobFromSuffix(suffix, adminSupabase);
+    if (!jobId) {
+      skippedUnknownJob += email.attachments.length;
+      continue;
+    }
+
     for (const attachment of email.attachments) {
       try {
-        const suffix = extractJobSuffixFromEmail(email.to, email.subject);
-        if (!suffix) continue;
-
-        const jobId = await resolveJobFromSuffix(suffix, adminSupabase);
-        if (!jobId) continue;
 
         const storagePath = `email-queue/${email.messageId
           .replace(/[^a-z0-9]/gi, "-")
@@ -80,6 +90,7 @@ export async function POST(request: Request) {
             "[email-fetch] Storage upload failed:",
             uploadError.message,
           );
+          skippedUpload += 1;
           continue;
         }
 
@@ -113,6 +124,9 @@ export async function POST(request: Request) {
   return NextResponse.json({
     fetched: emails.length,
     queued: queuedCount,
+    skippedNoSuffix,
+    skippedUnknownJob,
+    skippedUpload,
   });
   } catch (err) {
     const message =

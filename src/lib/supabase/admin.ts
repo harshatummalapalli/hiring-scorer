@@ -9,7 +9,7 @@ export function createSupabaseAdminClient(): SupabaseClient {
   const key = getSupabaseServiceRoleKey();
   if (!url.startsWith("https://") || !key.trim()) {
     throw new Error(
-      "SUPABASE_SERVICE_ROLE_KEY is missing. Add it in Vercel → Settings → Environment Variables (Supabase → Project Settings → API → service_role key).",
+      "SUPABASE_SERVICE_ROLE_KEY is missing. For local dev, add it to .env.local; for production, add it in Vercel → Settings → Environment Variables. Value: Supabase → Project Settings → API → service_role key (not the anon key).",
     );
   }
   if (!adminClient) {
