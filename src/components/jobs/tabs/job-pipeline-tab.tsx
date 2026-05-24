@@ -655,38 +655,50 @@ export function JobPipelineTab({
     const nextFiles = [...initial];
 
     try {
-      for (let i = 0; i < fileList.length; i++) {
-        const file = fileList[i];
-        nextFiles[i] = { ...nextFiles[i], status: "processing" };
-        setUploadUi({ phase: "processing", files: [...nextFiles] });
-        try {
-          const resumeText = await parseResumeFile(file);
-          await uploadOne({
-            resumeText,
-            resumeFilename: file.name,
-            resumeFile: file,
-          });
-          nextFiles[i] = { name: file.name, status: "done" };
-          successCount += 1;
-          await load({ silent: true });
-        } catch (err) {
-          if (err instanceof Error && err.message === "duplicate") {
-            nextFiles[i] = {
-              name: file.name,
-              status: "error",
-              error: "Duplicate — resolve prompt",
-            };
-          } else {
-            nextFiles[i] = {
-              name: file.name,
-              status: "error",
-              error: err instanceof Error ? err.message : "Upload failed",
-            };
-          }
-        }
-        setUploadUi({ phase: "processing", files: [...nextFiles] });
-        if (i < fileList.length - 1) {
-          await new Promise((r) => setTimeout(r, 200));
+      const BATCH_SIZE = 3;
+
+      for (let b = 0; b < fileList.length; b += BATCH_SIZE) {
+        const batch = fileList.slice(b, b + BATCH_SIZE);
+        const batchIndices = batch.map((_, j) => b + j);
+
+        await Promise.all(
+          batch.map(async (file, j) => {
+            const i = batchIndices[j];
+            nextFiles[i] = { ...nextFiles[i], status: "processing" };
+            setUploadUi({ phase: "processing", files: [...nextFiles] });
+            try {
+              const resumeText = await parseResumeFile(file);
+              await uploadOne({
+                resumeText,
+                resumeFilename: file.name,
+                resumeFile: file,
+              });
+              nextFiles[i] = { name: file.name, status: "done" };
+              successCount += 1;
+            } catch (err) {
+              if (err instanceof Error && err.message === "duplicate") {
+                nextFiles[i] = {
+                  name: file.name,
+                  status: "error",
+                  error: "Duplicate — resolve prompt",
+                };
+                return;
+              }
+              nextFiles[i] = {
+                name: file.name,
+                status: "error",
+                error:
+                  err instanceof Error ? err.message : "Upload failed",
+              };
+            }
+            setUploadUi({ phase: "processing", files: [...nextFiles] });
+          }),
+        );
+
+        if (successCount > 0) void load();
+
+        if (b + BATCH_SIZE < fileList.length) {
+          await new Promise((r) => setTimeout(r, 400));
         }
       }
 

@@ -153,34 +153,30 @@ function parseGeminiResumeJson(text: string): GeminiParsedResume {
   }
 }
 
-async function callGeminiWithRetry(
-  model: ReturnType<GoogleGenerativeAI["getGenerativeModel"]>,
-  prompt: string,
+async function callWithRetry(
+  fn: () => Promise<string>,
   maxAttempts = 3,
 ): Promise<string> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const result = await model.generateContent(prompt);
-      const text = result.response.text().trim();
-
-      // Detect non-JSON error responses from Gemini
+      const text = await fn();
       if (
+        !text.includes("{") ||
         text.startsWith("An error") ||
         text.startsWith("I'm sorry") ||
-        text.startsWith("Sorry") ||
-        !text.includes("{")
+        text.startsWith("Sorry")
       ) {
-        throw new Error(`Gemini returned non-JSON: ${text.slice(0, 100)}`);
+        throw new Error(`Non-JSON response: ${text.slice(0, 80)}`);
       }
-
       return text;
     } catch (err) {
       if (attempt === maxAttempts) throw err;
-      // Wait before retrying: 1s, 2s, 4s
-      await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+      await new Promise((r) =>
+        setTimeout(r, 800 * Math.pow(2, attempt - 1)),
+      );
     }
   }
-  throw new Error("Gemini parse failed after all retries");
+  throw new Error("All retry attempts failed");
 }
 
 async function requestGeminiParse(
@@ -211,7 +207,7 @@ Output size limits (strict):
   const prompt = `${SYSTEM_PROMPT}${compactRules}
 
 RESUME TEXT:
-${rawResumeText.slice(0, 15000)}
+${rawResumeText.slice(0, 8000)}
 
 Return a JSON object matching this exact schema:
 {
@@ -252,7 +248,9 @@ Return a JSON object matching this exact schema:
   ]
 }`;
 
-  const text = await callGeminiWithRetry(model, prompt);
+  const text = await callWithRetry(() =>
+    model.generateContent(prompt).then((r) => r.response.text().trim()),
+  );
 
   if (!text) {
     throw new Error("Gemini resume parser returned an empty response.");
