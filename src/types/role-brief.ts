@@ -100,8 +100,6 @@ export type RoleBrief = {
   application_count: number;
   auto_score_mode: AutoScoreMode;
   status: JobStatus;
-  share_token: string | null;
-  share_enabled: boolean;
   inbound_email: string | null;
   inbound_email_active: boolean;
   created_by: string | null;
@@ -405,8 +403,6 @@ export function parseRoleBriefRow(row: Record<string, unknown>): RoleBrief {
     application_count: Math.max(0, Number(row.application_count ?? 0) || 0),
     auto_score_mode: parseAutoScoreMode(row.auto_score_mode),
     status: parseJobStatus(row.status),
-    share_token: row.share_token != null ? String(row.share_token) : null,
-    share_enabled: row.share_enabled === true,
     inbound_email:
       row.inbound_email != null ? String(row.inbound_email) : null,
     inbound_email_active: row.inbound_email_active !== false,

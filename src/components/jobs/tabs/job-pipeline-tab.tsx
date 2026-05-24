@@ -844,11 +844,6 @@ export function JobPipelineTab({
             </span>
           )}
         </div>
-        <div className="hidden shrink-0 text-sm text-slate-600 sm:block">
-          {formatTotalExperienceDisplay(
-            c.signal_profile.total_years_experience,
-          )}
-        </div>
         {score && (
           <VerdictBadge
             verdict={score.verdict}

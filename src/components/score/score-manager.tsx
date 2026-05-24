@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, Loader2, Sparkles } from "lucide-react";
 import { useActiveRoleBrief } from "@/contexts/active-role-brief-context";
-import { useScoringDebug } from "@/contexts/scoring-debug-context";
 import { getErrorMessage } from "@/lib/errors";
 import {
   SCORE_ALL_READY_LABEL,
@@ -47,7 +46,6 @@ async function scoreResume(
 
 export function ScoreManager() {
   const { activeBriefId, hydrated, setActiveBrief } = useActiveRoleBrief();
-  const { appendRun } = useScoringDebug();
 
   const [allBriefs, setAllBriefs] = useState<RoleBrief[]>([]);
   const [roleBrief, setRoleBrief] = useState<RoleBrief | null>(null);
@@ -200,26 +198,17 @@ export function ScoreManager() {
 
     updateCandidate(candidate.id, { status: "scoring", error: undefined });
 
-    const startedAt = Date.now();
-
     try {
       const result = await scoreResume(
         candidate.resumeText,
         roleBrief,
         candidate.file.name,
       );
-      const durationMs = Date.now() - startedAt;
       console.log("[Hiring Scorer] Scoring complete", result);
       console.log(
         "[Hiring Scorer] Model raw JSON responses",
         result.model_raw_responses,
       );
-      appendRun({
-        candidateFilename: candidate.file.name,
-        roleBrief,
-        result,
-        durationMs,
-      });
       updateCandidate(candidate.id, {
         status: "scored",
         result,
@@ -227,12 +216,6 @@ export function ScoreManager() {
       });
     } catch (err) {
       const message = getErrorMessage(err, "Failed to score candidate");
-      appendRun({
-        candidateFilename: candidate.file.name,
-        roleBrief,
-        error: message,
-        durationMs: Date.now() - startedAt,
-      });
       updateCandidate(candidate.id, { status: "error", error: message });
       throw err;
     }

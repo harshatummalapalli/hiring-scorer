@@ -716,52 +716,6 @@ export function CandidateSlidePanel({
               {panelTab === "resume" ? (
                 <div className="space-y-4">
 
-                  {/* Contact & Identity */}
-                  <section className={`${karta.card} p-4`}>
-                    <h3 className={karta.sectionHeading}>Candidate Profile</h3>
-                    <dl className="mt-3 grid grid-cols-1 gap-y-2 text-sm sm:grid-cols-2">
-                      {candidate.application_email && (
-                        <div>
-                          <dt className="text-xs text-[#94A3B8]">Email</dt>
-                          <dd className="font-medium text-[#1E293B]">{candidate.application_email}</dd>
-                        </div>
-                      )}
-                      {candidate.application_phone && (
-                        <div>
-                          <dt className="text-xs text-[#94A3B8]">Phone</dt>
-                          <dd className="font-medium text-[#1E293B]">{candidate.application_phone}</dd>
-                        </div>
-                      )}
-                      {candidate.signal_profile?.location && (
-                        <div>
-                          <dt className="text-xs text-[#94A3B8]">Location</dt>
-                          <dd className="font-medium text-[#1E293B]">{candidate.signal_profile.location}</dd>
-                        </div>
-                      )}
-                      {candidate.signal_profile?.total_years_experience && (
-                        <div>
-                          <dt className="text-xs text-[#94A3B8]">Experience</dt>
-                          <dd className="font-medium text-[#1E293B]">{candidate.signal_profile.total_years_experience}</dd>
-                        </div>
-                      )}
-                      {candidate.linkedin_url && (
-                        <div className="sm:col-span-2">
-                          <dt className="text-xs text-[#94A3B8]">LinkedIn</dt>
-                          <dd>
-                            <a
-                              href={candidate.linkedin_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[#0D9488] hover:underline break-all text-sm"
-                            >
-                              {candidate.linkedin_url}
-                            </a>
-                          </dd>
-                        </div>
-                      )}
-                    </dl>
-                  </section>
-
                   {/* Work History */}
                   {(candidate.signal_profile?.experience?.length ?? 0) > 0 && (
                     <section className={`${karta.card} p-4`}>

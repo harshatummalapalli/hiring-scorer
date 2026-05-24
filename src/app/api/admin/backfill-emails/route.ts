@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { assertSuperAdminApi } from "@/lib/admin/api-guard";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 function generateShortId(): string {
@@ -12,6 +13,9 @@ function generateShortId(): string {
 
 export async function POST() {
   try {
+    const guard = await assertSuperAdminApi();
+    if (guard instanceof NextResponse) return guard;
+
     const supabase = createSupabaseAdminClient();
 
     const { data: briefs, error } = await supabase
@@ -64,6 +68,8 @@ export async function POST() {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const guard = await assertSuperAdminApi();
+  if (guard instanceof NextResponse) return guard;
   return POST();
 }

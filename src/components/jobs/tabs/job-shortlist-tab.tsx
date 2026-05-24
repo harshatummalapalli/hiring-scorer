@@ -72,7 +72,7 @@ function EditableCell({
       className="w-full min-h-[1.75rem] rounded px-1 py-0.5 text-left text-sm text-slate-700 hover:bg-slate-50"
     >
       {value?.trim() ? value : (
-        <span className="text-slate-400">{placeholder ?? "—"}</span>
+        <span className="text-slate-300 italic">{placeholder ?? "—"}</span>
       )}
     </button>
   );

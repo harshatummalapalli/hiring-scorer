@@ -1,10 +1,20 @@
 import { NextResponse } from "next/server";
 import { logWorkspaceActivityIfAuthed } from "@/lib/activity/log";
+import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import { insertSavedScoreWithFallback } from "@/lib/saved-scores/insert-with-fallback";
 import { sanitizeSavedScorePayload } from "@/lib/saved-scores/sanitize-save-payload";
 
 export async function POST(request: Request) {
   try {
+    const supabase = await createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentication required." },
+        { status: 401 },
+      );
+    }
+
     const raw = (await request.json()) as Record<string, unknown>;
     const payload = sanitizeSavedScorePayload(raw);
 

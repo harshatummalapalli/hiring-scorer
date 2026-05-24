@@ -21,12 +21,23 @@ export function extractPhoneFromResume(text: string): string | null {
   return null;
 }
 
-export function extractContactFromResume(text: string): {
+export function extractContactFromResume(
+  text: string,
+  signalProfile?: {
+    extracted_email?: string | null;
+    extracted_phone?: string | null;
+  },
+): {
   email: string | null;
   phone: string | null;
 } {
-  return {
-    email: extractEmailFromResume(text),
-    phone: extractPhoneFromResume(text),
-  };
+  const email =
+    extractEmailFromResume(text) ??
+    signalProfile?.extracted_email?.trim() ??
+    null;
+  const phone =
+    extractPhoneFromResume(text) ??
+    signalProfile?.extracted_phone?.trim() ??
+    null;
+  return { email, phone };
 }

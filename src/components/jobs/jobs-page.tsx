@@ -307,7 +307,7 @@ export function JobsPage() {
             <p className="mt-1 text-xs text-[#94A3B8]">
               {isUnlimitedWorkspaceCap(usage.jobs.max)
                 ? `${usage.jobs.current} jobs · ${usage.candidates.current} candidates`
-                : `${usage.jobs.current} of ${usage.jobs.max} jobs · ${usage.candidates.current} of ${usage.candidates.max} candidates`}
+                : `${usage.jobs.current} of ${usage.jobs.max} jobs · ${usage.candidates.current} candidates`}
             </p>
           )}
           <p className="mt-1 text-sm text-[#64748B]">

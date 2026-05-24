@@ -210,8 +210,8 @@ export async function addCandidateToPipeline(
   const scoreForRole = await loadScoreForRole(candidateId, roleBriefId);
   const score =
     scoreForRole ?? (await loadLatestScoreAnyRole(candidateId));
-  const contact = extractContactFromResume(candidate.resume_text);
   const profile = candidate.signal_profile;
+  const contact = extractContactFromResume(candidate.resume_text, profile);
 
   const insights = score?.score_snapshot
     ? insightsFromScoreResult(score.score_snapshot)
@@ -244,8 +244,8 @@ export async function addCandidateToPipeline(
     role_brief_id: roleBriefId,
     candidate_id: candidateId,
     candidate_name: displayName,
-    email: contact.email,
-    phone: contact.phone,
+    email: contact.email ?? profile.extracted_email ?? null,
+    phone: contact.phone ?? profile.extracted_phone ?? null,
     location: profile.location,
     fit_score: fit_score != null ? Math.round(fit_score) : null,
     fit_verdict,

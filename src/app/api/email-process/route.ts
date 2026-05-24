@@ -19,26 +19,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
 
-  const parserBase = process.env.RESUME_PARSER_URL ?? "";
-  if (!parserBase) {
-    return NextResponse.json({
-      processed: 0,
-      message: "Parser URL not configured",
-    });
-  }
-
-  try {
-    const health = await fetch(`${parserBase}/health`, {
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!health.ok) throw new Error("Not healthy");
-  } catch {
-    return NextResponse.json({
-      processed: 0,
-      message: "Parser not ready — will retry next run",
-    });
-  }
-
   const adminSupabase = createSupabaseAdminClient();
 
   const { data: item, error } = await adminSupabase
@@ -103,12 +83,13 @@ export async function POST(request: Request) {
     const candidate = await insertApplicationCandidate(
       {
         display_name: ingested.signalProfile.display_name,
-        resume_text: ingested.resumeText,
+        resume_text: ingested.strippedResumeText,
         resume_filename: item.attachment_filename,
         signal_profile: ingested.signalProfile,
         source: "email_inbound",
         job_id: item.job_id,
-        application_email: item.sender_email ?? null,
+        application_email: ingested.signalProfile.extracted_email,
+        application_phone: ingested.signalProfile.extracted_phone,
         scoring_status: "unscored",
         activity: [
           createActivity("added", "Added via inbound email"),

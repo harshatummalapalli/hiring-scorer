@@ -95,6 +95,11 @@ function initialsFromName(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+function isMissingExperience(display: string): boolean {
+  const trimmed = display.trim();
+  return !trimmed || /^not\s+stated$/i.test(trimmed);
+}
+
 function SkillsRow({ skills }: { skills: string[] }) {
   const [expanded, setExpanded] = useState(false);
   if (!skills.length) return null;
@@ -254,7 +259,7 @@ export function CandidateIdentityCard({
             {roleLine}
           </p>
         )}
-        {expDisplay && (
+        {expDisplay && !isMissingExperience(expDisplay) && (
           <p className="mt-0.5 text-[12px] font-semibold text-[#0D9488]">
             {expDisplay}
             <span className="ml-1 font-normal text-[#94A3B8]">
@@ -294,7 +299,7 @@ export function CandidateIdentityCard({
           </p>
           {verdictBadge}
         </div>
-        {expDisplay && (
+        {expDisplay && !isMissingExperience(expDisplay) && (
           <p className="mt-0.5 text-[12px] font-semibold text-[#0D9488]">
             {expDisplay}
             <span className="ml-1 font-normal text-[#94A3B8]">
