@@ -3,6 +3,8 @@ import { requireSuperAdmin } from "@/lib/admin/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 function isCronAuthorised(request: Request): boolean {
   const secret = process.env.CRON_SECRET ?? "";
@@ -12,22 +14,23 @@ function isCronAuthorised(request: Request): boolean {
 }
 
 export async function POST(request: Request) {
-  if (!isCronAuthorised(request)) {
-    try {
-      await requireSuperAdmin();
-    } catch {
-      return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+  try {
+    if (!isCronAuthorised(request)) {
+      try {
+        await requireSuperAdmin();
+      } catch {
+        return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+      }
     }
-  }
 
-  if (!process.env.GMAIL_INBOUND_USER || !process.env.GMAIL_INBOUND_APP_PASSWORD) {
-    return NextResponse.json(
-      { error: "Gmail inbound not configured" },
-      { status: 503 },
-    );
-  }
+    if (!process.env.GMAIL_INBOUND_USER || !process.env.GMAIL_INBOUND_APP_PASSWORD) {
+      return NextResponse.json(
+        { error: "Gmail inbound not configured" },
+        { status: 503 },
+      );
+    }
 
-  const adminSupabase = createSupabaseAdminClient();
+    const adminSupabase = createSupabaseAdminClient();
 
   const { data: queued } = await adminSupabase
     .from("email_queue")
@@ -111,4 +114,10 @@ export async function POST(request: Request) {
     fetched: emails.length,
     queued: queuedCount,
   });
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Email fetch failed";
+    console.error("[email-fetch]", err);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

@@ -5,6 +5,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { insertApplicationCandidate } from "@/lib/supabase/candidates";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 export const maxDuration = 60;
 
 function isCronAuthorised(request: Request): boolean {

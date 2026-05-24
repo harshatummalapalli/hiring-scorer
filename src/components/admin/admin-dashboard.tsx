@@ -47,6 +47,30 @@ function formatDate(iso: string | null): string {
   });
 }
 
+async function readJsonResponse<T extends Record<string, unknown>>(
+  res: Response,
+  fallbackError: string,
+): Promise<T> {
+  const contentType = res.headers.get("content-type") ?? "";
+  const text = await res.text();
+  if (!text.trim()) {
+    throw new Error(
+      `${fallbackError} (HTTP ${res.status}: empty response). Check server logs.`,
+    );
+  }
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      text.trim().slice(0, 200) ||
+        `${fallbackError} (HTTP ${res.status}: non-JSON response).`,
+    );
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`${fallbackError}: invalid JSON from server.`);
+  }
+}
+
 function MetricCard({
   label,
   value,
@@ -110,11 +134,11 @@ function EmailInboundCard() {
     setQueueProgress("");
     try {
       const res = await fetch("/api/email-fetch", { method: "POST" });
-      const json = (await res.json()) as {
+      const json = await readJsonResponse<{
         error?: string;
         fetched?: number;
         queued?: number;
-      };
+      }>(res, "Gmail fetch failed");
       if (!res.ok) throw new Error(json.error ?? "Fetch failed");
       setQueueProgress(
         `Fetched ${json.fetched ?? 0} email(s), queued ${json.queued ?? 0} attachment(s).`,
@@ -136,9 +160,13 @@ function EmailInboundCard() {
     let hadError = false;
     try {
       const statsRes = await fetch("/api/admin/email-log");
-      const freshStats = (await statsRes.json()) as {
+      const freshStats = await readJsonResponse<{
         queuePending?: number;
-      };
+        error?: string;
+      }>(statsRes, "Failed to load queue stats");
+      if (!statsRes.ok) {
+        throw new Error(freshStats.error ?? "Failed to load queue stats");
+      }
       let remaining = freshStats.queuePending ?? 0;
       setStats((prev) =>
         prev ? { ...prev, queuePending: remaining } : prev,
@@ -153,19 +181,19 @@ function EmailInboundCard() {
       while (true) {
         setQueueProgress(`Processing... (${remaining} remaining)`);
         const res = await fetch("/api/email-process", { method: "POST" });
-        const json = (await res.json()) as {
+        const json = await readJsonResponse<{
           processed?: number;
           error?: string;
-        };
+        }>(res, "Queue processing failed");
         if (!res.ok) {
           throw new Error(json.error ?? "Failed to process queue item");
         }
         if ((json.processed ?? 0) === 0) break;
 
         const statsRes = await fetch("/api/admin/email-log");
-        const statsJson = (await statsRes.json()) as {
+        const statsJson = await readJsonResponse<{
           queuePending?: number;
-        };
+        }>(statsRes, "Failed to refresh queue stats");
         remaining = statsJson.queuePending ?? 0;
         setStats((prev) =>
           prev ? { ...prev, queuePending: remaining } : prev,
