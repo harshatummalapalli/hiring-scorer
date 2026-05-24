@@ -16,7 +16,11 @@ function isCronAuthorised(request: Request): boolean {
 
 export async function POST(request: Request) {
   if (!isCronAuthorised(request)) {
-    return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+    try {
+      await requireSuperAdmin();
+    } catch {
+      return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+    }
   }
 
   const adminSupabase = createSupabaseAdminClient();

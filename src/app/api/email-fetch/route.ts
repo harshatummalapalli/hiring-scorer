@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   for (const email of emails) {
     for (const attachment of email.attachments) {
       try {
-        const suffix = extractJobSuffixFromEmail(email.to);
+        const suffix = extractJobSuffixFromEmail(email.to, email.subject);
         if (!suffix) continue;
 
         const jobId = await resolveJobFromSuffix(suffix, adminSupabase);
@@ -81,7 +81,10 @@ export async function POST(request: Request) {
               storage_path: storagePath,
               status: "pending",
             },
-            { onConflict: "message_id", ignoreDuplicates: true },
+            {
+              onConflict: "storage_path",
+              ignoreDuplicates: true,
+            },
           );
 
         if (!insertError) queuedCount++;

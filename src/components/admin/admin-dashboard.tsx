@@ -76,6 +76,8 @@ function EmailInboundCard() {
     queueDone?: number;
   } | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [processingQueue, setProcessingQueue] = useState(false);
+  const [queueProgress, setQueueProgress] = useState("");
 
   const loadStats = useCallback(() => {
     void fetch("/api/admin/email-log")
@@ -99,6 +101,47 @@ function EmailInboundCard() {
       console.error(err);
     } finally {
       setRetrying(false);
+    }
+  };
+
+  const processEmailQueue = async () => {
+    setProcessingQueue(true);
+    setQueueProgress("");
+    let hadError = false;
+    try {
+      let remaining = stats?.queuePending ?? 0;
+      while (true) {
+        setQueueProgress(`Processing... (${remaining} remaining)`);
+        const res = await fetch("/api/email-process", { method: "POST" });
+        const json = (await res.json()) as {
+          processed?: number;
+          error?: string;
+        };
+        if (!res.ok) {
+          throw new Error(json.error ?? "Failed to process queue item");
+        }
+        if ((json.processed ?? 0) === 0) break;
+
+        const statsRes = await fetch("/api/admin/email-log");
+        const statsJson = (await statsRes.json()) as {
+          queuePending?: number;
+        };
+        remaining = statsJson.queuePending ?? 0;
+        setStats((prev) =>
+          prev ? { ...prev, queuePending: remaining } : prev,
+        );
+      }
+      loadStats();
+    } catch (err) {
+      hadError = true;
+      console.error(err);
+      const message =
+        err instanceof Error ? err.message : "Queue processing failed";
+      setQueueProgress(message);
+      window.setTimeout(() => setQueueProgress(""), 5000);
+    } finally {
+      setProcessingQueue(false);
+      if (!hadError) setQueueProgress("");
     }
   };
 
@@ -144,27 +187,48 @@ function EmailInboundCard() {
               </dd>
             </div>
           </dl>
-          <p
-            className={`mt-4 text-sm ${
-              (stats.queueFailed ?? 0) > 0
-                ? "text-red-600"
-                : "text-[#64748B]"
-            }`}
-          >
-            Queue: {stats.queuePending ?? 0} pending ·{" "}
-            {stats.queueDone ?? 0} processed today ·{" "}
-            {stats.queueFailed ?? 0} failed
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <p
+              className={`text-sm ${
+                (stats.queueFailed ?? 0) > 0
+                  ? "text-red-600"
+                  : "text-[#64748B]"
+              }`}
+            >
+              Queue: {stats.queuePending ?? 0} pending ·{" "}
+              {stats.queueDone ?? 0} processed today ·{" "}
+              {stats.queueFailed ?? 0} failed
+            </p>
+            <button
+              type="button"
+              onClick={() => void processEmailQueue()}
+              disabled={
+                processingQueue ||
+                retrying ||
+                (stats.queuePending ?? 0) === 0
+              }
+              className="rounded-lg bg-[#0D9488] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#0f766e] disabled:opacity-60"
+            >
+              {processingQueue ? queueProgress || "Processing…" : "Process Email Queue"}
+            </button>
             {(stats.queueFailed ?? 0) > 0 && (
               <button
                 type="button"
                 onClick={() => void retryFailed()}
-                disabled={retrying}
-                className="ml-3 rounded border border-red-300 bg-white px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
+                disabled={retrying || processingQueue}
+                className="rounded border border-red-300 bg-white px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
               >
                 {retrying ? "Retrying…" : "Retry failed"}
               </button>
             )}
-          </p>
+          </div>
+          {queueProgress &&
+            !processingQueue &&
+            !queueProgress.startsWith("Processing") && (
+              <p className="mt-2 text-sm text-red-600" role="alert">
+                {queueProgress}
+              </p>
+            )}
         </>
       )}
     </section>
