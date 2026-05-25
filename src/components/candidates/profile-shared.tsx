@@ -29,6 +29,8 @@ export function VerdictBadge({
   score,
   showScore,
   animateIn = true,
+  preliminary = false,
+  scoreAnimate = false,
 }: {
   verdict: string | null | undefined;
   score?: number | null;
@@ -36,6 +38,10 @@ export function VerdictBadge({
   showScore?: boolean;
   /** Play entrance animation when badge mounts with a verdict */
   animateIn?: boolean;
+  /** Show "Preliminary" label under the badge (local pre-score before GPT) */
+  preliminary?: boolean;
+  /** Animate score number when GPT score replaces pre-score */
+  scoreAnimate?: boolean;
 }) {
   if (!verdict) {
     return (
@@ -46,13 +52,25 @@ export function VerdictBadge({
   const shadow = verdictBadgeShadow(verdict);
 
   return (
-    <span
-      className={`${VERDICT_BADGE_BASE} ${verdictBadgeClass(verdict)} ${shadow} ${
-        animateIn ? "verdict-badge-enter" : ""
-      }`}
-    >
-      {verdictLabel(verdict)}
-      {score != null && showScore ? ` ${score}` : null}
+    <span className="inline-flex flex-col items-end gap-0.5">
+      <span
+        className={`${VERDICT_BADGE_BASE} ${verdictBadgeClass(verdict)} ${shadow} ${
+          animateIn ? "verdict-badge-enter" : ""
+        }`}
+      >
+        {verdictLabel(verdict)}
+        {score != null && showScore ? (
+          <span
+            key={score}
+            className={scoreAnimate ? "verdict-score-update" : undefined}
+          >
+            {` ${score}`}
+          </span>
+        ) : null}
+      </span>
+      {preliminary ? (
+        <span className="text-[10px] text-slate-400">Preliminary</span>
+      ) : null}
     </span>
   );
 }

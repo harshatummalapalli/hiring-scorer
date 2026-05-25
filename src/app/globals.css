@@ -137,6 +137,26 @@ h4,
   animation: verdict-badge-enter 250ms ease-out forwards;
 }
 
+@keyframes verdict-score-update {
+  0% {
+    opacity: 0.4;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.verdict-score-update {
+  display: inline-block;
+  animation: verdict-score-update 400ms ease-out forwards;
+}
+
 /* Page fade */
 @keyframes page-fade-in {
   from {

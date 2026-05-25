@@ -37,6 +37,8 @@ import {
 import type { CandidateListItem } from "@/types/candidate";
 import type { Job } from "@/types/job";
 import type { FitVerdict } from "@/types/score";
+import { scoreToVerdict } from "@/lib/scoring/recruiter-card";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 type JobPipelineTabProps = {
   jobId: string;
@@ -137,6 +139,25 @@ function matchesVerdict(
   verdict: FitVerdict,
 ): boolean {
   return pipelineVerdictForRole(c, jobId) === verdict;
+}
+
+function pipelineDisplayScore(
+  c: CandidateListItem,
+  jobId: string,
+): {
+  gptScore: number | null;
+  displayScore: number | null;
+  verdict: FitVerdict | null;
+  isPreliminary: boolean;
+} {
+  const roleScore = getScoreForRole(c, jobId);
+  const gptScore = roleScore?.overall_score ?? null;
+  const displayScore = gptScore ?? c.pre_score ?? null;
+  const verdict =
+    roleScore?.verdict ??
+    (displayScore != null ? scoreToVerdict(displayScore) : null);
+  const isPreliminary = gptScore == null && c.pre_score != null;
+  return { gptScore, displayScore, verdict, isPreliminary };
 }
 
 export function JobPipelineTab({
@@ -281,38 +302,53 @@ export function JobPipelineTab({
     return () => window.removeEventListener("karta:candidate-updated", handler);
   }, []);
 
-  const [pollingActive, setPollingActive] = useState(false);
+  const showEvaluatingIndicator = useMemo(
+    () =>
+      candidates.some(
+        (c) =>
+          c.scoring_status === "unscored" ||
+          (c.scoring_status as string) === "evaluating",
+      ) ||
+      scoringId != null ||
+      batchEvaluating,
+    [candidates, scoringId, batchEvaluating],
+  );
 
   useEffect(() => {
-    const hasPending = candidates.some(
-      (c) =>
-        c.scoring_status === "unscored" ||
-        c.scoring_status === "needs_scoring",
-    );
-    setPollingActive(hasPending);
-  }, [candidates]);
+    const supabase = createSupabaseBrowserClient();
 
-  useEffect(() => {
-    if (!pollingActive) return;
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/jobs/${jobId}/candidates`);
-        if (!res.ok) return;
-        const json = await res.json();
-        const updated = json.candidates as CandidateListItem[];
-        setCandidates(updated);
-        const stillPending = updated.some(
-          (c) =>
-            c.scoring_status === "unscored" ||
-            c.scoring_status === "needs_scoring",
-        );
-        if (!stillPending) setPollingActive(false);
-      } catch {
-        // best-effort polling
-      }
-    }, 8000);
-    return () => clearInterval(interval);
-  }, [pollingActive, jobId]);
+    const channel = supabase
+      .channel(`pipeline-${jobId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "candidates",
+          filter: `job_id=eq.${jobId}`,
+        },
+        () => {
+          void load({ silent: true });
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "candidates",
+          filter: `job_id=eq.${jobId}`,
+        },
+        () => {
+          void load({ silent: true });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [jobId, load]);
 
   const groups = useMemo(() => {
     const ex = (c: CandidateListItem) =>
@@ -781,7 +817,8 @@ export function JobPipelineTab({
     showRejectionReason = false,
     flatMode = false,
   ) => {
-    const score = getScoreForRole(c, jobId);
+    const { gptScore, displayScore, verdict, isPreliminary } =
+      pipelineDisplayScore(c, jobId);
     const isSelected = selected.has(c.id);
 
     return (
@@ -853,11 +890,14 @@ export function JobPipelineTab({
             </span>
           )}
         </div>
-        {score && (
+        {displayScore != null && verdict && (
           <VerdictBadge
-            verdict={score.verdict}
-            score={score.overall_score}
+            verdict={verdict}
+            score={displayScore}
             showScore
+            preliminary={isPreliminary}
+            animateIn={!isPreliminary}
+            scoreAnimate={gptScore != null}
           />
         )}
         <div
@@ -889,6 +929,8 @@ export function JobPipelineTab({
   };
 
   const renderPendingRow = (c: CandidateListItem) => {
+    const { gptScore, displayScore, verdict, isPreliminary } =
+      pipelineDisplayScore(c, jobId);
     const isEvaluating = scoringId === c.id;
     const isSelected = selected.has(c.id);
 
@@ -955,6 +997,15 @@ export function JobPipelineTab({
             c.signal_profile.total_years_experience,
           )}
         </div>
+        {displayScore != null && verdict && (
+          <VerdictBadge
+            verdict={verdict}
+            score={displayScore}
+            showScore
+            preliminary={isPreliminary}
+            animateIn={false}
+          />
+        )}
         {isEvaluating ? (
           <span className="inline-flex items-center gap-2 text-sm text-[#64748B]">
             <Loader2 className="h-4 w-4 animate-spin text-[#0D9488]" />
@@ -1006,7 +1057,7 @@ export function JobPipelineTab({
         >
           <span className="inline-flex flex-wrap items-center gap-2">
             {meta.label} · {items.length}
-            {key === "pending" && pollingActive && (
+            {key === "pending" && showEvaluatingIndicator && (
               <span className="inline-flex items-center gap-1 text-xs font-normal text-[#64748B]">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-teal-500" />
                 Evaluating…
@@ -1210,7 +1261,7 @@ export function JobPipelineTab({
         </div>
       ) : (
         <div className={`${karta.card} overflow-hidden`}>
-          {pollingActive && (
+          {showEvaluatingIndicator && (
             <div className="flex items-center gap-2 border-b border-[#F1F5F9] px-4 py-2 text-xs text-[#64748B]">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-teal-500" />
               Evaluating candidates — scores updating automatically

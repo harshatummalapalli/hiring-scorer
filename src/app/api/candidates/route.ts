@@ -12,6 +12,7 @@ import {
 } from "@/lib/candidates/github-enrichment";
 import { classifyApplicantPrefilter } from "@/lib/jobs/applicant-prefilter";
 import { triggerAutoEvaluation } from "@/lib/scoring/evaluation-queue";
+import { computeLocalPreScore } from "@/lib/scoring/local-pre-score";
 import { getCandidateHeaderName } from "@/lib/candidates/profile-display";
 import { createActivity } from "@/lib/candidates/activity";
 import { normalizeResumeText } from "@/lib/resume/normalize-resume-text";
@@ -22,7 +23,7 @@ import {
 } from "@/lib/supabase/candidates";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import { limitErrorResponse } from "@/lib/workspace/limits";
-import { parseRoleBriefRow } from "@/types/role-brief";
+import { parseRoleBriefRow, type RoleBrief } from "@/types/role-brief";
 import type { CandidateScoringStatus } from "@/types/job";
 
 export const maxDuration = 60;
@@ -194,6 +195,7 @@ export async function POST(request: Request) {
     const source = body.source?.trim() || (jobId ? "uploaded" : "uploaded");
 
     let scoringStatus: CandidateScoringStatus | undefined;
+    let roleBrief: RoleBrief | null = null;
     if (jobId) {
       const supabase = await createSupabaseServerClient();
       const { data: briefRow } = await supabase
@@ -202,7 +204,7 @@ export async function POST(request: Request) {
         .eq("id", jobId)
         .maybeSingle();
       if (briefRow) {
-        const roleBrief = parseRoleBriefRow(briefRow as Record<string, unknown>);
+        roleBrief = parseRoleBriefRow(briefRow as Record<string, unknown>);
         scoringStatus = classifyApplicantPrefilter(
           roleBrief,
           profile,
@@ -272,6 +274,14 @@ export async function POST(request: Request) {
     }
 
     if (scoringStatus === "unscored" && jobId) {
+      if (roleBrief) {
+        const preScore = computeLocalPreScore(profile, roleBrief);
+        const supabase = await createSupabaseServerClient();
+        await supabase
+          .from("candidates")
+          .update({ pre_score: preScore })
+          .eq("id", id);
+      }
       void triggerAutoEvaluation(id, jobId, request);
     }
 

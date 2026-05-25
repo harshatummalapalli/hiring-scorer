@@ -10,8 +10,12 @@ create table if not exists public.candidates (
   tag text,
   activity jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  pre_score integer
 );
+
+alter table public.candidates
+  add column if not exists pre_score integer;
 
 create index if not exists candidates_display_name_idx
   on public.candidates (lower(display_name));

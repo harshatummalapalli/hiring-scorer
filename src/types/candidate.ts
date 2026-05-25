@@ -148,6 +148,7 @@ export type CandidateRow = {
   manually_rejected_at: string | null;
   manually_rejected_by: string | null;
   linkedin_url: string | null;
+  pre_score: number | null;
   created_at: string;
   updated_at: string;
 };

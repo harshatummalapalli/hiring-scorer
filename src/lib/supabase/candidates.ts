@@ -113,6 +113,10 @@ function rowToCandidate(row: Record<string, unknown>): CandidateRow {
     manually_rejected_by:
       row.manually_rejected_by != null ? String(row.manually_rejected_by) : null,
     linkedin_url: row.linkedin_url != null ? String(row.linkedin_url) : null,
+    pre_score:
+      row.pre_score != null && !Number.isNaN(Number(row.pre_score))
+        ? Number(row.pre_score)
+        : null,
     resume_file_path:
       row.resume_file_path != null ? String(row.resume_file_path) : null,
     resume_file_name:
