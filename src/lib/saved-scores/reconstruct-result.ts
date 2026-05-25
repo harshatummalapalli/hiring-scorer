@@ -10,7 +10,7 @@ import {
   CONFIDENCE_LABEL_REVIEW,
   toRecruiterConfidenceLabel,
 } from "@/lib/scoring/recruiter-labels";
-import { AGREEMENT_THRESHOLD } from "@/lib/ai/agreement-threshold";
+import { AGREEMENT_THRESHOLD } from "@/lib/saved-scores/legacy-types";
 import { buildFallbackRecruiterCard } from "@/lib/scoring/recruiter-card";
 import type { SavedScoreRow } from "@/types/saved-score";
 

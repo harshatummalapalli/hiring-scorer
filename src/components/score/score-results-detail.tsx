@@ -4,7 +4,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   Eye,
-  Users,
 } from "lucide-react";
 import type { RoleBrief } from "@/types/role-brief";
 import type {
@@ -13,10 +12,6 @@ import type {
   DimensionKey,
 } from "@/types/score";
 import { toRecruiterConfidenceLabel } from "@/lib/scoring/recruiter-labels";
-import {
-  MODEL_CONSENSUS_DESCRIPTION,
-  MODEL_ROLE_LABELS,
-} from "@/types/score";
 import { DimensionBreakdown } from "./dimension-breakdown";
 import { ModelRawResponsesPanel } from "./model-raw-responses";
 import { SkillsIntelligencePanel } from "./skills-intelligence-panel";
@@ -44,7 +39,7 @@ function weightFor(key: DimensionKey, brief: RoleBrief): number {
   }[key];
 }
 
-/** Power-user breakdown: dimensions, models, raw signals. */
+/** Power-user breakdown: dimensions, scoring detail, raw response. */
 export function ScoreResultsDetail({
   result,
   roleBrief,
@@ -77,18 +72,10 @@ export function ScoreResultsDetail({
         <SkillsIntelligencePanel intelligence={result.skills_intelligence} />
       )}
 
-      <section className="rounded-lg border border-slate-100 bg-slate-50 p-4">
-        <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800">
-          <Users className="h-4 w-4" aria-hidden />
-          Evaluator pipeline
-        </h3>
-        <p className="text-xs text-slate-600">{MODEL_CONSENSUS_DESCRIPTION}</p>
-        <ul className="mt-2 space-y-0.5 text-xs text-slate-500">
-          <li>{MODEL_ROLE_LABELS.gemini}</li>
-          <li>{MODEL_ROLE_LABELS.claude}</li>
-          <li>{MODEL_ROLE_LABELS.gpt4o}</li>
-        </ul>
-      </section>
+      <p className="text-xs text-slate-600">
+        Scored with GPT-4o mini in one pass against your active role brief
+        (structured JSON, temperature 0).
+      </p>
 
       {result.dissent_signals.length > 0 && (
         <section className="rounded-lg border border-amber-200 bg-amber-50 p-4">
@@ -156,27 +143,11 @@ export function ScoreResultsDetail({
 
       {result.review_recommended && (
         <section className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-          <p className="font-medium">What each model flagged</p>
-          <ul className="mt-2 space-y-2 text-xs">
-            <li>
-              <strong>{MODEL_ROLE_LABELS.gemini} — watch signals:</strong>{" "}
-              {(result.model_flags.gemini?.watch_signals.length ?? 0) > 0
-                ? (result.model_flags.gemini?.watch_signals ?? []).join("; ")
-                : "No watch signals"}
-            </li>
-            <li>
-              <strong>{MODEL_ROLE_LABELS.claude} — risks:</strong>{" "}
-              {result.model_flags.claude?.risks.join("; ") || "None"}
-            </li>
-            <li>
-              <strong>{MODEL_ROLE_LABELS.claude} — gaps:</strong>{" "}
-              {result.model_flags.claude?.gaps.join("; ") || "None"}
-            </li>
-            <li>
-              <strong>{MODEL_ROLE_LABELS.gpt4o} — insufficient data:</strong>{" "}
-              {result.model_flags.gpt4o.insufficient.join(", ") || "None"}
-            </li>
-          </ul>
+          <p className="font-medium">Human review recommended</p>
+          <p className="mt-1 text-xs">
+            GPT-4o mini reported lower confidence on this match. Use the green
+            flags, watch signals, and review flags above before deciding.
+          </p>
         </section>
       )}
     </div>

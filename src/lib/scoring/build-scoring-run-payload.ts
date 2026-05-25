@@ -1,8 +1,5 @@
 import { FIXED_MODEL_CONFIGURATION } from "@/lib/config/model-configuration";
-import {
-  configurationLabelFromRoles,
-  PROVIDER_LABELS,
-} from "@/lib/scoring/provider-labels";
+import { PROVIDER_LABELS } from "@/lib/scoring/provider-labels";
 import type {
   ScoringRunConfidenceLevels,
   ScoringRunDimensionScores,
@@ -95,31 +92,5 @@ export function buildScoringRunPayloadFromResult(
     per_model_scores,
     confidence_levels,
     spreads,
-  };
-}
-
-export function buildManualScoringRunPayload(input: {
-  candidate_filename: string;
-  scenario_label: string;
-  model_extractor: string;
-  model_advocate: string;
-  model_scorer: string;
-  overall_score: number;
-  dimension_scores?: ScoringRunDimensionScores | null;
-  per_model_scores?: ScoringRunPerModelScores | null;
-  confidence_levels?: ScoringRunConfidenceLevels | null;
-  spreads?: ScoringRunSpreads | null;
-}): ScoringRunInsert {
-  return {
-    candidate_filename: input.candidate_filename.trim(),
-    scenario_label: input.scenario_label.trim(),
-    model_extractor: input.model_extractor.trim(),
-    model_advocate: input.model_advocate.trim(),
-    model_scorer: input.model_scorer.trim(),
-    overall_score: Math.round(input.overall_score),
-    dimension_scores: input.dimension_scores ?? null,
-    per_model_scores: input.per_model_scores ?? null,
-    confidence_levels: input.confidence_levels ?? null,
-    spreads: input.spreads ?? null,
   };
 }
