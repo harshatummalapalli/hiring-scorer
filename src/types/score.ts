@@ -130,6 +130,11 @@ export type {
 
 export type CandidateScoreResult = {
   overall_score: number;
+  profile_classification?: {
+    primary_type: string;
+    ai_depth: "native" | "applied" | "peripheral" | "none";
+    lean_summary: string;
+  } | null;
   /** Shown in UI when must-have deal breakers were missing and score was capped down. */
   deal_breaker_warning?: string | null;
   /** True when overall used provisional scores for one or more dimensions. */

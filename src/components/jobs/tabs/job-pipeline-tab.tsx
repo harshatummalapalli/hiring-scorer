@@ -420,6 +420,39 @@ export function JobPipelineTab({
     };
   }, [candidates, jobId, pipelineIds, optimisticShortlistedIds]);
 
+  const verdictCounts = useMemo(
+    () => ({
+      exceptional: groups.exceptionalMatch.filter(
+        (c) => !isExcluded(c, pipelineIds, optimisticShortlistedIds),
+      ).length,
+      strong: groups.strongMatch.filter(
+        (c) => !isExcluded(c, pipelineIds, optimisticShortlistedIds),
+      ).length,
+      potential: groups.potentialMatch.filter(
+        (c) => !isExcluded(c, pipelineIds, optimisticShortlistedIds),
+      ).length,
+      pending: groups.pendingEvaluation.filter(
+        (c) => !isExcluded(c, pipelineIds, optimisticShortlistedIds),
+      ).length,
+      weak: groups.weakMatch.filter(
+        (c) => !isExcluded(c, pipelineIds, optimisticShortlistedIds),
+      ).length,
+      notAMatch: groups.notAMatch.filter(
+        (c) => !isExcluded(c, pipelineIds, optimisticShortlistedIds),
+      ).length,
+    }),
+    [groups, pipelineIds, optimisticShortlistedIds],
+  );
+
+  const totalScored =
+    verdictCounts.exceptional +
+    verdictCounts.strong +
+    verdictCounts.potential +
+    verdictCounts.weak +
+    verdictCounts.notAMatch;
+
+  const totalAll = totalScored + verdictCounts.pending;
+
   const flatList = useMemo(() => {
     const ex = (c: CandidateListItem) =>
       isExcluded(c, pipelineIds, optimisticShortlistedIds);
@@ -1090,6 +1123,67 @@ export function JobPipelineTab({
 
   return (
     <div className="space-y-6 pb-24">
+      {totalAll > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+          {verdictCounts.exceptional > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-violet-400" />
+              <span className="font-medium text-[#1E293B]">
+                {verdictCounts.exceptional}
+              </span>
+              <span className="text-[#64748B]">Exceptional</span>
+            </span>
+          )}
+          {verdictCounts.strong > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              <span className="font-medium text-[#1E293B]">
+                {verdictCounts.strong}
+              </span>
+              <span className="text-[#64748B]">Strong</span>
+            </span>
+          )}
+          {verdictCounts.potential > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-amber-400" />
+              <span className="font-medium text-[#1E293B]">
+                {verdictCounts.potential}
+              </span>
+              <span className="text-[#64748B]">Potential</span>
+            </span>
+          )}
+          {verdictCounts.pending > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-slate-300" />
+              <span className="font-medium text-[#1E293B]">
+                {verdictCounts.pending}
+              </span>
+              <span className="text-[#64748B]">Evaluating</span>
+            </span>
+          )}
+          {verdictCounts.weak > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-orange-300" />
+              <span className="font-medium text-[#64748B]">
+                {verdictCounts.weak}
+              </span>
+              <span className="text-[#94A3B8]">Weak</span>
+            </span>
+          )}
+          {verdictCounts.notAMatch > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-red-300" />
+              <span className="font-medium text-[#64748B]">
+                {verdictCounts.notAMatch}
+              </span>
+              <span className="text-[#94A3B8]">Not a match</span>
+            </span>
+          )}
+          <span className="ml-auto text-xs text-[#94A3B8]">
+            {totalScored} of {totalAll} evaluated
+          </span>
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex items-center rounded-lg border border-slate-200 p-0.5">
           <button

@@ -111,6 +111,11 @@ type GptMiniRawResponse = {
     watch_points?: GptWatchRow[];
   };
   interview_questions?: string[];
+  profile_classification?: {
+    primary_type?: string;
+    ai_depth?: string;
+    lean_summary?: string;
+  } | null;
 };
 
 const SCORING_ANCHORS_SECTION = `SCORING ANCHORS:
@@ -313,6 +318,27 @@ Rule two — skills appearing only in a skills section score maximum 45 for the 
 Rule three — participation language such as part of the team, assisted, supported, contributed to, or helped with scores maximum 55 for relevant dimensions. Ownership language such as built, designed, led, architected, launched, established, or drove scores higher.
 Rule four — every interview question must reference specific content from this candidate's resume. A question that could be asked of any candidate for this role is not acceptable. Each question must be unanswerable without knowing this specific candidate's background.
 Rule five — missing must-haves are surfaced as warnings but do not automatically cap the score. Surface them clearly and let the recruiter decide.
+Rule six — profile classification: Before scoring, characterise what kind of engineer this candidate primarily is, based on their full career arc — not just their most recent role.
+
+primary_type definitions:
+- ai_engineer: AI/ML is the primary thread across multiple roles. Has built, trained, or deployed AI systems as a core job responsibility.
+- backend_with_ai: Strong backend foundation. AI adopted in recent roles as an addition, not a primary responsibility.
+- data_scientist_with_ai: Statistical or analytical background. ML modelling focus. Limited production engineering or deployment experience.
+- ml_researcher: Academic or research orientation. Papers, experiments, benchmarks over shipped products.
+- devops_with_ai: Infrastructure primary. AI appears in a supporting or tooling capacity.
+- fullstack_with_ai: Web or product engineering primary. AI as a feature layer.
+- pure_backend: Backend engineering with no meaningful AI exposure.
+- pure_frontend: Frontend engineering.
+- other_technical: Technical but does not fit above.
+
+ai_depth definitions:
+- native: Has built, trained, fine-tuned, or deployed AI systems as primary job responsibility across two or more roles.
+- applied: Has integrated AI APIs, used pre-trained models, or built AI features as part of a broader engineering role.
+- peripheral: Has used AI tools, listed AI frameworks in skills, or worked adjacent to AI teams without direct AI system ownership.
+- none: No meaningful AI exposure.
+
+Rule seven — for any candidate where ai_depth is peripheral or none, automatically add a watch point:
+"Primary background is [lean_summary]. Verify AI engineering depth before progressing."
 
 ${SCORING_ANCHORS_SECTION}
 
@@ -347,7 +373,16 @@ Return this exact JSON schema with no preamble and no text outside the JSON:
       { "concern": "specific concern", "evidence_basis": "what evidence or absence caused this" }
     ]
   },
-  "interview_questions": ["question 1", "question 2"]
+  "interview_questions": ["question 1", "question 2"],
+  "profile_classification": {
+    "primary_type": "ai_engineer" | "backend_with_ai" |
+                    "data_scientist_with_ai" | "ml_researcher" |
+                    "devops_with_ai" | "fullstack_with_ai" |
+                    "pure_backend" | "pure_frontend" |
+                    "other_technical",
+    "ai_depth": "native" | "applied" | "peripheral" | "none",
+    "lean_summary": "one sentence — what kind of engineer this person primarily is"
+  }
 }`;
 }
 
@@ -356,6 +391,40 @@ function parseGptResponse(raw: unknown): GptMiniRawResponse {
     throw new Error("GPT-4o mini returned invalid JSON.");
   }
   return raw as GptMiniRawResponse;
+}
+
+const AI_DEPTH_LEVELS = ["native", "applied", "peripheral", "none"] as const;
+
+function parseProfileClassificationFromGpt(
+  raw: GptMiniRawResponse,
+): CandidateScoreResult["profile_classification"] | undefined {
+  const pc = raw.profile_classification;
+  if (pc === undefined) return undefined;
+  if (pc === null) return null;
+  if (typeof pc !== "object") return undefined;
+
+  const aiRaw =
+    typeof pc.ai_depth === "string" ? pc.ai_depth.trim() : "";
+  if (!(AI_DEPTH_LEVELS as readonly string[]).includes(aiRaw))
+    return undefined;
+
+  const primary_type =
+    typeof pc.primary_type === "string"
+      ? pc.primary_type.trim()
+      : "";
+
+  const lean_summary =
+    typeof pc.lean_summary === "string"
+      ? pc.lean_summary.trim()
+      : "";
+
+  if (!primary_type || !lean_summary) return undefined;
+
+  return {
+    primary_type,
+    ai_depth: aiRaw as "native" | "applied" | "peripheral" | "none",
+    lean_summary,
+  };
 }
 
 function parseDimensionScores(
@@ -659,8 +728,13 @@ function mapToCandidateScoreResult(
     .slice(0, 3)
     .map((m) => attributed(`Inferred only: ${m.requirement}`));
 
+  const profile_classification = parseProfileClassificationFromGpt(raw);
+
   return {
     overall_score: overallScore,
+    ...(profile_classification !== undefined
+      ? { profile_classification }
+      : {}),
     deal_breaker_warning: (raw.must_haves_check ?? []).some(
       (m) => m.status === "absent",
     )
