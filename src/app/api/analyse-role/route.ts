@@ -6,6 +6,10 @@ import { getAnalyseRatelimiter, checkRateLimit } from "@/lib/rate-limit";
 import { deriveTitleFromAnalysis, parseRoleBriefRow } from "@/types/role-brief";
 import type { JdRecruiterContext } from "@/types/job-posting";
 import type { JdSessionCache } from "@/lib/role-brief/resolve-jd-analysis";
+import {
+  expandEquivalents,
+  expandMustHaves,
+} from "@/lib/intelligence/tech-graph";
 
 export const maxDuration = 120;
 
@@ -68,17 +72,66 @@ export async function POST(request: Request) {
       recruiterContext: body.recruiterContext ?? null,
     });
 
+    // Enrich must-haves and core signals with tech-graph equivalents.
+    const enrichedCoreSignals =
+      result.analysis.core_signals?.map((signal) => {
+        const techEquivalents = expandEquivalents(signal.skill);
+        const merged = Array.from(
+          new Set([
+            ...(signal.equivalents ?? []),
+            ...techEquivalents.filter(
+              (name) =>
+                name.toLowerCase() !== signal.skill.trim().toLowerCase(),
+            ),
+          ]),
+        );
+        return {
+          ...signal,
+          equivalents: merged,
+        };
+      }) ?? [];
+
+    const mustHaveEquivalents = expandMustHaves(
+      result.analysis.deal_breakers ?? [],
+    );
+
+    const expandedAnalysis = {
+      ...result.analysis,
+      deal_breakers: result.analysis.deal_breakers ?? [],
+      core_signals: enrichedCoreSignals,
+      // Exposed for UI / future use; not yet a strong runtime dependency.
+      must_have_equivalents: mustHaveEquivalents,
+    } as typeof result.analysis & {
+      must_have_equivalents: Record<string, string[]>;
+    };
+
+    if (body.roleBriefId) {
+      await supabase
+        .from("role_briefs")
+        .update({
+          job_description: body.jobDescription.trim(),
+          job_description_hash: result.job_description_hash,
+          analysis_version: result.analysis_version,
+          last_analysed_at: result.last_analysed_at,
+          deal_breakers: expandedAnalysis.deal_breakers,
+          core_signals: expandedAnalysis.core_signals,
+          preferred_signals: expandedAnalysis.preferred_signals,
+          cannot_assess: expandedAnalysis.cannot_assess,
+          equivalent_titles: expandedAnalysis.equivalent_titles,
+          title_band: expandedAnalysis.title_band,
+          semantic_clusters: expandedAnalysis.semantic_clusters,
+        })
+        .eq("id", body.roleBriefId);
+    }
+
     if (!result.fromCache) {
       await logWorkspaceActivityIfAuthed({ action: "analyse_role" });
     }
 
-    const title = deriveTitleFromAnalysis(
-      result.analysis,
-      body.jobDescription,
-    );
+    const title = deriveTitleFromAnalysis(expandedAnalysis, body.jobDescription);
 
     return NextResponse.json({
-      analysis: result.analysis,
+      analysis: expandedAnalysis,
       title,
       fromCache: result.fromCache,
       job_description_hash: result.job_description_hash,

@@ -15,6 +15,7 @@ import {
 import { normalizeInterviewQuestions } from "@/lib/scoring/interview-questions";
 import type { CandidateSignalProfile } from "@/types/candidate";
 import type { RoleBrief, TitleBand } from "@/types/role-brief";
+import { expandEquivalents } from "@/lib/intelligence/tech-graph";
 import type {
   AttributedFlag,
   CandidateScoreResult,
@@ -220,6 +221,16 @@ function numberedList(items: string[]): string {
   return items.map((item, i) => `${i + 1}. ${item}`).join("\n");
 }
 
+function formatMustHaveWithEquivalents(value: string): string {
+  const skill = value.trim();
+  if (!skill) return value;
+  const equivalents = expandEquivalents(skill).filter(
+    (t) => t.trim().toLowerCase() !== skill.toLowerCase(),
+  );
+  if (equivalents.length === 0) return skill;
+  return `Must-have: ${skill}. The following are accepted equivalents: ${equivalents.join(", ")}. Credit any of these as meeting this requirement.`; 
+}
+
 function titleBandDescription(band: TitleBand | null): string {
   if (!band) {
     return "Title band not specified — infer seniority expectations from the job title and must-haves.";
@@ -249,7 +260,9 @@ function buildUserMessage(
 ): string {
   const titleLine = `${roleBrief.title}${roleBrief.title_band ? ` · ${roleBrief.title_band}` : ""}`;
 
-  const mustHaves = numberedList(roleBrief.deal_breakers ?? []);
+  const mustHaves = numberedList(
+    (roleBrief.deal_breakers ?? []).map(formatMustHaveWithEquivalents),
+  );
   const keyRequirements = numberedList(
     (roleBrief.core_signals ?? []).map((s) => {
       const eq =
