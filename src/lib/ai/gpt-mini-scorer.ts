@@ -786,7 +786,7 @@ export async function scoreCandidate(
   );
 
   const completion = await client.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: "gpt-4o-mini-2024-07-18",
     temperature: 0,
     max_tokens: 2000,
     response_format: { type: "json_object" },

@@ -36,7 +36,7 @@ export async function GET() {
       return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     }
 
-    const candidates = await listCandidatesWithSummaries();
+    const candidates = await listCandidatesWithSummaries(user.id);
     return NextResponse.json({ candidates });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to list candidates";

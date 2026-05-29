@@ -53,3 +53,20 @@ export async function checkRateLimit(
   }
   return { allowed: true };
 }
+
+export function assertRateLimiterConfigured(): void {
+  if (
+    !process.env.UPSTASH_REDIS_REST_URL ||
+    !process.env.UPSTASH_REDIS_REST_TOKEN
+  ) {
+    console.warn(
+      "[rate-limit] WARNING: UPSTASH_REDIS_REST_URL or " +
+        "UPSTASH_REDIS_REST_TOKEN is not set. " +
+        "Rate limiting is DISABLED. All API calls to " +
+        "/api/score and /api/analyse-role are unthrottled. " +
+        "Set these env vars in Vercel to enable protection.",
+    );
+  }
+}
+
+assertRateLimiterConfigured();

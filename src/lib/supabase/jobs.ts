@@ -8,14 +8,24 @@ async function getServerSupabase(): Promise<SupabaseClient> {
   return createSupabaseServerClient();
 }
 
-export async function listJobsWithStats(): Promise<JobListItem[]> {
+export async function listJobsWithStats(
+  userId: string,
+): Promise<JobListItem[]> {
   const supabase = await getServerSupabase();
   const [jobsRes, applicantsRes, scoresRes] = await Promise.all([
-    supabase.from("role_briefs").select("*").order("created_at", { ascending: false }),
-    supabase.from("candidates").select("job_id, scoring_status"),
+    supabase
+      .from("role_briefs")
+      .select("*")
+      .eq("created_by", userId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("candidates")
+      .select("job_id, scoring_status")
+      .eq("created_by", userId),
     supabase
       .from("saved_scores")
-      .select("role_brief_id, overall_score, candidate_id"),
+      .select("role_brief_id, overall_score, candidate_id")
+      .eq("created_by", userId),
   ]);
 
   if (jobsRes.error) throw new Error(jobsRes.error.message);

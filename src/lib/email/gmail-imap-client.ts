@@ -2,13 +2,16 @@ import Imap from "imap";
 import { simpleParser } from "mailparser";
 import type { ConnectionOptions } from "tls";
 
-/** Gmail IMAP TLS. Default skips cert verify (Windows AV/proxy often breaks chain). Set GMAIL_IMAP_STRICT_TLS=true to enforce. */
+/** Gmail IMAP TLS. Certificate verification is enforced
+    by default. Set GMAIL_IMAP_STRICT_TLS=false only in
+    local development if your AV or proxy breaks the
+    certificate chain. Never disable in production. */
 function gmailImapTlsOptions(): ConnectionOptions {
   return {
     host: "imap.gmail.com",
     servername: "imap.gmail.com",
     minVersion: "TLSv1.2",
-    rejectUnauthorized: process.env.GMAIL_IMAP_STRICT_TLS === "true",
+    rejectUnauthorized: process.env.GMAIL_IMAP_STRICT_TLS !== "false",
   };
 }
 

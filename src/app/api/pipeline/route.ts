@@ -4,12 +4,23 @@ import { addCandidateToPipeline } from "@/lib/pipeline/add-to-pipeline";
 import { getCandidateById } from "@/lib/supabase/candidates";
 import { getJobById } from "@/lib/supabase/jobs";
 import { getPipelineBoard } from "@/lib/supabase/pipeline";
+import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 
 export async function GET(request: Request) {
   try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentication required." },
+        { status: 401 },
+      );
+    }
     const { searchParams } = new URL(request.url);
     const roleId = searchParams.get("role_brief_id")?.trim();
-    const board = await getPipelineBoard();
+    const board = await getPipelineBoard(user.id);
     if (roleId) {
       const section = board.sections.find((s) => s.role_brief_id === roleId);
       return NextResponse.json({
@@ -33,6 +44,16 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentication required." },
+        { status: 401 },
+      );
+    }
     const body = (await request.json()) as {
       role_brief_id?: string;
       candidate_ids?: string[];
@@ -76,7 +97,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const board = await getPipelineBoard();
+    const board = await getPipelineBoard(user.id);
     return NextResponse.json({ results, sections: board.sections });
   } catch (err) {
     const message =

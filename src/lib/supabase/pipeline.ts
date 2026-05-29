@@ -56,11 +56,14 @@ function rowToPipelineCandidate(
   };
 }
 
-export async function listPipelineCandidates(): Promise<PipelineCandidateRow[]> {
+export async function listPipelineCandidates(
+  userId: string,
+): Promise<PipelineCandidateRow[]> {
   const supabase = await getServerSupabase();
   const { data, error } = await supabase
     .from("pipeline_candidates")
     .select("*")
+    .eq("created_by", userId)
     .order("added_at", { ascending: false });
 
   if (error) {
@@ -72,11 +75,14 @@ export async function listPipelineCandidates(): Promise<PipelineCandidateRow[]> 
   );
 }
 
-export async function listRoleBriefs(): Promise<RoleBrief[]> {
+export async function listRoleBriefs(
+  userId: string,
+): Promise<RoleBrief[]> {
   const supabase = await getServerSupabase();
   const { data, error } = await supabase
     .from("role_briefs")
     .select("*")
+    .eq("created_by", userId)
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(error.message);
@@ -98,9 +104,12 @@ function sortPipelineCandidates(
   });
 }
 
-async function countScreenedCandidates(): Promise<number> {
+async function countScreenedCandidates(userId: string): Promise<number> {
   const supabase = await getServerSupabase();
-  const { data, error } = await supabase.from("candidates").select("activity");
+  const { data, error } = await supabase
+    .from("candidates")
+    .select("activity")
+    .eq("created_by", userId);
   if (error) return 0;
   let count = 0;
   for (const row of data ?? []) {
@@ -120,15 +129,15 @@ async function countScreenedCandidates(): Promise<number> {
   return count;
 }
 
-export async function getPipelineBoard(): Promise<{
+export async function getPipelineBoard(userId: string): Promise<{
   roleBriefs: RoleBrief[];
   sections: PipelineRoleSection[];
   screenedCount: number;
 }> {
   const [roleBriefs, pipelineRows, screenedCount] = await Promise.all([
-    listRoleBriefs(),
-    listPipelineCandidates(),
-    countScreenedCandidates(),
+    listRoleBriefs(userId),
+    listPipelineCandidates(userId),
+    countScreenedCandidates(userId),
   ]);
 
   const byRole = new Map<string, PipelineCandidateRow[]>();

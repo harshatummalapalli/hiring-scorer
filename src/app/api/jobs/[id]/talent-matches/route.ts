@@ -11,16 +11,26 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, { params }: Params) {
   try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentication required." },
+        { status: 401 },
+      );
+    }
+
     const { id: jobId } = await params;
     const job = await getJobById(jobId);
     if (!job) {
       return NextResponse.json({ error: "Job not found." }, { status: 404 });
     }
 
-    const allCandidates = await listCandidates();
+    const allCandidates = await listCandidates(user.id);
     const pool = allCandidates.filter((c) => c.job_id !== jobId);
 
-    const supabase = await createSupabaseServerClient();
     const { data: scoreRows } = await supabase
       .from("saved_scores")
       .select("candidate_id, role_brief_id, role_brief_title, overall_score, created_at")

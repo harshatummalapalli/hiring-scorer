@@ -8,7 +8,17 @@ import type { RoleBriefAnalysis, RoleBriefAnalysisMeta } from "@/types/role-brie
 
 export async function GET() {
   try {
-    const jobs = await listJobsWithStats();
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentication required." },
+        { status: 401 },
+      );
+    }
+    const jobs = await listJobsWithStats(user.id);
     return NextResponse.json({ jobs });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to list jobs";

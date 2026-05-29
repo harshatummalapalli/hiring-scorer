@@ -171,10 +171,28 @@ export async function ensureWorkspaceLimitsRow(
   return unlimited ? applyUnlimitedCaps(usage) : usage;
 }
 
+export async function reconcileCandidateCount(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<void> {
+  const { count, error } = await supabase
+    .from("candidates")
+    .select("id", { count: "exact", head: true })
+    .eq("created_by", userId);
+
+  if (error || count === null) return;
+
+  await supabase
+    .from("workspace_settings")
+    .update({ current_candidate_count: count })
+    .eq("user_id", userId);
+}
+
 export async function getWorkspaceUsage(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<WorkspaceUsage> {
+  await reconcileCandidateCount(supabase, userId);
   const usage = await ensureWorkspaceLimitsRow(supabase, userId);
   if (await isWorkspaceUnlimited(supabase, userId)) {
     return applyUnlimitedCaps(usage);

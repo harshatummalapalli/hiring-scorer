@@ -202,12 +202,20 @@ export async function listCandidatesByJob(jobId: string): Promise<CandidateRow[]
   return rawRows.map((r) => rowToCandidate(r));
 }
 
-export async function listCandidates(): Promise<CandidateRow[]> {
+export async function listCandidates(
+  userId?: string,
+): Promise<CandidateRow[]> {
   const supabase = await getServerSupabase();
-  const { data, error } = await supabase
+  let query = supabase
     .from("candidates")
     .select("*")
     .order("updated_at", { ascending: false });
+
+  if (userId) {
+    query = query.eq("created_by", userId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     if (error.message?.toLowerCase().includes("does not exist")) return [];
@@ -277,10 +285,10 @@ function attachScoresToCandidate(
   };
 }
 
-export async function listCandidatesWithSummaries(): Promise<
-  CandidateListItem[]
-> {
-  const rows = await listCandidates();
+export async function listCandidatesWithSummaries(
+  userId?: string,
+): Promise<CandidateListItem[]> {
+  const rows = await listCandidates(userId);
   if (rows.length === 0) return [];
 
   const supabase = await getServerSupabase();
