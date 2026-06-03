@@ -1,20 +1,9 @@
+import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import { storeUploadedResumeForCandidate } from "@/lib/candidates/store-uploaded-resume";
-import { ingestResumeFromBytes, ingestResumeFromText } from "@/lib/ingestion/ingest-resume";
-import { persistResumeIntelligence } from "@/lib/ingestion/persist-intelligence";
-import {
-  findDuplicateCandidates,
-  type DuplicateMatch,
-} from "@/lib/candidates/duplicate-detection";
-import {
-  enrichGithubProfile,
-  extractGithubUsername,
-} from "@/lib/candidates/github-enrichment";
-import { classifyApplicantPrefilter } from "@/lib/jobs/applicant-prefilter";
-import { triggerAutoEvaluation } from "@/lib/scoring/evaluation-queue";
-import { computeLocalPreScore } from "@/lib/scoring/local-pre-score";
-import { getCandidateHeaderName } from "@/lib/candidates/profile-display";
 import { createActivity } from "@/lib/candidates/activity";
+import { triggerParsing } from "@/lib/ingestion/trigger-parsing";
+import { extractResumeTextFromBytes } from "@/lib/resume/parse-resume";
 import { normalizeResumeText } from "@/lib/resume/normalize-resume-text";
 import { getAuthenticatedUserId } from "@/lib/supabase/created-by";
 import {
@@ -23,17 +12,25 @@ import {
 } from "@/lib/supabase/candidates";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import { limitErrorResponse } from "@/lib/workspace/limits";
-import { parseRoleBriefRow, type RoleBrief } from "@/types/role-brief";
-import type { CandidateScoringStatus } from "@/types/job";
+import { filenameToDisplayName } from "@/lib/scoring/recruiter-card";
 
 export const maxDuration = 60;
+
+function computeResumeHash(text: string): string {
+  return createHash("sha256").update(text.slice(0, 10000)).digest("hex");
+}
 
 export async function GET() {
   try {
     const supabase = await createSupabaseServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) {
-      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+      return NextResponse.json(
+        { error: "Authentication required." },
+        { status: 401 },
+      );
     }
 
     const candidates = await listCandidatesWithSummaries(user.id);
@@ -82,13 +79,15 @@ async function parsePostInput(request: Request): Promise<{
     return {
       body: {
         resumeText: coerceResumeText(form.get("resumeText")),
-        resumeFilename: String(form.get("resumeFilename") ?? "").trim() || undefined,
+        resumeFilename:
+          String(form.get("resumeFilename") ?? "").trim() || undefined,
         displayName: String(form.get("displayName") ?? "").trim() || undefined,
         jobId: String(form.get("jobId") ?? "").trim() || undefined,
         source: String(form.get("source") ?? "").trim() || undefined,
         forceUpload: form.get("forceUpload") === "true",
       },
-      resumeFile: resumeFile instanceof File && resumeFile.size > 0 ? resumeFile : null,
+      resumeFile:
+        resumeFile instanceof File && resumeFile.size > 0 ? resumeFile : null,
     };
   }
 
@@ -98,199 +97,119 @@ async function parsePostInput(request: Request): Promise<{
 
 export async function POST(request: Request) {
   try {
-    const { body, resumeFile } = await parsePostInput(request);
-    const resumeText = normalizeResumeText(coerceResumeText(body.resumeText));
-    if (!resumeText && !resumeFile) {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
       return NextResponse.json(
-        { error: "Resume text or file is required." },
-        { status: 400 },
+        { error: "Authentication required." },
+        { status: 401 },
       );
     }
+
+    const { body, resumeFile } = await parsePostInput(request);
     const resumeFilename =
       body.resumeFilename?.trim() ||
       resumeFile?.name?.trim() ||
       "candidate-resume.pdf";
 
-    let ingested;
-    try {
-      if (resumeText && resumeText.length >= 150) {
-        ingested = await ingestResumeFromText(resumeText, resumeFilename);
-      } else if (resumeFile) {
-        const bytes = await resumeFile.arrayBuffer();
-        ingested = await ingestResumeFromBytes(bytes, resumeFilename);
-      } else {
-        return NextResponse.json(
-          { error: "Resume text or file is required." },
-          { status: 400 },
+    let resumeText = normalizeResumeText(coerceResumeText(body.resumeText));
+    if (!resumeText && resumeFile) {
+      try {
+        resumeText = await extractResumeTextFromBytes(
+          await resumeFile.arrayBuffer(),
+          resumeFilename,
         );
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Resume extraction failed";
+        return NextResponse.json({ error: message }, { status: 422 });
       }
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Resume parsing failed";
-      console.error("[candidates/route] Ingest error:", message);
+    }
+
+    if (!resumeText) {
       return NextResponse.json(
-        {
-          error:
-            "Could not process this resume. " +
-            "The parsing service may be unavailable. " +
-            "Please try again in a moment.",
-          detail: message,
-        },
-        { status: 422 },
+        { error: "Resume text or file is required." },
+        { status: 400 },
       );
     }
-    const signal_profile = ingested.signalProfile;
-    const resumeTextFinal = ingested.resumeText;
-    const strippedText = ingested.strippedResumeText ?? ingested.resumeText;
-    if (resumeTextFinal.length > 50000) {
+
+    if (resumeText.length > 50000) {
       return NextResponse.json(
         { error: "Resume text exceeds 50,000 characters." },
         { status: 400 },
       );
     }
-    const display_name =
-      body.displayName?.trim() || getCandidateHeaderName(signal_profile);
+
+    const resumeHash = computeResumeHash(resumeText);
 
     if (!body.forceUpload) {
-      const duplicates = await findDuplicateCandidates({
-        resumeText: resumeTextFinal,
-        displayName: display_name,
-      });
-      const primary = duplicates[0];
-      const duplicateConfidence = (match: DuplicateMatch): number => {
-        if (match.level === "content_hash") return 1;
-        if (match.level === "email") return 0.95;
-        return match.similarity ?? 0;
-      };
-      if (primary && duplicateConfidence(primary) >= 0.85) {
+      const { data: hashMatch } = await supabase
+        .from("candidates")
+        .select("id, display_name")
+        .eq("resume_content_hash", resumeHash)
+        .eq("created_by", user.id)
+        .maybeSingle();
+
+      if (hashMatch) {
         return NextResponse.json(
           {
             error: "duplicate",
-            message:
-              "This resume matches an existing candidate in your workspace.",
-            existingId: primary.candidateId,
-            existingName: primary.displayName,
+            existingId: hashMatch.id,
+            existingName: hashMatch.display_name,
           },
           { status: 409 },
         );
       }
     }
 
-    const githubUser = extractGithubUsername(resumeText);
-    const githubData = githubUser
-      ? await enrichGithubProfile(githubUser)
-      : null;
-
-    const activity = [
-      createActivity("added", "Candidate added to talent pool"),
-    ];
-
-    const profile = {
-      ...signal_profile,
-      display_name,
-      ...(githubData ? { github: githubData } : {}),
-    };
-
     const jobId = body.jobId?.trim() || null;
     const source = body.source?.trim() || (jobId ? "uploaded" : "uploaded");
-
-    let scoringStatus: CandidateScoringStatus | undefined;
-    let roleBrief: RoleBrief | null = null;
-    if (jobId) {
-      const supabase = await createSupabaseServerClient();
-      const { data: briefRow } = await supabase
-        .from("role_briefs")
-        .select("*")
-        .eq("id", jobId)
-        .maybeSingle();
-      if (briefRow) {
-        roleBrief = parseRoleBriefRow(briefRow as Record<string, unknown>);
-        scoringStatus = classifyApplicantPrefilter(
-          roleBrief,
-          profile,
-          resumeTextFinal,
-        );
-      } else {
-        scoringStatus = "unscored";
-      }
-    }
+    const displayName =
+      body.displayName?.trim() || filenameToDisplayName(resumeFilename);
 
     const { id } = await insertCandidate({
-      display_name,
+      display_name: displayName,
       resume_filename: resumeFilename,
-      resume_text: strippedText,
-      signal_profile: profile,
-      activity,
-      application_email: ingested.signalProfile.extracted_email ?? null,
-      application_phone: ingested.signalProfile.extracted_phone ?? null,
-      linkedin_url: ingested.signalProfile.linkedin_url ?? null,
+      resume_text: resumeText,
+      resume_content_hash: resumeHash,
+      signal_profile: {},
+      activity: [createActivity("added", "Candidate added")],
+      parsing_status: "pending",
+      scoring_status: "unscored",
       ...(jobId
         ? {
             job_id: jobId,
             source,
-            scoring_status: scoringStatus ?? "unscored",
             applied_at: new Date().toISOString(),
           }
         : {}),
     });
 
-    if (ingested.structuredResume) {
-      const persisted = await persistResumeIntelligence({
-        candidateId: id,
-        structuredResume: ingested.structuredResume,
-        parseResult: ingested.parseResult,
-      });
-      if (persisted.errors.length) {
-        console.warn(
-          `[candidates] ingestion persist warnings for ${id}:`,
-          persisted.errors.join("; "),
-        );
-      }
-    }
-
-    let storageWarning: string | undefined;
     if (resumeFile) {
-      const supabase = await createSupabaseServerClient();
       const userId = await getAuthenticatedUserId(supabase);
-      try {
-        await storeUploadedResumeForCandidate(
-          supabase,
-          userId,
-          id,
-          jobId,
-          resumeFile,
-        );
-      } catch (storageErr) {
-        const message =
-          storageErr instanceof Error
-            ? storageErr.message
-            : "Failed to store resume file";
-        console.warn(
-          `[candidates] Resume storage failed for ${id}:`,
-          message,
-        );
-        storageWarning = `Candidate saved but file storage failed: ${message}`;
-      }
+      void storeUploadedResumeForCandidate(
+        supabase,
+        userId,
+        id,
+        jobId,
+        resumeFile,
+      ).catch(console.warn);
     }
 
-    if (scoringStatus === "unscored" && jobId) {
-      if (roleBrief) {
-        const preScore = computeLocalPreScore(profile, roleBrief);
-        const supabase = await createSupabaseServerClient();
-        await supabase
-          .from("candidates")
-          .update({ pre_score: preScore })
-          .eq("id", id);
-      }
-      void triggerAutoEvaluation(id, jobId, request);
-    }
+    void triggerParsing(
+      id,
+      resumeText,
+      resumeFilename,
+      jobId,
+      request,
+    ).catch(console.warn);
 
     return NextResponse.json({
       id,
-      display_name,
-      signal_profile: profile,
-      extractionSource: ingested.ingestionSource,
-      ...(storageWarning ? { warning: storageWarning } : {}),
+      display_name: displayName,
+      parsing_status: "pending",
     });
   } catch (err) {
     const limited = limitErrorResponse(err);

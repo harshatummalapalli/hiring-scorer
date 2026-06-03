@@ -21,6 +21,8 @@ import type {
   CandidateStage,
 } from "@/types/candidate";
 import { normalizeSignalProfile } from "@/lib/candidates/build-signal-profile";
+import { profileFromStoredSignalProfile } from "@/lib/candidates/normalize-stored-signal-profile";
+import type { CandidateParsingStatus } from "@/types/candidate";
 import { getCandidateHeaderName } from "@/lib/candidates/profile-display";
 import {
   resolveDisplayRole,
@@ -43,14 +45,27 @@ async function getServerSupabase(): Promise<SupabaseClient> {
   return createSupabaseServerClient();
 }
 
+function parseParsingStatus(value: unknown): CandidateParsingStatus {
+  const s = String(value ?? "complete").toLowerCase();
+  if (s === "pending" || s === "failed") return s;
+  return "complete";
+}
+
 function rowToCandidate(row: Record<string, unknown>): CandidateRow {
   const filename = String(row.resume_filename ?? "candidate.pdf");
   const resumeText = String(row.resume_text ?? "");
-  const signal_profile = normalizeSignalProfile(
-    row.signal_profile,
-    resumeText,
-    filename,
-  );
+  const parsing_status = parseParsingStatus(row.parsing_status);
+  const signal_profile =
+    parsing_status === "pending"
+      ? profileFromStoredSignalProfile(
+          typeof row.signal_profile === "object" &&
+            row.signal_profile != null &&
+            !Array.isArray(row.signal_profile)
+            ? (row.signal_profile as Record<string, unknown>)
+            : {},
+          resumeText,
+        )
+      : normalizeSignalProfile(row.signal_profile, resumeText, filename);
   const storedDisplayName = String(row.display_name ?? "").trim();
   const profileName = getCandidateHeaderName(signal_profile);
   let display_name =
@@ -100,6 +115,11 @@ function rowToCandidate(row: Record<string, unknown>): CandidateRow {
       row.application_location != null ? String(row.application_location) : null,
     applied_at: row.applied_at != null ? String(row.applied_at) : null,
     scoring_status: parseScoringStatus(row.scoring_status),
+    parsing_status,
+    resume_content_hash:
+      row.resume_content_hash != null
+        ? String(row.resume_content_hash)
+        : null,
     manual_rejection_reason:
       row.manual_rejection_reason != null
         ? String(row.manual_rejection_reason)
@@ -426,11 +446,13 @@ export async function insertCandidate(row: {
   display_name: string;
   resume_filename: string | null;
   resume_text: string;
-  signal_profile: CandidateSignalProfile;
+  signal_profile: CandidateSignalProfile | Record<string, unknown>;
   activity: CandidateActivity[];
   job_id?: string | null;
   source?: string;
   scoring_status?: string;
+  parsing_status?: string;
+  resume_content_hash?: string | null;
   applied_at?: string | null;
   application_email?: string | null;
   application_phone?: string | null;
@@ -455,6 +477,12 @@ export async function insertCandidate(row: {
           ...(row.job_id ? { job_id: row.job_id } : {}),
           ...(row.source ? { source: row.source } : {}),
           ...(row.scoring_status ? { scoring_status: row.scoring_status } : {}),
+          ...(row.parsing_status
+            ? { parsing_status: row.parsing_status }
+            : {}),
+          ...(row.resume_content_hash
+            ? { resume_content_hash: row.resume_content_hash }
+            : {}),
           ...(row.applied_at ? { applied_at: row.applied_at } : {}),
           ...(row.application_email
             ? { application_email: row.application_email }

@@ -2,6 +2,36 @@ import { normalizeResumeText } from "./normalize-resume-text";
 
 const MAX_CHARS = 50_000;
 
+function normalizeExtractedText(text: string): string {
+  const trimmed = normalizeResumeText(text);
+  if (!trimmed) {
+    throw new Error("Could not extract text from this file.");
+  }
+  if (trimmed.length > MAX_CHARS) {
+    return trimmed.slice(0, MAX_CHARS);
+  }
+  return trimmed;
+}
+
+/** Server-safe text extraction from raw bytes (no Gemini). */
+export async function extractResumeTextFromBytes(
+  bytes: ArrayBuffer,
+  filename: string,
+): Promise<string> {
+  const name = filename.toLowerCase();
+  let text: string;
+  if (name.endsWith(".pdf")) {
+    text = await parsePdfBytes(bytes);
+  } else if (name.endsWith(".docx")) {
+    text = await parseDocxBytes(bytes);
+  } else if (name.endsWith(".txt")) {
+    text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  } else {
+    throw new Error("Unsupported file type. Upload PDF, DOCX, or TXT.");
+  }
+  return normalizeExtractedText(text);
+}
+
 export async function parseResumeFile(file: File): Promise<string> {
   const name = file.name.toLowerCase();
 
@@ -16,24 +46,15 @@ export async function parseResumeFile(file: File): Promise<string> {
     throw new Error("Unsupported file type. Upload PDF, DOCX, or TXT.");
   }
 
-  const trimmed = normalizeResumeText(text);
-  if (!trimmed) {
-    throw new Error("Could not extract text from this file.");
-  }
-
-  if (trimmed.length > MAX_CHARS) {
-    return trimmed.slice(0, MAX_CHARS);
-  }
-
-  return trimmed;
+  return normalizeExtractedText(text);
 }
 
-async function parsePdf(file: File): Promise<string> {
+async function parsePdfBytes(bytes: ArrayBuffer): Promise<string> {
   const pdfjs = await import("pdfjs-dist");
 
   pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
-  const data = new Uint8Array(await file.arrayBuffer());
+  const data = new Uint8Array(bytes);
   const doc = await pdfjs.getDocument({ data }).promise;
 
   const pages: string[] = [];
@@ -49,10 +70,16 @@ async function parsePdf(file: File): Promise<string> {
   return pages.join("\n");
 }
 
-async function parseDocx(file: File): Promise<string> {
+async function parsePdf(file: File): Promise<string> {
+  return parsePdfBytes(await file.arrayBuffer());
+}
+
+async function parseDocxBytes(bytes: ArrayBuffer): Promise<string> {
   const mammoth = await import("mammoth");
-  const result = await mammoth.extractRawText({
-    arrayBuffer: await file.arrayBuffer(),
-  });
+  const result = await mammoth.extractRawText({ arrayBuffer: bytes });
   return result.value;
+}
+
+async function parseDocx(file: File): Promise<string> {
+  return parseDocxBytes(await file.arrayBuffer());
 }

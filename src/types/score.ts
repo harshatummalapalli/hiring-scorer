@@ -198,3 +198,29 @@ export const MODEL_ROLE_LABELS: Record<ModelRole, string> = MODEL_ROLE_DISPLAY;
 
 /** Short labels for consensus narrative */
 export const MODEL_CONSENSUS_DESCRIPTION = CONSENSUS_SUMMARY;
+
+export type InterviewQuestion = {
+  question: string;
+  why_this_question: string;
+  probes: string[];
+  rubric: {
+    exceptional: string;
+    strong: string;
+    adequate: string;
+    weak: string;
+  };
+  maps_to_dimension: string;
+};
+
+export type InterviewBrief = {
+  interview_focus: string;
+  candidate_context: string;
+  questions: InterviewQuestion[];
+  red_flags_to_watch: string[];
+  sell_points: string[];
+  post_interview_verdict_guide: {
+    hire_signal: string;
+    pass_signal: string;
+    borderline_signal: string;
+  };
+};

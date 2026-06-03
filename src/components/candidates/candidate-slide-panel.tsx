@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
+  ClipboardList,
   Download,
   Loader2,
   Trash2,
@@ -50,6 +51,7 @@ import { useScoreCandidate } from "@/lib/candidates/use-score-candidate";
 import { VerdictBadge } from "./profile-shared";
 import { CandidateScoreHistory } from "./candidate-score-history";
 import { CandidatePitchCard } from "@/components/pipeline/candidate-pitch-card";
+import { InterviewBriefPanel } from "@/components/candidates/interview-brief-panel";
 
 function formatDate(iso: string): string {
   try {
@@ -256,6 +258,7 @@ export function CandidateSlidePanel({
   const [pdfBusy, setPdfBusy] = useState(false);
   const [cvDownloadBusy, setCvDownloadBusy] = useState(false);
   const [selectedFitId, setSelectedFitId] = useState<string | null>(null);
+  const [showInterviewBrief, setShowInterviewBrief] = useState(false);
   const [panelTab, setPanelTab] = useState<"insights" | "resume">("insights");
   const [panelExiting, setPanelExiting] = useState(false);
   const [insightsAnimateKey, setInsightsAnimateKey] = useState(0);
@@ -1008,6 +1011,17 @@ export function CandidateSlidePanel({
                     </section>
                   )}
 
+                  {hasScore && selectedFit && candidateId && (
+                    <button
+                      type="button"
+                      onClick={() => setShowInterviewBrief(true)}
+                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-[#0D9488] bg-[#F0FDFA] px-4 py-2.5 text-sm font-medium text-[#0D9488] transition-colors hover:bg-[#CCFBF1]"
+                    >
+                      <ClipboardList className="h-4 w-4" />
+                      Generate Interview Brief
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => setBreakdownOpen((o) => !o)}
@@ -1226,6 +1240,15 @@ export function CandidateSlidePanel({
           ) : null}
         </div>
       </aside>
+      {showInterviewBrief && selectedFit && candidateId && (
+        <InterviewBriefPanel
+          candidateId={candidateId}
+          savedScoreId={selectedFit.id}
+          candidateName={candidate?.display_name ?? "Candidate"}
+          roleTitle={selectedFit.role_brief_title ?? "Role"}
+          onClose={() => setShowInterviewBrief(false)}
+        />
+      )}
       {pickerOpen && pickerCandidate && (
         <ScoreRolePickerModal
           candidateName={pickerCandidate.name}

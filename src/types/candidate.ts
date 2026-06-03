@@ -8,6 +8,8 @@ import type { CompanyType, FitVerdict, ResumeQualitySignals } from "@/types/scor
 import type { CandidateScoreResult } from "@/types/score";
 import type { StructuredResume } from "@/types/structured-resume";
 
+export type CandidateParsingStatus = "pending" | "complete" | "failed";
+
 export type CandidateStage =
   | "new"
   | "screening"
@@ -143,6 +145,8 @@ export type CandidateRow = {
   application_location: string | null;
   applied_at: string | null;
   scoring_status: CandidateScoringStatus;
+  parsing_status: CandidateParsingStatus;
+  resume_content_hash: string | null;
   manual_rejection_reason: string | null;
   manual_rejection_detail: string | null;
   manually_rejected_at: string | null;

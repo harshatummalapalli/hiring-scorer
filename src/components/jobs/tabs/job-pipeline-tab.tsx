@@ -4,11 +4,13 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  AlertCircle,
   ChevronDown,
   ChevronRight,
   Layers,
   LayoutList,
   Loader2,
+  RotateCw,
   Upload,
   X,
 } from "lucide-react";
@@ -48,8 +50,24 @@ type JobPipelineTabProps = {
 
 type UploadUiState =
   | { phase: "idle" }
-  | { phase: "processing"; files: ResumeUploadFileItem[] }
+  | { phase: "uploading"; files: ResumeUploadFileItem[] }
   | { phase: "success"; files: ResumeUploadFileItem[]; count: number };
+
+function candidateDisplayName(c: CandidateListItem): string {
+  return c.display_name?.trim() || c.resume_filename || "Parsing...";
+}
+
+function candidateTopSkills(c: CandidateListItem): string[] {
+  return c.signal_profile?.top_skills ?? [];
+}
+
+function candidateTitle(c: CandidateListItem): string {
+  return c.current_title ?? c.signal_profile?.current_title ?? "";
+}
+
+function candidateCompany(c: CandidateListItem): string {
+  return c.current_company ?? c.signal_profile?.current_company ?? "";
+}
 
 type PendingUpload = {
   resumeText: string;
@@ -209,7 +227,7 @@ export function JobPipelineTab({
     [jobId, roleBrief],
   );
 
-  const uploading = uploadUi.phase === "processing";
+  const uploading = uploadUi.phase === "uploading";
 
   const load = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) setLoading(true);
@@ -718,13 +736,13 @@ export function JobPipelineTab({
       name: f.name,
       status: "pending",
     }));
-    setUploadUi({ phase: "processing", files: initial });
+    setUploadUi({ phase: "uploading", files: initial });
 
     let successCount = 0;
     const nextFiles = [...initial];
 
     try {
-      const BATCH_SIZE = 3;
+      const BATCH_SIZE = 10;
 
       for (let b = 0; b < fileList.length; b += BATCH_SIZE) {
         const batch = fileList.slice(b, b + BATCH_SIZE);
@@ -734,7 +752,7 @@ export function JobPipelineTab({
           batch.map(async (file, j) => {
             const i = batchIndices[j];
             nextFiles[i] = { ...nextFiles[i], status: "processing" };
-            setUploadUi({ phase: "processing", files: [...nextFiles] });
+            setUploadUi({ phase: "uploading", files: [...nextFiles] });
             try {
               const resumeText = await parseResumeFile(file);
               await uploadOne({
@@ -760,28 +778,25 @@ export function JobPipelineTab({
                   err instanceof Error ? err.message : "Upload failed",
               };
             }
-            setUploadUi({ phase: "processing", files: [...nextFiles] });
+            setUploadUi({ phase: "uploading", files: [...nextFiles] });
           }),
         );
 
         if (successCount > 0) void load();
-
-        if (b + BATCH_SIZE < fileList.length) {
-          await new Promise((r) => setTimeout(r, 400));
-        }
       }
 
       if (successCount === 0 && !duplicateMatch) {
         const firstError = nextFiles.find((f) => f.status === "error")?.error;
         setError(
           firstError ??
-            "No resumes could be processed. Check the files and try again.",
+            "No resumes could be uploaded. Check the files and try again.",
         );
         setUploadUi({ phase: "idle" });
         return;
       }
 
       if (successCount > 0) {
+        void load();
         setUploadUi({
           phase: "success",
           files: nextFiles,
@@ -844,12 +859,70 @@ export function JobPipelineTab({
     }
   }
 
+  const retryParsing = async (candidateId: string) => {
+    setError(null);
+    try {
+      const res = await fetch(`/api/candidates/${candidateId}/reparse`, {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error ?? "Retry failed");
+      }
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Retry failed");
+    }
+  };
+
+  const renderParsingRow = (c: CandidateListItem) => (
+    <div
+      key={c.id}
+      className="flex flex-wrap items-center gap-3 border-b border-[#F1F5F9] border-l-4 border-l-[#0D9488]/60 px-4 py-3 last:border-0 bg-[#F8FAFC]/50"
+    >
+      <div className="h-4 w-4 shrink-0 rounded border border-slate-200 bg-slate-100" />
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className="h-4 w-32 animate-pulse rounded bg-slate-200" />
+        <p className="text-xs text-slate-400">Parsing resume…</p>
+      </div>
+      <span className="text-xs text-[#64748B]">
+        {c.resume_filename ?? "Resume"}
+      </span>
+    </div>
+  );
+
+  const renderFailedRow = (c: CandidateListItem) => (
+    <div
+      key={c.id}
+      className="flex flex-wrap items-center gap-3 border-b border-[#F1F5F9] border-l-4 border-l-red-300 px-4 py-3 last:border-0"
+    >
+      <AlertCircle className="h-4 w-4 shrink-0 text-red-500" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-red-700">
+          {c.resume_filename ?? candidateDisplayName(c)}
+        </p>
+        <p className="text-xs text-red-500">Resume parsing failed</p>
+      </div>
+      <button
+        type="button"
+        onClick={() => void retryParsing(c.id)}
+        className={`${karta.btnOutlineTeal} inline-flex items-center gap-1.5 px-3 py-1.5 text-sm`}
+      >
+        <RotateCw className="h-3.5 w-3.5" />
+        Retry
+      </button>
+    </div>
+  );
+
   const renderEvaluatedRow = (
     c: CandidateListItem,
     showShortlist: boolean,
     showRejectionReason = false,
     flatMode = false,
   ) => {
+    if (c.parsing_status === "pending") return renderParsingRow(c);
+    if (c.parsing_status === "failed") return renderFailedRow(c);
+
     const { gptScore, displayScore, verdict, isPreliminary } =
       pipelineDisplayScore(c, jobId);
     const isSelected = selected.has(c.id);
@@ -876,19 +949,19 @@ export function JobPipelineTab({
           checked={isSelected}
           onChange={() => toggleSelected(c.id)}
           onClick={(e) => e.stopPropagation()}
-          aria-label={`Select ${c.display_name}`}
+          aria-label={`Select ${candidateDisplayName(c)}`}
           className="h-4 w-4 shrink-0 rounded border-slate-300"
         />
         <div className="min-w-0 flex-1">
           <CandidateIdentityCard
-            displayName={c.display_name}
+            displayName={candidateDisplayName(c)}
             candidateId={c.id}
             panelOptions={panelOptions}
-            currentTitle={c.current_title}
-            currentCompany={c.current_company}
-            yearsExperience={c.signal_profile.total_years_experience}
-            experienceYears={c.signal_profile.experience_years}
-            location={c.signal_profile.location}
+            currentTitle={candidateTitle(c)}
+            currentCompany={candidateCompany(c)}
+            yearsExperience={c.signal_profile?.total_years_experience ?? ""}
+            experienceYears={c.signal_profile?.experience_years}
+            location={c.signal_profile?.location ?? null}
             scoredJobTitle={jobTitle}
             showMetaRow={false}
             enforceMinHeight
@@ -902,17 +975,14 @@ export function JobPipelineTab({
               )?.career_gaps ?? []
             }
             topSkills={
-              (
-                c.signal_profile as typeof c.signal_profile & {
-                  top_skills?: string[];
-                }
-              )?.top_skills ??
-              (c.signal_profile.skills_verified ?? []).map((s) =>
-                typeof s === "string" ? s : s.skill,
-              )
+              candidateTopSkills(c).length > 0
+                ? candidateTopSkills(c)
+                : (c.signal_profile?.skills_verified ?? []).map((s) =>
+                    typeof s === "string" ? s : s.skill,
+                  )
             }
-            skillsVerified={c.signal_profile.skills_verified}
-            professionalSummary={c.signal_profile.professional_summary}
+            skillsVerified={c.signal_profile?.skills_verified ?? []}
+            professionalSummary={c.signal_profile?.professional_summary ?? ""}
           />
           {showRejectionReason && c.manual_rejection_reason && (
             <span className="mt-0.5 inline-block rounded bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-600">
@@ -962,9 +1032,20 @@ export function JobPipelineTab({
   };
 
   const renderPendingRow = (c: CandidateListItem) => {
-    const { gptScore, displayScore, verdict, isPreliminary } =
-      pipelineDisplayScore(c, jobId);
-    const isEvaluating = scoringId === c.id;
+    if (c.parsing_status === "pending") return renderParsingRow(c);
+    if (c.parsing_status === "failed") return renderFailedRow(c);
+
+    const { displayScore, verdict, isPreliminary } = pipelineDisplayScore(
+      c,
+      jobId,
+    );
+    const awaitingScore =
+      c.parsing_status === "complete" &&
+      isPipelinePendingEvaluation(c, jobId);
+    const isEvaluating =
+      scoringId === c.id ||
+      batchEvaluating ||
+      awaitingScore;
     const isSelected = selected.has(c.id);
 
     return (
@@ -976,7 +1057,7 @@ export function JobPipelineTab({
           type="checkbox"
           checked={isSelected}
           onChange={() => toggleSelected(c.id)}
-          aria-label={`Select ${c.display_name}`}
+          aria-label={`Select ${candidateDisplayName(c)}`}
           className="h-4 w-4 shrink-0 rounded border-slate-300"
         />
         <div
@@ -992,14 +1073,14 @@ export function JobPipelineTab({
           }}
         >
           <CandidateIdentityCard
-            displayName={c.display_name}
+            displayName={candidateDisplayName(c)}
             candidateId={c.id}
             panelOptions={panelOptions}
-            currentTitle={c.current_title}
-            currentCompany={c.current_company}
-            yearsExperience={c.signal_profile.total_years_experience}
-            experienceYears={c.signal_profile.experience_years}
-            location={c.signal_profile.location}
+            currentTitle={candidateTitle(c)}
+            currentCompany={candidateCompany(c)}
+            yearsExperience={c.signal_profile?.total_years_experience ?? ""}
+            experienceYears={c.signal_profile?.experience_years}
+            location={c.signal_profile?.location ?? null}
             scoredJobTitle={jobTitle}
             showMetaRow={false}
             education={c.signal_profile?.education ?? []}
@@ -1012,25 +1093,27 @@ export function JobPipelineTab({
               )?.career_gaps ?? []
             }
             topSkills={
-              (
-                c.signal_profile as typeof c.signal_profile & {
-                  top_skills?: string[];
-                }
-              )?.top_skills ??
-              (c.signal_profile.skills_verified ?? []).map((s) =>
-                typeof s === "string" ? s : s.skill,
-              )
+              candidateTopSkills(c).length > 0
+                ? candidateTopSkills(c)
+                : (c.signal_profile?.skills_verified ?? []).map((s) =>
+                    typeof s === "string" ? s : s.skill,
+                  )
             }
-            skillsVerified={c.signal_profile.skills_verified}
-            professionalSummary={c.signal_profile.professional_summary}
+            skillsVerified={c.signal_profile?.skills_verified ?? []}
+            professionalSummary={c.signal_profile?.professional_summary ?? ""}
           />
         </div>
         <div className="hidden shrink-0 text-sm text-slate-600 sm:block">
           {formatTotalExperienceDisplay(
-            c.signal_profile.total_years_experience,
+            c.signal_profile?.total_years_experience,
           )}
         </div>
-        {displayScore != null && verdict && (
+        {awaitingScore ? (
+          <span className="inline-flex items-center gap-2 rounded-full border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-1 text-sm text-[#64748B]">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#0D9488]" />
+            Evaluating…
+          </span>
+        ) : displayScore != null && verdict ? (
           <VerdictBadge
             verdict={verdict}
             score={displayScore}
@@ -1038,8 +1121,7 @@ export function JobPipelineTab({
             preliminary={isPreliminary}
             animateIn={false}
           />
-        )}
-        {isEvaluating ? (
+        ) : isEvaluating ? (
           <span className="inline-flex items-center gap-2 text-sm text-[#64748B]">
             <Loader2 className="h-4 w-4 animate-spin text-[#0D9488]" />
             Evaluating…
@@ -1059,6 +1141,8 @@ export function JobPipelineTab({
   };
 
   const renderFlatRow = (c: CandidateListItem) => {
+    if (c.parsing_status === "pending") return renderParsingRow(c);
+    if (c.parsing_status === "failed") return renderFailedRow(c);
     const isPending = isPipelinePendingEvaluation(c, jobId);
     if (isPending) return renderPendingRow(c);
     const verdict = pipelineVerdictForRole(c, jobId);
@@ -1241,7 +1325,7 @@ export function JobPipelineTab({
       {uploadUi.phase !== "idle" && (
         <ResumeUploadProgress
           files={uploadUi.files}
-          phase={uploadUi.phase}
+          phase={uploadUi.phase === "success" ? "success" : "uploading"}
           successCount={
             uploadUi.phase === "success" ? uploadUi.count : undefined
           }
