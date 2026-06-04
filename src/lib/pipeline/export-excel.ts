@@ -1,6 +1,12 @@
 import * as XLSX from "xlsx-js-style";
-import { formatInsightsText } from "@/lib/pipeline/insights-from-score";
 import { topWatchPoint } from "@/lib/pipeline/insights-from-score";
+import {
+  legacyPipelineExportHeaders,
+  legacyPipelineExportRow,
+  shortlistCellExportValue,
+} from "@/lib/shortlist/export-cell-value";
+import { visibleShortlistColumns } from "@/lib/shortlist/resolve-columns";
+import type { ShortlistColumn } from "@/lib/shortlist/default-columns";
 import type { PipelineRoleSection } from "@/types/pipeline";
 import type { CandidateScoreResult, FitVerdict } from "@/types/score";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -49,50 +55,47 @@ async function loadWatchPoints(
   return map;
 }
 
+export type BuildPipelineWorkbookOptions = {
+  columns?: ShortlistColumn[];
+};
+
 export async function buildPipelineWorkbook(
   sections: PipelineRoleSection[],
+  options?: BuildPipelineWorkbookOptions,
 ): Promise<XLSX.WorkBook> {
   const wb = XLSX.utils.book_new();
-  const header = [
-    "Name",
-    "Email",
-    "Phone",
-    "Location",
-    "Fit Score",
-    "Verdict",
-    "Key Strengths",
-    "Watch Points",
-    "Relocation",
-    "Present CTC",
-    "Expected CTC",
-    "Recruiter Notes",
-  ];
+  const visibleColumns = options?.columns
+    ? visibleShortlistColumns(options.columns)
+    : null;
+
+  const header = visibleColumns
+    ? visibleColumns.map((c) => c.label)
+    : legacyPipelineExportHeaders();
 
   for (const section of sections) {
     if (section.candidates.length === 0) continue;
 
-    const watchByCandidate = await loadWatchPoints(
-      section.candidates.map((c) => c.candidate_id),
-      section.role_brief_id,
-    );
+    const watchByCandidate = visibleColumns
+      ? null
+      : await loadWatchPoints(
+          section.candidates.map((c) => c.candidate_id),
+          section.role_brief_id,
+        );
 
     const rows: (string | number)[][] = [header];
     for (const c of section.candidates) {
-      const strengths = formatInsightsText(c.insights);
-      rows.push([
-        c.candidate_name,
-        c.email ?? "",
-        c.phone ?? "",
-        c.location ?? "",
-        c.fit_score ?? "",
-        c.fit_verdict ?? "",
-        strengths,
-        watchByCandidate.get(c.candidate_id) ?? "",
-        c.relocation ?? "",
-        c.present_salary ?? "",
-        c.expected_salary ?? "",
-        c.recruiter_notes ?? "",
-      ]);
+      if (visibleColumns) {
+        rows.push(
+          visibleColumns.map((col) => shortlistCellExportValue(c, col)),
+        );
+      } else {
+        rows.push(
+          legacyPipelineExportRow(
+            c,
+            watchByCandidate?.get(c.candidate_id) ?? "",
+          ),
+        );
+      }
     }
 
     const ws = XLSX.utils.aoa_to_sheet(rows);
@@ -107,12 +110,27 @@ export async function buildPipelineWorkbook(
       };
     }
 
-    for (let r = 1; r <= range.e.r; r++) {
-      const verdictCell = XLSX.utils.encode_cell({ r, c: 5 });
-      const verdict = String(ws[verdictCell]?.v ?? "") as FitVerdict;
-      const fill = VERDICT_FILL[verdict];
-      if (fill && ws[verdictCell]) {
-        ws[verdictCell].s = { fill: { fgColor: { rgb: fill } } };
+    if (!visibleColumns) {
+      for (let r = 1; r <= range.e.r; r++) {
+        const verdictCell = XLSX.utils.encode_cell({ r, c: 5 });
+        const verdict = String(ws[verdictCell]?.v ?? "") as FitVerdict;
+        const fill = VERDICT_FILL[verdict];
+        if (fill && ws[verdictCell]) {
+          ws[verdictCell].s = { fill: { fgColor: { rgb: fill } } };
+        }
+      }
+    } else {
+      const matchIdx = visibleColumns.findIndex((col) => col.id === "match");
+      if (matchIdx >= 0) {
+        for (let r = 1; r <= range.e.r; r++) {
+          const cell = XLSX.utils.encode_cell({ r, c: matchIdx });
+          const text = String(ws[cell]?.v ?? "");
+          const verdict = text.split(" · ")[0] as FitVerdict;
+          const fill = VERDICT_FILL[verdict];
+          if (fill && ws[cell]) {
+            ws[cell].s = { fill: { fgColor: { rgb: fill } } };
+          }
+        }
       }
     }
 
@@ -131,9 +149,13 @@ export async function buildPipelineWorkbook(
   }
 
   if (wb.SheetNames.length === 0) {
+    const emptyCols = header.length;
     const ws = XLSX.utils.aoa_to_sheet([
       header,
-      ["No candidates in pipeline yet", "", "", "", "", "", "", "", "", "", "", ""],
+      [
+        "No candidates in pipeline yet",
+        ...Array(Math.max(0, emptyCols - 1)).fill(""),
+      ],
     ]);
     XLSX.utils.book_append_sheet(wb, ws, "Pipeline");
   }

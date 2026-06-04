@@ -4,8 +4,13 @@ import type {
 } from "@/types/job";
 import type { CoreStrengthBreakdown } from "@/lib/intelligence/skill-domains";
 import type { GithubProfileData } from "@/lib/candidates/github-enrichment";
-import type { CompanyType, FitVerdict, ResumeQualitySignals } from "@/types/score";
-import type { CandidateScoreResult } from "@/types/score";
+import type {
+  CandidateScoreResult,
+  CompanyType,
+  FitVerdict,
+  InterviewBrief,
+  ResumeQualitySignals,
+} from "@/types/score";
 import type { StructuredResume } from "@/types/structured-resume";
 
 export type CandidateParsingStatus = "pending" | "complete" | "failed";
@@ -166,6 +171,7 @@ export type CandidateRoleFitScore = {
   created_at: string;
   score_snapshot: CandidateScoreResult | null;
   role_brief_snapshot: unknown;
+  interview_brief: InterviewBrief | null;
 };
 
 export type CandidateScoreSummary = {

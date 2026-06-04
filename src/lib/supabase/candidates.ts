@@ -39,7 +39,7 @@ import {
   incrementCandidateCount,
   incrementCandidateCountAdmin,
 } from "@/lib/workspace/limits";
-import type { CandidateScoreResult } from "@/types/score";
+import type { CandidateScoreResult, InterviewBrief } from "@/types/score";
 
 async function getServerSupabase(): Promise<SupabaseClient> {
   return createSupabaseServerClient();
@@ -421,6 +421,10 @@ export async function getCandidateById(id: string): Promise<CandidateDetail | nu
       created_at: String(row.created_at),
       score_snapshot: (row.score_snapshot as CandidateScoreResult) ?? null,
       role_brief_snapshot: row.role_brief_snapshot,
+      interview_brief:
+        row.interview_brief != null
+          ? (row.interview_brief as InterviewBrief)
+          : null,
     };
   });
 

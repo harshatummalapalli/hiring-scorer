@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Loader2, Search } from "lucide-react";
 import type { AdminOverview, AdminWorkspaceRow } from "@/lib/admin/queries";
 import { AdminCostDashboard } from "@/components/admin/admin-cost-dashboard";
-import { ParserUsageWidget } from "@/components/admin/parser-usage-widget";
+import { ResumeParsingWidget } from "@/components/admin/resume-parsing-widget";
 import { karta } from "@/lib/brand/karta";
 
 function formatStorageBytes(bytes: number): string {
@@ -26,8 +26,12 @@ function formatUsd(n: number): string {
   }).format(n);
 }
 
+function formatMax(max: number): string {
+  return max >= 999999 ? "∞" : max.toLocaleString();
+}
+
 function usageClass(current: number, max: number): string {
-  if (max <= 0) return "text-[#64748B]";
+  if (max >= 999999 || max <= 0) return "text-[#64748B]";
   const ratio = current / max;
   if (ratio >= 1) return "font-medium text-red-600";
   if (ratio >= 0.85) return "font-medium text-amber-700";
@@ -35,7 +39,7 @@ function usageClass(current: number, max: number): string {
 }
 
 function formatUsage(current: number, max: number): string {
-  return `${current} / ${max}`;
+  return `${current.toLocaleString()} / ${formatMax(max)}`;
 }
 
 function formatDate(iso: string | null): string {
@@ -456,9 +460,9 @@ function DataQualityCard() {
     <section className={`${karta.card} p-5`}>
       <h3 className={karta.sectionHeading}>Data Quality</h3>
       <p className="mt-1 text-sm text-[#64748B]">
-        Reparse all candidate records using the Python parser service. This fixes
-        names, strips PII from resume text, and improves extraction quality for
-        all existing candidates.
+        Reparse all candidate records using the Gemini parser. This re-extracts
+        names, skills, experience, and contact details for all existing
+        candidates.
       </p>
       <div className="mt-4 flex flex-wrap items-center gap-4">
         <button
@@ -585,7 +589,7 @@ export function AdminDashboard() {
         )}
       </section>
 
-      <ParserUsageWidget />
+      <ResumeParsingWidget />
 
       <AdminCostDashboard />
 

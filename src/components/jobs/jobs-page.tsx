@@ -1,8 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { Loader2, Mail, MoreVertical, Pause, Play, Plus, Trash2, X } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  Loader2,
+  Mail,
+  MoreVertical,
+  Pause,
+  Play,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
 import { DashboardStrip } from "@/components/dashboard/dashboard-strip";
 import { CopyButton } from "@/components/ui/copy-button";
 import { RoleBriefCreator } from "@/components/role-briefs/role-brief-creator";
@@ -36,6 +46,7 @@ function JobCard({
   onReload: () => void;
   onError: (message: string) => void;
 }) {
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -50,10 +61,12 @@ function JobCard({
     return () => document.removeEventListener("click", handleClick);
   }, [menuOpen]);
 
-  const archived =
-    job.status === "filled" || job.status === "cancelled";
+  const isArchived =
+    job.status === "archived" ||
+    job.status === "filled" ||
+    job.status === "cancelled";
 
-  const handleStatusChange = async (newStatus: "active" | "paused") => {
+  const patchStatus = async (newStatus: JobStatus) => {
     setMenuOpen(false);
     try {
       const res = await fetch(`/api/jobs/${job.id}`, {
@@ -72,7 +85,7 @@ function JobCard({
   const handleDelete = async () => {
     setMenuOpen(false);
     const confirmed = window.confirm(
-      "Delete this role? This cannot be undone. Candidates already evaluated will remain in your Talent Pool.",
+      "Delete this job? This cannot be undone. Candidates already evaluated will remain in your Talent Pool.",
     );
     if (!confirmed) return;
     try {
@@ -85,11 +98,24 @@ function JobCard({
     }
   };
 
+  const goToJob = () => router.push(`/jobs/${job.id}`);
+
   return (
     <li
-      className={`relative flex h-full min-h-[280px] flex-col ${karta.card} p-5 ${
-        archived ? "opacity-60" : karta.cardHover
-      } ${job.status === "active" && !archived ? karta.jobCardActive : ""}`}
+      role="button"
+      tabIndex={0}
+      onClick={goToJob}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          goToJob();
+        }
+      }}
+      className={`relative flex h-full min-h-[240px] cursor-pointer flex-col ${karta.card} p-5 transition-colors hover:border-teal-400 ${
+        job.status === "paused" ? "opacity-70" : ""
+      } ${isArchived ? "opacity-60" : ""} ${
+        job.status === "active" && !isArchived ? karta.jobCardActive : ""
+      }`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-h-[3rem] min-w-0 flex-1 flex-wrap items-start gap-2">
@@ -121,34 +147,68 @@ function JobCard({
             <MoreVertical className="h-4 w-4" />
           </button>
           {menuOpen && (
-            <div className="absolute top-8 right-0 z-20 min-w-[160px] rounded-lg border border-slate-200 bg-white shadow-lg">
+            <div className="absolute top-8 right-0 z-20 min-w-[180px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
               {job.status === "active" && (
                 <button
                   type="button"
-                  onClick={() => void handleStatusChange("paused")}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void patchStatus("paused");
+                  }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
                 >
                   <Pause className="h-4 w-4 shrink-0" />
-                  Pause Role
+                  Pause Job
                 </button>
               )}
               {job.status === "paused" && (
                 <button
                   type="button"
-                  onClick={() => void handleStatusChange("active")}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void patchStatus("active");
+                  }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
                 >
                   <Play className="h-4 w-4 shrink-0" />
-                  Resume Role
+                  Resume Job
+                </button>
+              )}
+              {isArchived ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void patchStatus("active");
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                >
+                  <ArchiveRestore className="h-4 w-4 shrink-0" />
+                  Unarchive Job
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void patchStatus("archived");
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                >
+                  <Archive className="h-4 w-4 shrink-0" />
+                  Archive Job
                 </button>
               )}
               <button
                 type="button"
-                onClick={() => void handleDelete()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleDelete();
+                }}
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
               >
                 <Trash2 className="h-4 w-4 shrink-0" />
-                Delete Role
+                Delete Job
               </button>
             </div>
           )}
@@ -180,30 +240,15 @@ function JobCard({
           <span className="min-w-0 flex-1 truncate text-[11px] text-[#94A3B8]">
             {job.inbound_email}
           </span>
-          <CopyButton
-            text={job.inbound_email}
-            label="Copy"
-            className="relative z-10 shrink-0 !gap-1 text-[11px] [&_svg]:h-3 [&_svg]:w-3"
-          />
+          <span onClick={(e) => e.stopPropagation()} role="presentation">
+            <CopyButton
+              text={job.inbound_email}
+              label="Copy"
+              className="relative z-10 shrink-0 !gap-1 text-[11px] [&_svg]:h-3 [&_svg]:w-3"
+            />
+          </span>
         </div>
       )}
-      <div className="mt-auto flex flex-col gap-2 pt-4">
-        {archived ? (
-          <Link
-            href={`/jobs/${job.id}`}
-            className="block w-full rounded-lg border border-slate-200 py-2.5 text-center text-sm font-medium text-[#64748B] hover:bg-slate-50"
-          >
-            View
-          </Link>
-        ) : (
-          <Link
-            href={`/jobs/${job.id}`}
-            className="block w-full rounded-lg border border-[#0D9488] bg-white py-2.5 text-center text-sm font-semibold text-[#0D9488] transition hover:bg-[#F0FDFA]"
-          >
-            Open Job
-          </Link>
-        )}
-      </div>
     </li>
   );
 }
@@ -354,6 +399,7 @@ export function JobsPage() {
         />
       ) : (
         <>
+          <div id="job-cards" className="scroll-mt-6 space-y-4">
           <div className="flex gap-2">
             <button
               type="button"
@@ -383,9 +429,7 @@ export function JobsPage() {
             .filter((job) =>
               jobFilter === "all"
                 ? true
-                : job.status === "active" ||
-                  job.status === "paused" ||
-                  job.status === "on_hold",
+                : job.status === "active" || job.status === "paused",
             )
             .map((job) => (
               <JobCard
@@ -396,6 +440,7 @@ export function JobsPage() {
               />
             ))}
           </ul>
+          </div>
         </>
       )}
 

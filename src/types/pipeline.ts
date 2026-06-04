@@ -20,6 +20,7 @@ export type PipelineCandidateRow = {
   present_salary: string | null;
   expected_salary: string | null;
   recruiter_notes: string | null;
+  custom_fields: Record<string, string>;
   added_at: string;
   created_by: string | null;
 };

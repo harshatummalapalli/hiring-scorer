@@ -54,18 +54,23 @@ export function VerdictBadge({
   return (
     <span className="inline-flex flex-col items-end gap-0.5">
       <span
-        className={`${VERDICT_BADGE_BASE} ${verdictBadgeClass(verdict)} ${shadow} ${
+        className={`${VERDICT_BADGE_BASE} ${verdictBadgeClass(verdict)} ${shadow} inline-flex items-center gap-1.5 ${
           animateIn ? "verdict-badge-enter" : ""
         }`}
       >
-        {verdictLabel(verdict)}
+        <span className="verdict-label">{verdictLabel(verdict)}</span>
         {score != null && showScore ? (
-          <span
-            key={score}
-            className={scoreAnimate ? "verdict-score-update" : undefined}
-          >
-            {` ${score}`}
-          </span>
+          <>
+            <span className="opacity-50" aria-hidden>
+              ·
+            </span>
+            <span
+              key={score}
+              className={`verdict-score tabular-nums ${scoreAnimate ? "verdict-score-update" : ""}`}
+            >
+              {score}
+            </span>
+          </>
         ) : null}
       </span>
       {preliminary ? (

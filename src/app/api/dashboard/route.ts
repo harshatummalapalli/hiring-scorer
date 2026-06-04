@@ -64,13 +64,16 @@ export async function GET() {
 
     const shortlistedThisWeek = (pipelineRes.data ?? []).length;
 
+    let exceptionalMatches = 0;
     let strongMatches = 0;
     let evaluatedToday = 0;
 
     for (const row of scores) {
       const score = Number(row.overall_score ?? 0);
       const verdict = scoreToVerdict(score);
-      if (verdict === "STRONG MATCH" || verdict === "EXCEPTIONAL MATCH") {
+      if (verdict === "EXCEPTIONAL MATCH") {
+        exceptionalMatches += 1;
+      } else if (verdict === "STRONG MATCH") {
         strongMatches += 1;
       }
       const created = String(row.created_at ?? "");
@@ -84,6 +87,7 @@ export async function GET() {
       totalCandidates,
       inPipeline,
       shortlistedThisWeek,
+      exceptionalMatches,
       strongMatches,
       evaluatedToday,
     });

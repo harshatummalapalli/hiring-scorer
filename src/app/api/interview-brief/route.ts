@@ -189,6 +189,16 @@ export async function POST(request: Request) {
 
     const brief = parseJsonFromModel(text) as InterviewBrief;
 
+    const { error: saveError } = await supabase
+      .from("saved_scores")
+      .update({ interview_brief: brief })
+      .eq("id", body.saved_score_id)
+      .eq("created_by", user.id);
+
+    if (saveError) {
+      console.error("[interview-brief] save failed:", saveError.message);
+    }
+
     return NextResponse.json({ brief });
   } catch (err) {
     const msg =

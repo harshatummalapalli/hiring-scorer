@@ -63,9 +63,11 @@ async function openAiGet<T>(
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(
+    const err = new Error(
       `OpenAI API ${res.status}: ${text.slice(0, 300) || res.statusText}`,
-    );
+    ) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
   }
   return res.json() as Promise<T>;
 }
@@ -255,7 +257,26 @@ export type FetchOpenAiUsageResult = {
   usage: OpenAiUsageSnapshot;
   live: boolean;
   error?: string;
+  /** True when the admin key lacks api.usage.read (HTTP 403). */
+  usageScopeDenied?: boolean;
 };
+
+const OPENAI_USAGE_SCOPE_NOTE =
+  "Live OpenAI usage data requires an API key with the api.usage.read scope. Update your key in Vercel environment variables to enable this.";
+
+export function getOpenAiUsageScopeNote(): string {
+  return OPENAI_USAGE_SCOPE_NOTE;
+}
+
+function isUsageScopeDenied(status: number, message: string): boolean {
+  if (status === 403) return true;
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("api.usage.read") ||
+    lower.includes("missing scope") ||
+    (lower.includes("403") && lower.includes("usage"))
+  );
+}
 
 /** Pull live OpenAI usage for the current UTC month. */
 export async function fetchOpenAiUsageThisMonth(): Promise<FetchOpenAiUsageResult> {
@@ -277,11 +298,31 @@ export async function fetchOpenAiUsageThisMonth(): Promise<FetchOpenAiUsageResul
     return { usage: snapshot, live: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : "OpenAI usage fetch failed";
+    const status =
+      err && typeof err === "object" && "status" in err
+        ? Number((err as { status?: number }).status)
+        : 0;
+    const scopeDenied = isUsageScopeDenied(status, message);
     if (lastSuccessfulSnapshot) {
       return {
         usage: { ...lastSuccessfulSnapshot, source: "cached" },
         live: false,
-        error: message,
+        error: scopeDenied ? OPENAI_USAGE_SCOPE_NOTE : message,
+        usageScopeDenied: scopeDenied,
+      };
+    }
+    if (scopeDenied) {
+      return {
+        usage: {
+          total_tokens: 0,
+          total_cost_usd: 0,
+          requests: 0,
+          by_model: [],
+          source: "cached",
+        },
+        live: false,
+        error: OPENAI_USAGE_SCOPE_NOTE,
+        usageScopeDenied: true,
       };
     }
     throw new Error(message);

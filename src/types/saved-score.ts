@@ -1,4 +1,9 @@
-import type { CandidateScoreResult, DimensionKey, DimensionScore } from "@/types/score";
+import type {
+  CandidateScoreResult,
+  DimensionKey,
+  DimensionScore,
+  InterviewBrief,
+} from "@/types/score";
 import type { AttributedFlag } from "@/types/score";
 
 export type RoleBriefSnapshot = {
@@ -26,6 +31,7 @@ export type SavedScoreRow = {
   recruiter_notes: string | null;
   score_snapshot: CandidateScoreResult | null;
   role_brief_snapshot: RoleBriefSnapshot | null;
+  interview_brief: InterviewBrief | null;
   created_at: string;
 };
 

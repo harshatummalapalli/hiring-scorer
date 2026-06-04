@@ -8,6 +8,7 @@ import {
   resolvePanelLinkedInUrl,
 } from "@/lib/candidates/extract-resume-fields";
 import type { CandidateDetail, EducationEntry } from "@/types/candidate";
+import { VerdictBadge } from "@/components/candidates/profile-shared";
 
 // ─── Experience Calculator ────────────────────────────────────────────────────
 
@@ -199,11 +200,15 @@ function SkillsRow({ skills }: { skills: string[] }) {
 type CandidatePanelHeaderProps = {
   candidate: CandidateDetail;
   roleBriefTitle?: string | null;
+  verdict?: string | null;
+  score?: number | null;
 };
 
 export function CandidatePanelHeader({
   candidate,
   roleBriefTitle,
+  verdict = null,
+  score = null,
 }: CandidatePanelHeaderProps) {
   const profile = candidate.signal_profile;
 
@@ -312,14 +317,26 @@ export function CandidatePanelHeader({
         {/* Top skills + overflow */}
         <SkillsRow skills={allSkills} />
 
-        {/* Education */}
-        {topEd && (
-          <p className="text-xs text-[#64748B]">
-            {[topEd.degree, topEd.field, topEd.institution, topEd.year]
-              .filter(Boolean)
-              .join("  ·  ")}
-          </p>
+        {/* Verdict + score */}
+        {verdict && score != null && (
+          <div className="pt-1">
+            <VerdictBadge verdict={verdict} score={score} showScore />
+          </div>
         )}
+
+        {/* Education · location */}
+        <p className="text-xs text-[#64748B]">
+          {[
+            topEd
+              ? [topEd.degree, topEd.field, topEd.institution, topEd.year]
+                  .filter(Boolean)
+                  .join(" · ")
+              : null,
+            profile.location?.trim() || null,
+          ]
+            .filter(Boolean)
+            .join("  ·  ")}
+        </p>
 
       </div>
     </div>

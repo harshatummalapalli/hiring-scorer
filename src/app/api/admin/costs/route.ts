@@ -31,9 +31,10 @@ export async function GET() {
     };
     let openaiLive = false;
     let openaiWarning: string | undefined;
+    let openaiNote: string | undefined;
 
     if (missingEnv.includes("OPENAI_ADMIN_KEY")) {
-      openaiWarning =
+      openaiNote =
         "OPENAI_ADMIN_KEY is not configured. OpenAI totals are unavailable.";
     } else {
       try {
@@ -41,13 +42,16 @@ export async function GET() {
         openai = result.usage;
         openaiLive = result.live;
         if (!result.live && result.error) {
-          openaiWarning = `Live OpenAI data unavailable: ${result.error}. Showing last known values.`;
+          if (result.usageScopeDenied) {
+            openaiNote = result.error;
+          } else {
+            openaiWarning = `Live OpenAI data unavailable: ${result.error}. Showing last known values.`;
+          }
         }
       } catch (err) {
-        openaiWarning =
-          err instanceof Error
-            ? `Live OpenAI data unavailable: ${err.message}`
-            : "Live OpenAI data unavailable.";
+        const message =
+          err instanceof Error ? err.message : "Live OpenAI data unavailable.";
+        openaiWarning = `Live OpenAI data unavailable: ${message}`;
       }
     }
 
@@ -72,6 +76,7 @@ export async function GET() {
         ...openai,
         live: openaiLive,
         warning: openaiWarning,
+        note: openaiNote,
       },
       anthropic: {
         claude_cost_usd: claudeTotalUsd,

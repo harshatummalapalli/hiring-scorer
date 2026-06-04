@@ -44,6 +44,10 @@ function parseSavedScoreRow(row: Record<string, unknown>): SavedScoreRow {
     score_snapshot: row.score_snapshot as SavedScoreRow["score_snapshot"],
     role_brief_snapshot:
       row.role_brief_snapshot as SavedScoreRow["role_brief_snapshot"],
+    interview_brief:
+      row.interview_brief != null
+        ? (row.interview_brief as SavedScoreRow["interview_brief"])
+        : null,
     created_at: String(row.created_at),
   };
 }

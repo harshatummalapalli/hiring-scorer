@@ -1,20 +1,11 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ChevronDown,
-  ChevronUp,
-  ClipboardList,
-  Download,
-  Loader2,
-  Trash2,
-  X,
-} from "lucide-react";
+import { Download, Loader2, Trash2, X } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import type { CandidateDetail, CandidateSignalProfile } from "@/types/candidate";
 import type { RoleBrief } from "@/types/role-brief";
 import type { FitVerdict } from "@/types/score";
-import { buildRoleFitSummary } from "@/lib/scoring/role-fit-summary";
 import { scoreToVerdict } from "@/lib/scoring/recruiter-card";
 import type { CandidateScoreResult } from "@/types/score";
 import {
@@ -37,11 +28,9 @@ import {
 } from "@/lib/candidates/pick-panel-score";
 import { useActiveRoleBrief } from "@/contexts/active-role-brief-context";
 import { karta } from "@/lib/brand/karta";
-import { KartaMatchBreakdown } from "@/components/match/karta-match-breakdown";
 import { snapshotToRoleBrief } from "@/lib/saved-scores/build-save-payload";
 import { downloadKartaAssessmentPdf } from "@/lib/reports/karta-assessment-pdf";
 import type { RoleBriefSnapshot } from "@/types/saved-score";
-import { formatCoreStrengthLabel } from "@/lib/intelligence/skill-domains";
 import { SignalScoreCard } from "@/components/ui/signal-score-card";
 import { SlidingTabs } from "@/components/ui/sliding-tabs";
 import { CandidateDetailsSection } from "./candidate-details-section";
@@ -49,9 +38,13 @@ import { CandidatePanelHeader } from "./candidate-panel-header";
 import { ScoreRolePickerModal } from "./score-role-picker-modal";
 import { useScoreCandidate } from "@/lib/candidates/use-score-candidate";
 import { VerdictBadge } from "./profile-shared";
-import { CandidateScoreHistory } from "./candidate-score-history";
 import { CandidatePitchCard } from "@/components/pipeline/candidate-pitch-card";
-import { InterviewBriefPanel } from "@/components/candidates/interview-brief-panel";
+import { DimensionDonut } from "@/components/candidates/dimension-donut";
+import { ScoreBreakdownSection } from "@/components/candidates/score-breakdown-section";
+import { SkillsMatchSection } from "@/components/candidates/skills-match-section";
+import { WhyThisCandidateSection } from "@/components/candidates/why-this-candidate-section";
+import { InterviewBriefSection } from "@/components/candidates/interview-brief-section";
+import type { InterviewBrief } from "@/types/score";
 
 function formatDate(iso: string): string {
   try {
@@ -254,16 +247,13 @@ export function CandidateSlidePanel({
   const [error, setError] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
   const [noteBusy, setNoteBusy] = useState(false);
-  const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [cvDownloadBusy, setCvDownloadBusy] = useState(false);
   const [selectedFitId, setSelectedFitId] = useState<string | null>(null);
-  const [showInterviewBrief, setShowInterviewBrief] = useState(false);
   const [panelTab, setPanelTab] = useState<"insights" | "resume">("insights");
   const [panelExiting, setPanelExiting] = useState(false);
   const [insightsAnimateKey, setInsightsAnimateKey] = useState(0);
   const [inShortlist, setInShortlist] = useState(false);
-  const [signalBreakdownOpen, setSignalBreakdownOpen] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -315,7 +305,6 @@ export function CandidateSlidePanel({
 
   useEffect(() => {
     void load();
-    setBreakdownOpen(false);
   }, [load, candidateId]);
 
   useEffect(() => {
@@ -371,14 +360,6 @@ export function CandidateSlidePanel({
 
   const jobTitleLabel =
     selectedFit?.role_brief_title ?? roleBrief?.title ?? null;
-
-  const mustHaves = useMemo(() => {
-    const intel = displayResult?.skills_intelligence;
-    const total =
-      intel?.total_required ?? displayRoleBrief?.deal_breakers.length ?? 0;
-    const met = intel?.matched_count ?? 0;
-    return { met, total: Math.max(total, 1) };
-  }, [displayResult, displayRoleBrief]);
 
   const scoreRoleBriefId = contextJobId ?? roleBrief?.id ?? null;
 
@@ -452,9 +433,20 @@ export function CandidateSlidePanel({
     };
   }, [candidateId, contextJobId]);
 
-  useEffect(() => {
-    setSignalBreakdownOpen(false);
-  }, [candidateId, contextJobId]);
+  const handleBriefStored = useCallback(
+    (brief: InterviewBrief) => {
+      setCandidate((prev) => {
+        if (!prev || !selectedFitId) return prev;
+        return {
+          ...prev,
+          role_fit_scores: prev.role_fit_scores.map((fit) =>
+            fit.id === selectedFitId ? { ...fit, interview_brief: brief } : fit,
+          ),
+        };
+      });
+    },
+    [selectedFitId],
+  );
 
   const addNote = async () => {
     if (!candidateId || !noteText.trim()) return;
@@ -548,11 +540,111 @@ export function CandidateSlidePanel({
   const profile = candidate?.signal_profile;
   const insightsAnimate =
     panelTab === "insights" && !loading && Boolean(profile);
-  const card = displayResult?.recruiter_card;
-  const verdict = displayResult
+  const verdict = selectedFit?.verdict ?? (displayResult
     ? scoreToVerdict(displayResult.overall_score)
-    : null;
+    : null);
   const intel = displayResult?.skills_intelligence;
+
+  const roleFitHistorySection = candidate ? (
+    <section className={`${karta.card} p-4`}>
+      <h3 className={karta.sectionHeading}>Role Fit History</h3>
+      {candidate.role_fit_scores.length === 0 ? (
+        <p className="text-sm text-[#64748B]">No scores yet.</p>
+      ) : (
+        <ul className="mt-2 divide-y divide-[#F1F5F9]">
+          {candidate.role_fit_scores.map((fit) => (
+            <li
+              key={fit.id}
+              className="flex items-center justify-between gap-2 py-2.5 text-sm"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium text-[#1E293B]">
+                  {fit.role_brief_title ?? "Job role"}
+                </p>
+                <p className="text-xs text-[#64748B]">
+                  {formatDate(fit.created_at)}
+                </p>
+              </div>
+              <VerdictBadge
+                verdict={fit.verdict as FitVerdict}
+                score={fit.overall_score}
+                showScore
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  ) : null;
+
+  const notesSection = (
+    <section className={`${karta.card} p-4`}>
+      <h3 className={karta.sectionHeading}>Notes</h3>
+      {contextJobId && (
+        <div className="mb-3 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setNoteFilter("all")}
+            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+              noteFilter === "all"
+                ? "bg-[#0D9488] text-white"
+                : "bg-slate-100 text-[#64748B] hover:bg-slate-200"
+            }`}
+          >
+            All notes
+          </button>
+          <button
+            type="button"
+            onClick={() => setNoteFilter("role")}
+            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+              noteFilter === "role"
+                ? "bg-[#0D9488] text-white"
+                : "bg-slate-100 text-[#64748B] hover:bg-slate-200"
+            }`}
+          >
+            This role
+          </button>
+        </div>
+      )}
+      {visibleNotes.length > 0 && (
+        <ul className="mb-3 space-y-2">
+          {visibleNotes.map((n) => (
+            <li
+              key={n.id}
+              className="rounded-md bg-[#F8FAFC] px-3 py-2 text-sm text-[#334155]"
+            >
+              <p>{n.body}</p>
+              <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#64748B]">
+                <span>{formatDate(n.created_at)}</span>
+                {n.job_id && contextJobId === n.job_id ? (
+                  <span className="text-[10px] text-[#0D9488]">This role</span>
+                ) : n.job_id ? (
+                  <span className="text-[10px] text-[#94A3B8]">Other role</span>
+                ) : (
+                  <span className="text-[10px] text-[#94A3B8]">General</span>
+                )}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+      <textarea
+        value={noteText}
+        onChange={(e) => setNoteText(e.target.value)}
+        rows={3}
+        placeholder="Add a note…"
+        className={karta.input}
+      />
+      <button
+        type="button"
+        disabled={noteBusy || !noteText.trim()}
+        onClick={() => void addNote()}
+        className={`mt-2 ${karta.btnPrimary}`}
+      >
+        {noteBusy ? "Saving…" : "Add note"}
+      </button>
+    </section>
+  );
 
   return (
     <>
@@ -598,19 +690,22 @@ export function CandidateSlidePanel({
                 </p>
               )}
 
-              <CandidatePanelHeader
-                candidate={candidate}
-                roleBriefTitle={jobTitleLabel ?? displayRoleBrief?.title ?? null}
-              />
+              <div className="sticky top-0 z-10 -mx-4 border-b border-[#F1F5F9] bg-white px-4 pb-4">
+                <CandidatePanelHeader
+                  candidate={candidate}
+                  roleBriefTitle={jobTitleLabel ?? displayRoleBrief?.title ?? null}
+                  verdict={verdict}
+                  score={displayResult?.overall_score ?? null}
+                />
 
-              <div className="space-y-2">
+                <div className="mt-2 space-y-2">
                   {contextJobId && jobTitleLabel ? (
-                    <p className="mt-1 text-xs font-medium text-[#0D9488]">
+                    <p className="text-xs font-medium text-[#0D9488]">
                       {jobTitleLabel}
                     </p>
                   ) : null}
                   {!contextJobId && historicalFits.length > 1 ? (
-                    <div className="mt-2">
+                    <div>
                       <label className="sr-only" htmlFor="panel-job-score-select">
                         Evaluated against
                       </label>
@@ -618,7 +713,7 @@ export function CandidateSlidePanel({
                         id="panel-job-score-select"
                         value={selectedFitId ?? ""}
                         onChange={(e) => setSelectedFitId(e.target.value)}
-                        className={`${karta.input} mt-1 text-sm`}
+                        className={`${karta.input} text-sm`}
                       >
                         {historicalFits.map((fit) => (
                           <option key={fit.id} value={fit.id}>
@@ -629,26 +724,62 @@ export function CandidateSlidePanel({
                       </select>
                     </div>
                   ) : !contextJobId && jobTitleLabel && hasScore ? (
-                    <p className="mt-1 text-xs font-medium text-[#0D9488]">
+                    <p className="text-xs font-medium text-[#0D9488]">
                       {jobTitleLabel}
                       {selectedFit
                         ? ` · ${formatDate(selectedFit.created_at)}`
                         : ""}
                     </p>
                   ) : null}
-                  {formatCoreStrengthLabel(
-                    profile.core_strength_primary,
-                    profile.core_strength_secondary,
-                  ) && (
-                    <p className="mt-0.5 text-[11px] font-medium text-[#0D9488]">
-                      Core strength:{" "}
-                      {formatCoreStrengthLabel(
-                        profile.core_strength_primary,
-                        profile.core_strength_secondary,
-                      )
-                        ?.replace(" + ", " · ")}
-                    </p>
-                  )}
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                  {candidate.resume_file_path ? (
+                    <button
+                      type="button"
+                      disabled={cvDownloadBusy}
+                      onClick={() => void handleDownloadOriginalCv()}
+                      className="inline-flex items-center gap-1.5 text-sm font-medium text-[#0D9488] hover:text-[#0B8276] disabled:opacity-50"
+                    >
+                      {cvDownloadBusy ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Download className="h-3.5 w-3.5" />
+                      )}
+                      Download Original CV
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={
+                      pdfBusy ||
+                      loading ||
+                      !hasScore ||
+                      !displayRoleBrief ||
+                      !candidate
+                    }
+                    onClick={() => void handleDownloadReport()}
+                    className={`inline-flex shrink-0 items-center gap-1.5 ${karta.btnOutlineTeal} px-2.5 py-1.5 text-xs`}
+                  >
+                    {pdfBusy ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" />
+                    )}
+                    Download Report
+                  </button>
+                </div>
+
+                <div className="mt-3">
+                  <SlidingTabs
+                    tabs={[
+                      { id: "insights", label: "Insights" },
+                      { id: "resume", label: "Resume" },
+                    ]}
+                    value={panelTab}
+                    onChange={setPanelTab}
+                  />
+                </div>
               </div>
 
               {candidate.manual_rejection_reason && (
@@ -669,52 +800,6 @@ export function CandidateSlidePanel({
                   )}
                 </div>
               )}
-
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                {candidate.resume_file_path ? (
-                  <button
-                    type="button"
-                    disabled={cvDownloadBusy}
-                    onClick={() => void handleDownloadOriginalCv()}
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-[#0D9488] hover:text-[#0B8276] disabled:opacity-50"
-                  >
-                    {cvDownloadBusy ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Download className="h-3.5 w-3.5" />
-                    )}
-                    Download Original CV
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  disabled={
-                    pdfBusy ||
-                    loading ||
-                    !hasScore ||
-                    !displayRoleBrief ||
-                    !candidate
-                  }
-                  onClick={() => void handleDownloadReport()}
-                  className={`inline-flex shrink-0 items-center gap-1.5 ${karta.btnOutlineTeal} px-2.5 py-1.5 text-xs`}
-                >
-                  {pdfBusy ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Download className="h-3.5 w-3.5" />
-                  )}
-                  Download Report
-                </button>
-              </div>
-
-              <SlidingTabs
-                tabs={[
-                  { id: "insights", label: "Insights" },
-                  { id: "resume", label: "Resume" },
-                ]}
-                value={panelTab}
-                onChange={setPanelTab}
-              />
 
               {panelTab === "resume" ? (
                 <div className="space-y-4">
@@ -764,39 +849,20 @@ export function CandidateSlidePanel({
                     </section>
                   )}
 
-                  {/* Skills */}
-                  {(candidate.signal_profile?.skills_verified?.length ?? 0) > 0 && (
-                    <section className={`${karta.card} p-4`}>
-                      <h3 className={karta.sectionHeading}>Skills</h3>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {candidate.signal_profile.skills_verified
-                          .slice(0, 20)
-                          .map((s, i) => (
-                            <span
-                              key={i}
-                              className="rounded-full bg-teal-50 px-2.5 py-0.5 text-xs font-medium text-[#0D9488]"
-                            >
-                              {typeof s === "string" ? s : s.skill}
-                            </span>
-                          ))}
-                      </div>
-                    </section>
-                  )}
-
                   <CandidateDetailsSection
                     candidate={candidate}
                     onSaved={() => void load()}
                   />
                 </div>
               ) : hasScore && displayResult && displayRoleBrief ? (
-                <>
+                <div className="space-y-4 pt-2">
                   {displayResult.deal_breaker_warning && (
                     <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                       {displayResult.deal_breaker_warning}
                     </p>
                   )}
 
-                  {inShortlist && selectedFit && candidate && (
+                  {inShortlist && selectedFit && (
                     <CandidatePitchCard
                       candidate={{
                         id: "",
@@ -813,6 +879,7 @@ export function CandidateSlidePanel({
                         present_salary: null,
                         expected_salary: null,
                         recruiter_notes: null,
+                        custom_fields: {},
                         added_at: "",
                         created_by: null,
                       }}
@@ -820,375 +887,92 @@ export function CandidateSlidePanel({
                     />
                   )}
 
-                  {inShortlist ? (
+                  <div className="flex flex-col gap-6 lg:flex-row">
+                    <div className="min-w-0 space-y-5 lg:flex-[3]">
+                      <WhyThisCandidateSection
+                        result={displayResult}
+                        roleBrief={displayRoleBrief}
+                        cannotAssessItems={cannotAssessItems}
+                      />
+                      <ScoreBreakdownSection
+                        result={displayResult}
+                        roleBrief={displayRoleBrief}
+                      />
+                      {intel && <SkillsMatchSection intel={intel} />}
+                      {selectedFit && candidateId && (
+                        <InterviewBriefSection
+                          key={selectedFit.id}
+                          candidateId={candidateId}
+                          savedScoreId={selectedFit.id}
+                          candidateName={candidate.display_name}
+                          roleTitle={
+                            selectedFit.role_brief_title ?? "Role"
+                          }
+                          storedBrief={selectedFit.interview_brief}
+                          onBriefStored={handleBriefStored}
+                          onError={setError}
+                        />
+                      )}
+                    </div>
+
+                    <div className="min-w-0 space-y-5 lg:flex-[2]">
+                      <CandidateDetailsSection
+                        candidate={candidate}
+                        onSaved={() => void load()}
+                      />
+                      <DimensionDonut
+                        result={displayResult}
+                        roleBrief={displayRoleBrief}
+                      />
+                      {roleFitHistorySection}
+                      {notesSection}
+                    </div>
+                  </div>
+                </div>
+              ) : panelTab === "insights" ? (
+                <div className="flex flex-col gap-6 pt-2 lg:flex-row">
+                  <div className="min-w-0 space-y-5 lg:flex-[3]">
                     <section>
+                      <h3 className={karta.sectionHeading}>Candidate Insights</h3>
+                      <div className="mt-3">
+                        <CandidateInsightsBars
+                          key={insightsAnimateKey}
+                          profile={profile}
+                          animate={insightsAnimate}
+                        />
+                      </div>
+                    </section>
+                    <CandidateInsightsProfileExtras profile={profile} />
+                    {profile.github && (
+                      <GithubPresenceSection github={profile.github} />
+                    )}
+                    <div className="rounded-lg border border-dashed border-[#0D9488]/40 bg-teal-50/50 px-4 py-5 text-center">
+                      <p className="text-sm font-medium text-[#1E293B]">
+                        This candidate has not been evaluated yet
+                      </p>
                       <button
                         type="button"
-                        onClick={() =>
-                          setSignalBreakdownOpen((o) => !o)
-                        }
-                        className="flex w-full items-center justify-between gap-2 border-t border-[#F1F5F9] pt-3 text-sm font-medium text-[#0D9488] hover:text-[#0B8276]"
+                        disabled={scoring}
+                        onClick={() => void handleScoreNow()}
+                        className={`mt-4 ${karta.btnPrimary}`}
                       >
-                        Full Signal Breakdown
-                        {signalBreakdownOpen ? (
-                          <ChevronUp className="h-4 w-4 shrink-0" />
+                        {scoring ? (
+                          <span className="inline-flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Analysing…
+                          </span>
                         ) : (
-                          <ChevronDown className="h-4 w-4 shrink-0" />
+                          "Evaluate Now"
                         )}
                       </button>
-                      {signalBreakdownOpen && (
-                        <div className="mt-3 space-y-4">
-                          <div>
-                            <h3 className={karta.sectionHeading}>
-                              Candidate Insights
-                            </h3>
-                            <div className="mt-3">
-                              <CandidateInsightsBars
-                                key={insightsAnimateKey}
-                                profile={profile}
-                                animate={insightsAnimate}
-                              />
-                            </div>
-                          </div>
-                          <CandidateInsightsProfileExtras
-                            profile={profile}
-                          />
-                        </div>
-                      )}
-                    </section>
-                  ) : (
-                    <>
-                      <section>
-                        <h3 className={karta.sectionHeading}>
-                          Candidate Insights
-                        </h3>
-                        <div className="mt-3">
-                          <CandidateInsightsBars
-                            key={insightsAnimateKey}
-                            profile={profile}
-                            animate={insightsAnimate}
-                          />
-                        </div>
-                      </section>
-
-                      <CandidateInsightsProfileExtras profile={profile} />
-                    </>
-                  )}
-
-                  {profile.github && (
-                    <GithubPresenceSection github={profile.github} />
-                  )}
-
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <VerdictBadge
-                      verdict={verdict}
-                      score={displayResult.overall_score}
-                      showScore
-                    />
-                    <p className="text-sm text-[#64748B]">
-                      <span className="font-semibold text-[#0D9488]">
-                        {mustHaves.met}
-                      </span>{" "}
-                      of{" "}
-                      <span className="font-semibold text-[#0D9488]">
-                        {mustHaves.total}
-                      </span>{" "}
-                      must-haves met
-                    </p>
-                  </div>
-
-                  {intel && (
-                    <section className="space-y-2">
-                      <div>
-                        <div className="mb-1 flex justify-between text-[13px]">
-                          <span className="font-medium text-[#334155]">
-                            Skills matched
-                          </span>
-                          <span className="text-[#64748B]">
-                            {intel.direct_count + intel.semantic_count} of{" "}
-                            {intel.total_required}
-                          </span>
-                        </div>
-                        <div className={karta.barTrack}>
-                          <div
-                            className={karta.barFill}
-                            style={{
-                              width: `${Math.min(100, (intel.matched_count / Math.max(1, intel.total_required)) * 100)}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                      {intel.semantic_count > 0 && (
-                        <div>
-                          <div className="mb-1 flex justify-between text-[13px]">
-                            <span className="font-medium text-[#334155]">
-                              Smart matches
-                            </span>
-                            <span className="text-[#64748B]">
-                              {intel.semantic_count} inferred
-                            </span>
-                          </div>
-                          <div className={karta.barTrack}>
-                            <div
-                              className="h-full rounded-md bg-emerald-500"
-                              style={{
-                                width: `${Math.min(100, (intel.semantic_count / Math.max(1, intel.total_required)) * 100)}%`,
-                              }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </section>
-                  )}
-
-                  {card && card.what_stands_out.length > 0 && (
-                    <section className={karta.accentTealSection}>
-                      <h3 className={karta.sectionHeading}>
-                        Why This Candidate
-                      </h3>
-                      {displayRoleBrief && (
-                        <p className="mt-2 text-sm italic text-[#64748B]">
-                          {buildRoleFitSummary(displayResult, displayRoleBrief)}
-                        </p>
-                      )}
-                      <ul className="mt-2 space-y-3">
-                        {card.what_stands_out.slice(0, 3).map((item, i) => (
-                          <li key={i} className="text-sm text-[#334155]">
-                            <p>{item.signal}</p>
-                            {item.evidence && (
-                              <blockquote className="mt-1 border-l-2 border-[#0D9488] pl-3 text-xs italic text-[#64748B]">
-                                &ldquo;{item.evidence}&rdquo;
-                              </blockquote>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    </section>
-                  )}
-
-                  {card && card.worth_exploring.length > 0 && (
-                    <section>
-                      <h3 className={karta.sectionHeading}>Watch Points</h3>
-                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-800">
-                        {card.worth_exploring.slice(0, 2).map((item, i) => (
-                          <li key={i}>{item}</li>
-                        ))}
-                      </ul>
-                    </section>
-                  )}
-
-                  {cannotAssessItems.length > 0 && (
-                    <section>
-                      <h3 className={karta.sectionHeading}>
-                        Verify in Conversation
-                      </h3>
-                      <p className="mt-1 text-[11px] text-[#94A3B8]">
-                        These qualities need to be explored in a call or
-                        interview — they cannot be assessed from a resume alone.
-                      </p>
-                      <ul className="mt-2 space-y-1">
-                        {cannotAssessItems.map((item, i) => (
-                          <li
-                            key={i}
-                            className="flex items-center gap-2 text-sm text-[#334155]"
-                          >
-                            <span className="text-[#0D9488]">◦</span>
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
-                    </section>
-                  )}
-
-                  {card && card.interview_questions.length > 0 && (
-                    <section>
-                      <h3 className={karta.sectionHeading}>Ask Them</h3>
-                      <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm text-[#334155]">
-                        {card.interview_questions.slice(0, 2).map((q, i) => (
-                          <li key={i}>{q}</li>
-                        ))}
-                      </ol>
-                    </section>
-                  )}
-
-                  {hasScore && selectedFit && candidateId && (
-                    <button
-                      type="button"
-                      onClick={() => setShowInterviewBrief(true)}
-                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-[#0D9488] bg-[#F0FDFA] px-4 py-2.5 text-sm font-medium text-[#0D9488] transition-colors hover:bg-[#CCFBF1]"
-                    >
-                      <ClipboardList className="h-4 w-4" />
-                      Generate Interview Brief
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => setBreakdownOpen((o) => !o)}
-                    className="flex w-full items-center justify-center gap-1 border-t border-[#F1F5F9] pt-3 text-sm font-medium text-[#0D9488] hover:text-[#0B8276]"
-                  >
-                    See Full Breakdown
-                    {breakdownOpen ? (
-                      <ChevronUp className="h-4 w-4" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4" />
-                    )}
-                  </button>
-                  {breakdownOpen && (
-                    <KartaMatchBreakdown
-                      result={displayResult}
-                      roleBrief={displayRoleBrief}
-                    />
-                  )}
-
-                  {candidateId && (
-                    <CandidateScoreHistory candidateId={candidateId} />
-                  )}
-                </>
-              ) : (
-                <>
-                  <section>
-                    <h3 className={karta.sectionHeading}>Candidate Insights</h3>
-                    <div className="mt-3">
-                      <CandidateInsightsBars
-                        key={insightsAnimateKey}
-                        profile={profile}
-                        animate={insightsAnimate}
-                      />
                     </div>
-                  </section>
-
-                  <CandidateInsightsProfileExtras profile={profile} />
-
-                  {profile.github && (
-                    <GithubPresenceSection github={profile.github} />
-                  )}
-
-                  <div className="rounded-lg border border-dashed border-[#0D9488]/40 bg-teal-50/50 px-4 py-5 text-center">
-                    <p className="text-sm font-medium text-[#1E293B]">
-                      This candidate has not been evaluated yet
-                    </p>
-                    <button
-                      type="button"
-                      disabled={scoring}
-                      onClick={() => void handleScoreNow()}
-                      className={`mt-4 ${karta.btnPrimary}`}
-                    >
-                      {scoring ? (
-                        <span className="inline-flex items-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Analysing…
-                        </span>
-                      ) : (
-                        "Evaluate Now"
-                      )}
-                    </button>
                   </div>
-                </>
-              )}
-
-              <section className={`${karta.card} p-4`}>
-                <h3 className={karta.sectionHeading}>Role Fit History</h3>
-                {candidate.role_fit_scores.length === 0 ? (
-                  <p className="text-sm text-[#64748B]">No scores yet.</p>
-                ) : (
-                  <ul className="mt-2 divide-y divide-[#F1F5F9]">
-                    {candidate.role_fit_scores.map((fit) => (
-                      <li
-                        key={fit.id}
-                        className="flex items-center justify-between gap-2 py-2.5 text-sm"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate font-medium text-[#1E293B]">
-                            {fit.role_brief_title ?? "Job role"}
-                          </p>
-                          <p className="text-xs text-[#64748B]">
-                            {formatDate(fit.created_at)}
-                          </p>
-                        </div>
-                        <VerdictBadge
-                          verdict={fit.verdict as FitVerdict}
-                          score={fit.overall_score}
-                          showScore
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-
-              <section className={`${karta.card} p-4`}>
-                <h3 className={karta.sectionHeading}>Notes</h3>
-                {contextJobId && (
-                  <div className="mb-3 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setNoteFilter("all")}
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                        noteFilter === "all"
-                          ? "bg-[#0D9488] text-white"
-                          : "bg-slate-100 text-[#64748B] hover:bg-slate-200"
-                      }`}
-                    >
-                      All notes
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNoteFilter("role")}
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                        noteFilter === "role"
-                          ? "bg-[#0D9488] text-white"
-                          : "bg-slate-100 text-[#64748B] hover:bg-slate-200"
-                      }`}
-                    >
-                      This role
-                    </button>
+                  <div className="min-w-0 space-y-5 lg:flex-[2]">
+                    {roleFitHistorySection}
+                    {notesSection}
                   </div>
-                )}
-                {visibleNotes.length > 0 && (
-                  <ul className="mb-3 space-y-2">
-                    {visibleNotes.map((n) => (
-                      <li
-                        key={n.id}
-                        className="rounded-md bg-[#F8FAFC] px-3 py-2 text-sm text-[#334155]"
-                      >
-                        <p>{n.body}</p>
-                        <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#64748B]">
-                          <span>{formatDate(n.created_at)}</span>
-                          {n.job_id && contextJobId === n.job_id ? (
-                            <span className="text-[10px] text-[#0D9488]">
-                              This role
-                            </span>
-                          ) : n.job_id ? (
-                            <span className="text-[10px] text-[#94A3B8]">
-                              Other role
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-[#94A3B8]">
-                              General
-                            </span>
-                          )}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <textarea
-                  value={noteText}
-                  onChange={(e) => setNoteText(e.target.value)}
-                  rows={3}
-                  placeholder="Add a note…"
-                  className={karta.input}
-                />
-                <button
-                  type="button"
-                  disabled={noteBusy || !noteText.trim()}
-                  onClick={() => void addNote()}
-                  className={`mt-2 ${karta.btnPrimary}`}
-                >
-                  {noteBusy ? "Saving…" : "Add note"}
-                </button>
-              </section>
+                </div>
+              ) : null}
 
               {candidateId &&
                 candidate &&
@@ -1240,15 +1024,6 @@ export function CandidateSlidePanel({
           ) : null}
         </div>
       </aside>
-      {showInterviewBrief && selectedFit && candidateId && (
-        <InterviewBriefPanel
-          candidateId={candidateId}
-          savedScoreId={selectedFit.id}
-          candidateName={candidate?.display_name ?? "Candidate"}
-          roleTitle={selectedFit.role_brief_title ?? "Role"}
-          onClose={() => setShowInterviewBrief(false)}
-        />
-      )}
       {pickerOpen && pickerCandidate && (
         <ScoreRolePickerModal
           candidateName={pickerCandidate.name}

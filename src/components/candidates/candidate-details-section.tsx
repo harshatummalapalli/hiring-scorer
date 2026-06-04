@@ -189,23 +189,6 @@ export function CandidateDetailsSection({
             </dd>
           </div>
         </dl>
-        <div className="mt-3">
-          <dt className="text-xs text-[#64748B]">Key Skills</dt>
-          <dd className="mt-1 flex flex-wrap gap-1">
-            {form.skills.length === 0 ? (
-              <span className="text-sm text-[#94A3B8]">—</span>
-            ) : (
-              form.skills.map((s) => (
-                <span
-                  key={s}
-                  className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-[#334155]"
-                >
-                  {s}
-                </span>
-              ))
-            )}
-          </dd>
-        </div>
       </section>
     );
   }

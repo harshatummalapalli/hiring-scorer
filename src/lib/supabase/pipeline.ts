@@ -20,6 +20,16 @@ async function getServerSupabase(): Promise<SupabaseClient> {
   return createSupabaseServerClient();
 }
 
+function parseCustomFields(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, string> = {};
+  for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (val == null) continue;
+    out[key] = String(val);
+  }
+  return out;
+}
+
 function parseInsights(raw: unknown): PipelineInsights {
   if (raw && typeof raw === "object" && "signals" in raw) {
     const signals = (raw as { signals: unknown }).signals;
@@ -51,6 +61,7 @@ function rowToPipelineCandidate(
       row.expected_salary != null ? String(row.expected_salary) : null,
     recruiter_notes:
       row.recruiter_notes != null ? String(row.recruiter_notes) : null,
+    custom_fields: parseCustomFields(row.custom_fields),
     added_at: String(row.added_at),
     created_by: row.created_by != null ? String(row.created_by) : null,
   };
@@ -231,6 +242,7 @@ export async function updatePipelineCandidate(
       | "present_salary"
       | "expected_salary"
       | "recruiter_notes"
+      | "custom_fields"
     >
   >,
 ): Promise<PipelineCandidateRow> {

@@ -16,69 +16,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { karta } from "@/lib/brand/karta";
 import { formatInsightsText } from "@/lib/pipeline/insights-from-score";
 import { buildPipelineWorkbook, downloadPipelineExcel } from "@/lib/pipeline/export-excel";
+import { EditableTextCell } from "@/components/shortlist/editable-fields";
 import type { ScoredCandidateOption } from "@/types/pipeline";
-
-function EditableCell({
-  value,
-  onSave,
-  placeholder,
-}: {
-  value: string | null;
-  onSave: (next: string) => Promise<void>;
-  placeholder?: string;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value ?? "");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    setDraft(value ?? "");
-  }, [value]);
-
-  const commit = async () => {
-    setSaving(true);
-    try {
-      await onSave(draft);
-      setEditing(false);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (editing) {
-    return (
-      <input
-        type="text"
-        autoFocus
-        disabled={saving}
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => void commit()}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") void commit();
-          if (e.key === "Escape") {
-            setDraft(value ?? "");
-            setEditing(false);
-          }
-        }}
-        className={`w-full min-w-[7rem] ${karta.input} py-1 text-sm`}
-        placeholder={placeholder}
-      />
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={() => setEditing(true)}
-      className="w-full text-left text-sm text-slate-700 hover:bg-slate-50 rounded px-1 py-0.5 min-h-[1.75rem]"
-    >
-      {value?.trim() ? value : (
-        <span className="text-slate-400">{placeholder ?? "—"}</span>
-      )}
-    </button>
-  );
-}
 
 type AddCandidateSource = "role" | "talent_pool";
 
@@ -344,8 +283,8 @@ function RoleSection({
                     <th className="max-w-[12rem] px-4 py-3">Insights</th>
                     <th className="px-4 py-3">Match</th>
                     <th className="px-4 py-3">Relocation</th>
-                    <th className="px-4 py-3">Present CTC</th>
-                    <th className="px-4 py-3">Expected CTC</th>
+                    <th className="px-4 py-3">Current salary</th>
+                    <th className="px-4 py-3">Expected salary</th>
                     <th className="px-4 py-3">Recruiter Notes</th>
                   </tr>
                 </thead>
@@ -430,30 +369,29 @@ function PipelineTableRow({
         />
       </td>
       <td className="px-4 py-2">
-        <EditableCell
+        <EditableTextCell
           value={row.relocation}
-          placeholder="Add relocation"
+          placeholder="Open to relocate"
           onSave={(v) => onPatch(row.id, "relocation", v)}
         />
       </td>
       <td className="px-4 py-2">
-        <EditableCell
+        <EditableTextCell
           value={row.present_salary}
-          placeholder="Present CTC"
+          placeholder="e.g. $120,000 or ₹25 LPA"
           onSave={(v) => onPatch(row.id, "present_salary", v)}
         />
       </td>
       <td className="px-4 py-2">
-        <EditableCell
+        <EditableTextCell
           value={row.expected_salary}
-          placeholder="Expected CTC"
+          placeholder="e.g. $150,000 or ₹30 LPA"
           onSave={(v) => onPatch(row.id, "expected_salary", v)}
         />
       </td>
       <td className="px-4 py-2 min-w-[10rem]">
-        <EditableCell
+        <EditableTextCell
           value={row.recruiter_notes}
-          placeholder="Notes"
           onSave={(v) => onPatch(row.id, "recruiter_notes", v)}
         />
       </td>

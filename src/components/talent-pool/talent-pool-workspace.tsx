@@ -66,6 +66,33 @@ function profileTopSkills(profile: CandidateSignalProfile): string[] {
   );
 }
 
+function verdictFromQueryParam(
+  param: string | null,
+): CandidateVerdictFilter {
+  if (!param) return "all";
+  const normalized = param.trim().toLowerCase();
+  switch (normalized) {
+    case "exceptional_match":
+    case "exceptional":
+      return "exceptional";
+    case "strong_match":
+    case "strong":
+      return "strong";
+    case "potential_match":
+    case "potential":
+      return "potential";
+    case "weak_match":
+    case "weak":
+      return "weak";
+    case "not_a_match":
+      return "not_a_match";
+    case "unscored":
+      return "unscored";
+    default:
+      return "all";
+  }
+}
+
 function uniqueScoredJobTitles(candidate: CandidateListItem): string[] {
   const titles = candidate.role_scores
     .map((s) => s.role_brief_title?.trim())
@@ -79,7 +106,9 @@ export function TalentPoolWorkspace() {
   const [candidates, setCandidates] = useState<CandidateListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [verdict, setVerdict] = useState<CandidateVerdictFilter>("all");
+  const [verdict, setVerdict] = useState<CandidateVerdictFilter>(() =>
+    verdictFromQueryParam(searchParams.get("verdict")),
+  );
   const [experience, setExperience] = useState<CandidateExperienceFilter>("all");
   const [sourceFilter, setSourceFilter] = useState<CandidateSourceFilter>("all");
   const [sort, setSort] = useState<CandidateSortOption>("recent");
@@ -105,6 +134,10 @@ export function TalentPoolWorkspace() {
   >([]);
 
   const uploading = uploadUi.phase === "processing";
+
+  useEffect(() => {
+    setVerdict(verdictFromQueryParam(searchParams.get("verdict")));
+  }, [searchParams]);
 
   const loadCandidates = useCallback(async () => {
     setLoading(true);

@@ -21,6 +21,7 @@ export async function PATCH(request: Request, { params }: Params) {
       present_salary?: string;
       expected_salary?: string;
       recruiter_notes?: string;
+      custom_fields?: Record<string, string>;
     };
 
     const row = await updatePipelineCandidate(id, {
@@ -28,6 +29,7 @@ export async function PATCH(request: Request, { params }: Params) {
       present_salary: body.present_salary,
       expected_salary: body.expected_salary,
       recruiter_notes: body.recruiter_notes,
+      custom_fields: body.custom_fields,
     });
 
     return NextResponse.json({ row });

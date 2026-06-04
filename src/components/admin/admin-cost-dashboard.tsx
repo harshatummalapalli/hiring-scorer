@@ -22,6 +22,7 @@ type CostsPayload = {
     by_model: ModelRow[];
     live: boolean;
     warning?: string;
+    note?: string;
   };
   anthropic: {
     claude_cost_usd: number;
@@ -141,6 +142,12 @@ export function AdminCostDashboard() {
       {error && (
         <p className="text-sm text-red-600" role="alert">
           {error}
+        </p>
+      )}
+
+      {data?.openai.note && (
+        <p className="text-xs text-[#94A3B8]" role="status">
+          {data.openai.note}
         </p>
       )}
 
