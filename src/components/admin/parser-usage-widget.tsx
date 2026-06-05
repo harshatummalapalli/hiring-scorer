@@ -116,10 +116,10 @@ export function ParserUsageWidget() {
   return (
     <section className={`${karta.card} p-5`}>
       <h2 className={karta.sectionHeading}>
-        Cloud Run Parser Usage — This Month
+        Resume parsing capacity — this month
       </h2>
       <p className="mt-1 text-xs text-[#64748B]">
-        Google Cloud free tier: ~13,000 resumes/month (resets on the 1st)
+        Monthly parsing allowance (resets on the 1st)
       </p>
 
       <div className="mt-5 space-y-4">
@@ -181,8 +181,8 @@ export function ParserUsageWidget() {
         <div className="mt-4 flex gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden />
           <p>
-            Critical: Parser approaching free tier limit. Consider upgrading the
-            Cloud Run plan or throttling uploads until month reset.
+            Critical: Parsing capacity is nearly exhausted. Throttle uploads
+            until the monthly reset or contact support.
           </p>
         </div>
       )}

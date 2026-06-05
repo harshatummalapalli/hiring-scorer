@@ -219,7 +219,9 @@ export async function listCandidatesByJob(jobId: string): Promise<CandidateRow[]
     throw new Error(error.message);
   }
   const rawRows = (data ?? []) as Record<string, unknown>[];
-  return rawRows.map((r) => rowToCandidate(r));
+  return rawRows
+    .filter((r) => String(r.tag ?? "") !== "archived")
+    .map((r) => rowToCandidate(r));
 }
 
 export async function listCandidates(
@@ -424,6 +426,10 @@ export async function getCandidateById(id: string): Promise<CandidateDetail | nu
       interview_brief:
         row.interview_brief != null
           ? (row.interview_brief as InterviewBrief)
+          : null,
+      brief_content_hash:
+        row.brief_content_hash != null
+          ? String(row.brief_content_hash)
           : null,
     };
   });

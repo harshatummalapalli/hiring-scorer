@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import { storeUploadedResumeForCandidate } from "@/lib/candidates/store-uploaded-resume";
 import { createActivity } from "@/lib/candidates/activity";
+import { trackEvent } from "@/lib/analytics/track";
 import { triggerParsing } from "@/lib/ingestion/trigger-parsing";
 import { extractResumeTextFromBytes } from "@/lib/resume/parse-resume";
 import { normalizeResumeText } from "@/lib/resume/normalize-resume-text";
@@ -205,6 +206,12 @@ export async function POST(request: Request) {
       jobId,
       request,
     ).catch(console.warn);
+
+    void trackEvent("candidate_uploaded", {
+      candidate_id: id,
+      job_id: jobId,
+      source,
+    });
 
     return NextResponse.json({
       id,

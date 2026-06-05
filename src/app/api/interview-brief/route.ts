@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getApiKey } from "@/lib/ai/api-keys";
+import { trackEvent } from "@/lib/analytics/track";
+import { sanitizeAiErrorMessage } from "@/lib/errors/sanitize-ai-error-message";
 import { parseJsonFromModel } from "@/lib/ai/parse-json";
 import { scoreToVerdict } from "@/lib/scoring/recruiter-card";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
@@ -120,7 +122,7 @@ export async function POST(request: Request) {
     const { data: savedScore, error: scoreError } = await supabase
       .from("saved_scores")
       .select(
-        "id, overall_score, score_snapshot, role_brief_snapshot, role_brief_title, candidate_id",
+        "id, overall_score, score_snapshot, role_brief_snapshot, role_brief_id, role_brief_title, candidate_id",
       )
       .eq("id", body.saved_score_id)
       .eq("created_by", user.id)
@@ -187,7 +189,21 @@ export async function POST(request: Request) {
       .map((b) => b.text)
       .join("");
 
-    const brief = parseJsonFromModel(text) as InterviewBrief;
+    const rawRoleId =
+      roleBriefSnapshot && typeof roleBriefSnapshot === "object"
+        ? (roleBriefSnapshot as { id?: string }).id
+        : savedScore.role_brief_id;
+    const roleBriefId =
+      rawRoleId != null && String(rawRoleId).trim()
+        ? String(rawRoleId)
+        : null;
+
+    const parsed = parseJsonFromModel(text) as InterviewBrief;
+    const brief: InterviewBrief = {
+      ...parsed,
+      generated_at: new Date().toISOString(),
+      role_brief_id: roleBriefId ?? undefined,
+    };
 
     const { error: saveError } = await supabase
       .from("saved_scores")
@@ -199,10 +215,17 @@ export async function POST(request: Request) {
       console.error("[interview-brief] save failed:", saveError.message);
     }
 
+    void trackEvent("interview_brief_generated", {
+      candidate_id: body.candidate_id,
+      job_id: roleBriefId,
+      saved_score_id: body.saved_score_id,
+    });
+
     return NextResponse.json({ brief });
   } catch (err) {
-    const msg =
-      err instanceof Error ? err.message : "Failed to generate interview brief";
+    const msg = sanitizeAiErrorMessage(
+      err instanceof Error ? err.message : "Failed to generate interview brief",
+    );
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

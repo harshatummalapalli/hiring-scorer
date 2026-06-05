@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { trackEvent } from "@/lib/analytics/track";
 import { createJobForUser } from "@/lib/supabase/jobs-mutate";
 import { listJobsWithStats } from "@/lib/supabase/jobs";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
@@ -57,6 +58,16 @@ export async function POST(request: Request) {
       analysis: body.analysis,
       analysisMeta: body.analysisMeta,
       jobPosting: body.jobPosting,
+    });
+
+    void trackEvent("job_created", {
+      job_id: job.id,
+      title: body.jobPosting?.jobTitle.trim() ?? body.title.trim(),
+      location: body.jobPosting?.jobLocation ?? null,
+      seniority:
+        body.jobPosting?.titleBands?.join(", ") ??
+        body.jobPosting?.seniorityOverride ??
+        null,
     });
 
     return NextResponse.json({ job });

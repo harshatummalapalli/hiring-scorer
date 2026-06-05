@@ -10,6 +10,7 @@ import {
   type OpenAiUsageSnapshot,
 } from "@/lib/admin/openai-usage";
 import { getMissingAdminEnvKeys } from "@/lib/admin/required-env";
+import { sanitizeAiErrorMessage } from "@/lib/errors/sanitize-ai-error-message";
 
 export async function GET() {
   const guard = await assertSuperAdminApi();
@@ -35,7 +36,7 @@ export async function GET() {
 
     if (missingEnv.includes("OPENAI_ADMIN_KEY")) {
       openaiNote =
-        "OPENAI_ADMIN_KEY is not configured. OpenAI totals are unavailable.";
+        "Scoring cost tracking is not configured. Totals are unavailable.";
     } else {
       try {
         const result = await fetchOpenAiUsageThisMonth();
@@ -43,15 +44,13 @@ export async function GET() {
         openaiLive = result.live;
         if (!result.live && result.error) {
           if (result.usageScopeDenied) {
-            openaiNote = result.error;
+            openaiNote = sanitizeAiErrorMessage(result.error);
           } else {
-            openaiWarning = `Live OpenAI data unavailable: ${result.error}. Showing last known values.`;
+            openaiWarning = `Live scoring cost data unavailable. Showing last known values.`;
           }
         }
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Live OpenAI data unavailable.";
-        openaiWarning = `Live OpenAI data unavailable: ${message}`;
+        openaiWarning = "Live scoring cost data unavailable. Showing last known values.";
       }
     }
 
@@ -81,7 +80,7 @@ export async function GET() {
       anthropic: {
         claude_cost_usd: claudeTotalUsd,
         gpt_mini_recorded_usd: dbCosts.gpt_mini_cost_usd,
-        note: "Claude costs are summed from saved_scores.scoring_cost_usd where model_used contains claude. Anthropic has no public usage API.",
+        note: "Analysis costs are summed from recorded scoring runs this month.",
       },
       summary: {
         openai_total_usd: openaiTotalUsd,
@@ -95,7 +94,9 @@ export async function GET() {
       missingEnv,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to load costs";
+    const message = sanitizeAiErrorMessage(
+      err instanceof Error ? err.message : "Failed to load costs",
+    );
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

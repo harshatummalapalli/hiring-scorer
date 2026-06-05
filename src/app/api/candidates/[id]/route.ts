@@ -4,6 +4,7 @@ import {
   enrichGithubProfile,
   extractGithubUsername,
 } from "@/lib/candidates/github-enrichment";
+import { createActivity, prependActivity } from "@/lib/candidates/activity";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCandidateById, updateCandidate } from "@/lib/supabase/candidates";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
@@ -37,6 +38,7 @@ type PatchBody = {
   linkedin_url?: string | null;
   github_url?: string | null;
   skills?: string[];
+  status?: "archived" | "active";
 };
 
 export async function PATCH(request: Request, { params }: Params) {
@@ -117,7 +119,7 @@ export async function PATCH(request: Request, { params }: Params) {
       profile.extracted_phone = body.application_phone;
     }
 
-    await updateCandidate(id, {
+    const patch: Record<string, unknown> = {
       display_name,
       signal_profile: profile,
       ...(body.application_email !== undefined
@@ -129,7 +131,28 @@ export async function PATCH(request: Request, { params }: Params) {
       ...(body.linkedin_url !== undefined
         ? { linkedin_url: body.linkedin_url }
         : {}),
-    });
+    };
+
+    if (body.status === "archived") {
+      patch.tag = "archived";
+      patch.activity = prependActivity(
+        candidate.activity,
+        createActivity("stage_changed", "Archived — removed from pipeline view"),
+      );
+      const supabase = await createSupabaseServerClient();
+      await supabase
+        .from("pipeline_candidates")
+        .delete()
+        .eq("candidate_id", id);
+    } else if (body.status === "active") {
+      patch.tag = null;
+      patch.activity = prependActivity(
+        candidate.activity,
+        createActivity("stage_changed", "Restored from archive"),
+      );
+    }
+
+    await updateCandidate(id, patch);
 
     const updated = await getCandidateById(id);
     return NextResponse.json({ candidate: updated });

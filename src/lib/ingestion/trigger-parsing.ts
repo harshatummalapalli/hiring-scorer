@@ -1,3 +1,4 @@
+import { withTimeout } from "@/lib/async/with-timeout";
 import {
   enrichGithubProfile,
   extractGithubUsername,
@@ -13,6 +14,9 @@ import { updateCandidate } from "@/lib/supabase/candidates";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import { parseRoleBriefRow } from "@/types/role-brief";
 
+const PARSE_TIMEOUT_MS = 30_000;
+const AUTO_EVAL_TIMEOUT_MS = 120_000;
+
 export async function triggerParsing(
   candidateId: string,
   resumeText: string,
@@ -21,7 +25,10 @@ export async function triggerParsing(
   request: Request,
 ): Promise<void> {
   try {
-    const ingested = await ingestResumeFromText(resumeText, resumeFilename);
+    const ingested = await withTimeout(
+      ingestResumeFromText(resumeText, resumeFilename),
+      PARSE_TIMEOUT_MS,
+    );
 
     const signal_profile = ingested.signalProfile;
     const display_name =
@@ -93,7 +100,15 @@ export async function triggerParsing(
           return;
         }
 
-        void triggerAutoEvaluation(candidateId, jobId, request);
+        void withTimeout(
+          triggerAutoEvaluation(candidateId, jobId, request),
+          AUTO_EVAL_TIMEOUT_MS,
+        ).catch((err) => {
+          console.error(
+            `[trigger-parsing] Auto-evaluation timed out or failed for ${candidateId}:`,
+            err,
+          );
+        });
       }
     }
   } catch (err) {

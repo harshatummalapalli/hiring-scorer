@@ -13,14 +13,23 @@ const DIMENSION_KEYS: DimensionKey[] = [
   "tenure",
 ];
 
+function scoreBarColor(score: number): string {
+  if (score >= 80) return "bg-[#0D9488]";
+  if (score >= 60) return "bg-blue-500";
+  if (score >= 40) return "bg-amber-500";
+  return "bg-red-500";
+}
+
 type ScoreBreakdownSectionProps = {
   result: CandidateScoreResult;
   roleBrief: RoleBrief;
+  colorCoded?: boolean;
 };
 
 export function ScoreBreakdownSection({
   result,
   roleBrief,
+  colorCoded = false,
 }: ScoreBreakdownSectionProps) {
   return (
     <section className={`${karta.card} p-4`}>
@@ -51,7 +60,9 @@ export function ScoreBreakdownSection({
               </div>
               <div className={karta.barTrack}>
                 <div
-                  className={karta.barFill}
+                  className={`h-full rounded-md ${
+                    colorCoded ? scoreBarColor(score) : "bg-[#0D9488]"
+                  }`}
                   style={{ width: `${Math.min(100, score)}%` }}
                 />
               </div>

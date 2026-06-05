@@ -12,6 +12,68 @@ export function getGeminiModel(): string {
   return process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
 }
 
+/** True when a non-placeholder Google key is present (does not call the API). */
+export function isGoogleApiKeyConfigured(): boolean {
+  try {
+    const key = getApiKey("google");
+    return key.startsWith("AIza") && key.length >= 35;
+  } catch {
+    return false;
+  }
+}
+
+export function isGoogleApiKeyAuthError(message: string): boolean {
+  return (
+    message.includes("API_KEY_INVALID") ||
+    message.includes("API key not valid") ||
+    message.includes("API key not found") ||
+    message.includes("API key expired") ||
+    message.includes("GOOGLE_VERTEX_CREDENTIALS") ||
+    message.includes("Vertex AI authentication")
+  );
+}
+
+/** True when Vertex service account JSON is present and parseable. */
+export function isVertexCredentialsConfigured(): boolean {
+  try {
+    getVertexCredentials();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function getVertexCredentials(): {
+  client_email: string;
+  private_key: string;
+  project_id: string;
+} {
+  const raw = process.env.GOOGLE_VERTEX_CREDENTIALS?.trim();
+  if (!raw) {
+    throw new Error(
+      "GOOGLE_VERTEX_CREDENTIALS is not set. " +
+        "Add the service account JSON to environment variables.",
+    );
+  }
+  try {
+    const parsed = JSON.parse(raw) as {
+      client_email?: string;
+      private_key?: string;
+      project_id?: string;
+    };
+    if (!parsed.client_email || !parsed.private_key) {
+      throw new Error("Missing client_email or private_key");
+    }
+    return {
+      client_email: parsed.client_email,
+      private_key: parsed.private_key,
+      project_id: parsed.project_id ?? "karta2026",
+    };
+  } catch {
+    throw new Error("GOOGLE_VERTEX_CREDENTIALS is not valid JSON.");
+  }
+}
+
 export function getApiKey(provider: AiProvider): string {
   switch (provider) {
     case "anthropic": {
@@ -68,8 +130,10 @@ export function formatProviderAuthError(
   ) {
     if (provider === "google") {
       return (
-        "Google rejected GOOGLE_API_KEY as invalid. Create a new key at https://aistudio.google.com/apikey " +
-        "(use Create API key, not an old Cloud key). Paste into .env.local as GOOGLE_API_KEY=AIza... with no quotes, then restart npm run dev."
+        "Google Vertex AI authentication failed. " +
+        "Check GOOGLE_VERTEX_CREDENTIALS in your " +
+        "environment variables. The value should be the " +
+        "full JSON contents of a service account key file."
       );
     }
   }
@@ -82,11 +146,14 @@ export function formatProviderAuthError(
   ) {
     if (provider === "google") {
       return (
-        "Gemini API quota exceeded. Enable billing at https://aistudio.google.com/apikey " +
-        "or set GEMINI_MODEL=gemini-2.5-flash in .env.local, then restart npm run dev."
+        "Resume parsing quota exceeded. Check your " +
+        "GCP billing account has active credits."
       );
     }
-    return `${provider} rate limit or quota exceeded. Wait a minute and retry, or check your API plan.`;
+    if (provider === "openai") {
+      return "Scoring service is busy. Wait a moment and try again.";
+    }
+    return "Analysis service is busy. Wait a moment and try again.";
   }
 
   if (
@@ -94,15 +161,7 @@ export function formatProviderAuthError(
     rawMessage.includes("authentication") ||
     rawMessage.includes("401")
   ) {
-    const hints: Record<AiProvider, string> = {
-      anthropic:
-        "Check ANTHROPIC_API_KEY in .env.local (should start with sk-ant-). Restart npm run dev after saving.",
-      openai:
-        "Check OPENAI_API_KEY in .env.local (should start with sk-). Restart npm run dev after saving.",
-      google:
-        "Check GOOGLE_API_KEY in .env.local. Restart npm run dev after saving.",
-    };
-    return `Invalid API key for ${provider}. ${hints[provider]}`;
+    return "A required service credential is not configured. Contact your administrator.";
   }
 
   if (rawMessage.length > 400) {

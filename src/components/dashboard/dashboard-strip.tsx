@@ -5,36 +5,31 @@ import { useRouter } from "next/navigation";
 
 type DashboardStats = {
   activeJobs: number;
-  totalCandidates: number;
   inPipeline: number;
-  shortlistedThisWeek: number;
   exceptionalMatches: number;
   strongMatches: number;
+  shortlistedThisWeek: number;
   evaluatedToday: number;
+  totalCandidates: number;
 };
 
 const METRICS: {
   key: keyof DashboardStats;
   label: string;
+  color: string;
 }[] = [
-  { key: "activeJobs", label: "Active Jobs" },
-  { key: "inPipeline", label: "In Pipeline" },
-  { key: "exceptionalMatches", label: "Exceptional Matches" },
-  { key: "strongMatches", label: "Strong Matches" },
-  { key: "shortlistedThisWeek", label: "Shortlisted This Week" },
-  { key: "evaluatedToday", label: "Evaluated Today" },
-  { key: "totalCandidates", label: "Total Candidates" },
+  { key: "activeJobs", label: "Active Jobs", color: "#0D9488" },
+  { key: "inPipeline", label: "In Pipeline", color: "#378ADD" },
+  { key: "exceptionalMatches", label: "Exceptional Matches", color: "#7F77DD" },
+  { key: "strongMatches", label: "Strong Matches", color: "#1D9E75" },
+  { key: "shortlistedThisWeek", label: "Shortlisted This Week", color: "#BA7517" },
+  { key: "evaluatedToday", label: "Evaluated Today", color: "#5DCAA5" },
+  { key: "totalCandidates", label: "Total Candidates", color: "#888780" },
 ];
-
-function statValueClass(key: keyof DashboardStats): string {
-  if (key === "exceptionalMatches") return "text-violet-600";
-  if (key === "strongMatches") return "text-[#0D9488]";
-  return "text-[#1E293B]";
-}
 
 function SkeletonTile() {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4">
+    <div className="stat-card rounded-lg border border-slate-200 border-t-slate-200 bg-white p-4">
       <div className="h-8 w-12 animate-pulse rounded bg-slate-100" />
       <div className="mt-2 h-3 w-20 animate-pulse rounded bg-slate-100" />
     </div>
@@ -107,9 +102,13 @@ export function DashboardStrip() {
               key={m.key}
               type="button"
               onClick={() => handleStatClick(m.key)}
-              className="w-full cursor-pointer rounded-lg border border-slate-200 bg-white p-4 text-left transition-colors hover:bg-slate-50"
+              className="stat-card w-full cursor-pointer rounded-lg border border-slate-200 bg-white p-4 text-left transition-colors hover:bg-slate-50/80"
+              style={{ borderTopColor: m.color }}
             >
-              <p className={`text-2xl font-semibold ${statValueClass(m.key)}`}>
+              <p
+                className="stat-number"
+                style={{ color: m.color }}
+              >
                 {stats[m.key]}
               </p>
               <p className="mt-1 text-xs text-[#64748B]">{m.label}</p>

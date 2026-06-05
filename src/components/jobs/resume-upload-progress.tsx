@@ -86,6 +86,17 @@ export function ResumeUploadProgress({
       <p className="text-sm font-medium text-[#1E293B]">
         Adding candidates… ({doneCount} of {total})
       </p>
+      <div
+        className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100"
+        aria-hidden
+      >
+        <div
+          className="h-full rounded-full skeleton-shimmer transition-all duration-300"
+          style={{
+            width: `${total > 0 ? Math.round((doneCount / total) * 100) : 0}%`,
+          }}
+        />
+      </div>
       <ul className="mt-3 max-h-40 space-y-2 overflow-y-auto">
         {files.map((file) => (
           <FileRow key={file.name} file={file} />

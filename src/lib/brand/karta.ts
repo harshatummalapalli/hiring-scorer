@@ -84,11 +84,17 @@ export function verdictLabel(verdict: string | null | undefined): string {
   return VERDICT_DISPLAY[verdict as FitVerdict]?.label ?? "Not matched yet";
 }
 
+const VERDICT_GRADIENT_CLASS: Record<FitVerdict, string> = {
+  "EXCEPTIONAL MATCH": "verdict-badge-exceptional",
+  "STRONG MATCH": "verdict-badge-strong",
+  "POTENTIAL MATCH": "verdict-badge-potential",
+  "WEAK MATCH": "verdict-badge-weak",
+  "NOT A MATCH": "verdict-badge-not-a-match",
+};
+
 export function verdictBadgeClass(verdict: string | null | undefined): string {
   if (!verdict) return "bg-slate-200 text-slate-600 border-slate-200";
-  const c = VERDICT_COLORS[verdict as FitVerdict];
-  if (!c) return "bg-slate-200 text-slate-600 border-slate-200";
-  return `${c.bg} ${c.text} ${c.border}`;
+  return VERDICT_GRADIENT_CLASS[verdict as FitVerdict] ?? "bg-slate-200 text-slate-600 border-slate-200";
 }
 
 export function verdictBadgeShadow(verdict: string | null | undefined): string {

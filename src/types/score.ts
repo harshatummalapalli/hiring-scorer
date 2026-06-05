@@ -223,4 +223,6 @@ export type InterviewBrief = {
     pass_signal: string;
     borderline_signal: string;
   };
+  generated_at?: string;
+  role_brief_id?: string;
 };

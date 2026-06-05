@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { X } from "lucide-react";
+import { cleanDisplayText } from "@/lib/candidates/clean-display-text";
 import { sanitizeDisplayTitle } from "@/lib/candidates/candidate-identity-display";
 import { initialsFromName } from "@/lib/candidates/list-filters";
 import {
@@ -8,7 +9,9 @@ import {
   resolvePanelLinkedInUrl,
 } from "@/lib/candidates/extract-resume-fields";
 import type { CandidateDetail, EducationEntry } from "@/types/candidate";
+import { ConfidenceDots } from "@/components/candidates/confidence-dots";
 import { VerdictBadge } from "@/components/candidates/profile-shared";
+import { SkillPill } from "@/components/ui/skill-pill";
 
 // ─── Experience Calculator ────────────────────────────────────────────────────
 
@@ -18,7 +21,7 @@ import { VerdictBadge } from "@/components/candidates/profile-shared";
  * End   = today
  * Minus = career gap months from signal profile
  *
- * Falls back to Gemini's claimed total_years_experience when
+ * Falls back to parsed total_years_experience when
  * graduation year is unavailable.
  */
 function calcVerifiedExperience(
@@ -137,59 +140,20 @@ function LinkedInBadge() {
 // ─── Skills Row ───────────────────────────────────────────────────────────────
 
 function SkillsRow({ skills }: { skills: string[] }) {
-  const [expanded, setExpanded] = useState(false);
-
   if (!skills.length) return null;
 
   const top5 = skills.slice(0, 5);
-  const rest = skills.slice(5);
+  const overflow = skills.length - top5.length;
 
   return (
-    <div className="relative mt-2 flex flex-wrap items-center gap-1.5">
+    <div className="mt-1 flex flex-wrap items-center gap-1">
       {top5.map((s, i) => (
-        <span
-          key={i}
-          className="rounded-full bg-teal-50 px-2.5 py-0.5 text-xs
-            font-medium text-[#0D9488]"
-        >
-          {s}
-        </span>
+        <SkillPill key={i} skill={s} />
       ))}
-
-      {rest.length > 0 && (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="rounded-full border border-slate-200 bg-white px-2.5
-            py-0.5 text-xs font-medium text-[#64748B] hover:bg-slate-50"
-        >
-          +{rest.length} more
-        </button>
-      )}
-
-      {expanded && rest.length > 0 && (
-        <div
-          className="absolute left-0 top-8 z-20 flex max-w-sm flex-wrap
-            gap-1.5 rounded-xl border border-slate-200 bg-white p-3 shadow-lg"
-        >
-          {rest.map((s, i) => (
-            <span
-              key={i}
-              className="rounded-full bg-teal-50 px-2.5 py-0.5 text-xs
-                font-medium text-[#0D9488]"
-            >
-              {s}
-            </span>
-          ))}
-          <button
-            type="button"
-            onClick={() => setExpanded(false)}
-            className="mt-1 w-full text-center text-xs text-[#94A3B8]
-              hover:text-[#64748B]"
-          >
-            Close
-          </button>
-        </div>
+      {overflow > 0 && (
+        <span className="text-[11px] font-medium text-[#64748B]">
+          +{overflow}
+        </span>
       )}
     </div>
   );
@@ -202,6 +166,8 @@ type CandidatePanelHeaderProps = {
   roleBriefTitle?: string | null;
   verdict?: string | null;
   score?: number | null;
+  confidenceLevel?: string | null;
+  onClose?: () => void;
 };
 
 export function CandidatePanelHeader({
@@ -209,12 +175,13 @@ export function CandidatePanelHeader({
   roleBriefTitle,
   verdict = null,
   score = null,
+  confidenceLevel = null,
+  onClose,
 }: CandidatePanelHeaderProps) {
   const profile = candidate.signal_profile;
 
-  const name = resolvePanelDisplayName(
-    candidate.display_name,
-    profile.display_name,
+  const name = cleanDisplayText(
+    resolvePanelDisplayName(candidate.display_name, profile.display_name),
   );
   const linkedinUrl = resolvePanelLinkedInUrl(
     candidate.linkedin_url,
@@ -222,14 +189,14 @@ export function CandidatePanelHeader({
   );
   const initials = initialsFromName(name);
 
-  const displayTitle = sanitizeDisplayTitle(profile.current_title, {
-    roleBriefTitle,
-  });
-  const displayCompany = profile.current_company?.trim() || null;
+  const displayTitle = cleanDisplayText(
+    sanitizeDisplayTitle(profile.current_title, { roleBriefTitle }),
+  );
+  const displayCompany = cleanDisplayText(profile.current_company);
   const titleLine =
     displayTitle && displayCompany
       ? `${displayTitle}  ·  ${displayCompany}`
-      : displayTitle || displayCompany || null;
+      : cleanDisplayText(displayTitle || displayCompany || null) || null;
 
   // Verified experience calculation
   const careerGaps =
@@ -244,7 +211,7 @@ export function CandidatePanelHeader({
     profile.total_years_experience ?? null,
   );
 
-  // Skills — density order (skills_verified are already ordered by Gemini)
+  // Skills — density order (skills_verified are already ordered at parse time)
   const allSkills = (profile.skills_verified ?? []).map((s) =>
     typeof s === "string" ? s : s.skill,
   );
@@ -259,8 +226,8 @@ export function CandidatePanelHeader({
   const avatar = (
     <div className="relative shrink-0">
       <div
-        className="flex h-14 w-14 items-center justify-center rounded-full
-          bg-[#0D9488]/15 text-lg font-bold text-[#0D9488] select-none"
+        className="flex h-11 w-11 items-center justify-center rounded-full
+          bg-[#0D9488]/15 text-sm font-bold text-[#0D9488] select-none"
       >
         {initials || "?"}
       </div>
@@ -268,16 +235,22 @@ export function CandidatePanelHeader({
     </div>
   );
 
+  const educationLine = topEd
+    ? cleanDisplayText(
+        [topEd.degree, topEd.field, topEd.institution, topEd.year]
+          .filter(Boolean)
+          .join(" · "),
+      ) || null
+    : null;
+
   return (
-    <div className="flex gap-4 border-b border-[#F1F5F9] pb-5">
-      {/* Avatar — links to LinkedIn if available */}
+    <div className="flex gap-3 px-4 pb-2 pt-3">
       {linkedinUrl ? (
         <a
           href={linkedinUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="shrink-0 rounded-full focus:outline-none
-            focus-visible:ring-2 focus-visible:ring-[#0D9488]"
+          className="shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0D9488]"
           aria-label={`Open ${name} on LinkedIn`}
         >
           {avatar}
@@ -286,58 +259,53 @@ export function CandidatePanelHeader({
         avatar
       )}
 
-      <div className="min-w-0 flex-1 space-y-1">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-[15px] font-medium leading-tight text-[#1E293B]">
+            {name}
+          </p>
+          {onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="shrink-0 rounded-md p-1 text-[#64748B] hover:bg-slate-100"
+              aria-label="Close panel"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          ) : null}
+        </div>
 
-        {/* Full name */}
-        <p className="text-xl font-bold leading-tight text-[#1E293B]">
-          {name}
-        </p>
-
-        {/* Experience */}
         {expDisplay && (
-          <p className="text-sm font-semibold text-[#0D9488]">
+          <p className="mt-0.5 text-xs text-[#0D9488]">
             {expDisplay}
-            {isCalculated ? (
-              <span className="ml-1.5 text-xs font-normal text-[#94A3B8]">
-                verified
-              </span>
-            ) : (
-              <span className="ml-1.5 text-xs font-normal text-[#94A3B8]">
-                claimed
-              </span>
-            )}
+            <span className="ml-1 text-[#64748B]">
+              {isCalculated ? "verified" : "claimed"}
+            </span>
           </p>
         )}
 
-        {/* Current title · company */}
         {titleLine && (
-          <p className="text-sm text-[#334155]">{titleLine}</p>
+          <p className="mt-0.5 text-xs text-[#334155]">{titleLine}</p>
         )}
 
-        {/* Top skills + overflow */}
         <SkillsRow skills={allSkills} />
 
-        {/* Verdict + score */}
         {verdict && score != null && (
-          <div className="pt-1">
+          <div className="relative z-10 mt-1.5 flex flex-wrap items-center gap-2">
             <VerdictBadge verdict={verdict} score={score} showScore />
+            <span className="text-xs text-[#94A3B8]" aria-hidden>
+              ·
+            </span>
+            <ConfidenceDots level={confidenceLevel} />
           </div>
         )}
 
-        {/* Education · location */}
-        <p className="text-xs text-[#64748B]">
-          {[
-            topEd
-              ? [topEd.degree, topEd.field, topEd.institution, topEd.year]
-                  .filter(Boolean)
-                  .join(" · ")
-              : null,
-            profile.location?.trim() || null,
-          ]
-            .filter(Boolean)
-            .join("  ·  ")}
-        </p>
-
+        {educationLine && (
+          <p className="mt-1 truncate text-[11px] text-[#64748B]">
+            {educationLine}
+          </p>
+        )}
       </div>
     </div>
   );

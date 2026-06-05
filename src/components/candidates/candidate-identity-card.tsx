@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { ClickableCandidateName } from "@/components/candidates/clickable-candidate-name";
+import { SkillPill } from "@/components/ui/skill-pill";
 import type { OpenCandidatePanelOptions } from "@/contexts/candidate-panel-context";
 import {
   isInvalidDisplayTitle,
@@ -110,13 +111,7 @@ function SkillsRow({ skills }: { skills: string[] }) {
   return (
     <div className="relative mt-1.5 flex flex-wrap items-center gap-1">
       {top5.map((s, i) => (
-        <span
-          key={i}
-          className="rounded-full bg-teal-50 px-2 py-0.5 text-[11px]
-            font-medium text-[#0D9488]"
-        >
-          {s}
-        </span>
+        <SkillPill key={i} skill={s} />
       ))}
       {rest.length > 0 && (
         <button
@@ -137,13 +132,7 @@ function SkillsRow({ skills }: { skills: string[] }) {
           gap-1 rounded-xl border border-slate-200 bg-white p-3 shadow-lg"
         >
           {rest.map((s, i) => (
-            <span
-              key={i}
-              className="rounded-full bg-teal-50 px-2 py-0.5 text-[11px]
-                font-medium text-[#0D9488]"
-            >
-              {s}
-            </span>
+            <SkillPill key={i} skill={s} />
           ))}
           <button
             type="button"

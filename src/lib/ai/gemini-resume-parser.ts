@@ -1,5 +1,5 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { getApiKey, getGeminiModel } from "@/lib/ai/api-keys";
+import { VertexAI } from "@google-cloud/vertexai";
+import { getGeminiModel } from "@/lib/ai/api-keys";
 
 export type GeminiParsedResume = {
   full_name: string | null;
@@ -90,8 +90,32 @@ function stripJsonFences(text: string): string {
     .trim();
 }
 
+const PII_PLACEHOLDER_RE =
+  /\[EMAIL\]|\[PHONE\]|\[URL\]|\[NAME\]|\[LINKEDIN\]|\[GITHUB\]/gi;
+
+function stripPlaceholders(val: string | null): string | null {
+  if (!val) return null;
+  const cleaned = val
+    .replace(PII_PLACEHOLDER_RE, "")
+    .replace(/\s*[·\-|,]\s*$/, "")
+    .replace(/^\s*[·\-|,]\s*/, "")
+    .trim();
+  return cleaned || null;
+}
+
+const DESCRIPTION_PATTERNS = [
+  /involved in/i,
+  /responsible for/i,
+  /working on/i,
+  /developed/i,
+  /designed and/i,
+  /managed/i,
+  /led the/i,
+  /building/i,
+];
+
 function normalizeGeminiParsedRecord(record: GeminiParsedResume): GeminiParsedResume {
-  return {
+  const normalized: GeminiParsedResume = {
     ...record,
     full_name: record.full_name?.trim() || null,
     email: record.email?.trim() || null,
@@ -120,6 +144,75 @@ function normalizeGeminiParsedRecord(record: GeminiParsedResume): GeminiParsedRe
     })),
     career_gaps: record.career_gaps ?? [],
   };
+
+  // Cleanup 1 — strip candidate name from current_title
+  if (
+    normalized.full_name &&
+    normalized.current_title &&
+    normalized.current_title
+      .toLowerCase()
+      .startsWith(normalized.full_name.toLowerCase())
+  ) {
+    normalized.current_title =
+      normalized.current_title
+        .slice(normalized.full_name.length)
+        .replace(/^[\s,\-·|]+/, "")
+        .trim() || null;
+  }
+
+  // Cleanup 2 — strip PII placeholders
+  normalized.current_title = stripPlaceholders(normalized.current_title);
+  normalized.current_company = stripPlaceholders(normalized.current_company);
+  normalized.career_summary = stripPlaceholders(normalized.career_summary);
+
+  // Cleanup 3 — title duplicated as company
+  if (
+    normalized.current_title &&
+    normalized.current_company &&
+    normalized.current_title.toLowerCase() ===
+      normalized.current_company.toLowerCase()
+  ) {
+    const firstJob = normalized.work_history[0];
+    normalized.current_company = firstJob?.company?.trim() || null;
+  }
+
+  // Cleanup 4 — job description text in company field
+  if (normalized.current_company && normalized.current_company.length > 60) {
+    const firstJob = normalized.work_history[0];
+    normalized.current_company = firstJob?.company?.trim() || null;
+  }
+
+  if (
+    normalized.current_company &&
+    DESCRIPTION_PATTERNS.some((p) => p.test(normalized.current_company!))
+  ) {
+    const firstJob = normalized.work_history[0];
+    normalized.current_company = firstJob?.company?.trim() || null;
+  }
+
+  // Cleanup 5 — strip category prefix from skill names
+  normalized.skill_groups = normalized.skill_groups.map((g) => ({
+    ...g,
+    skills: g.skills
+      .map((s) => {
+        const colonIdx = s.indexOf(":");
+        if (colonIdx > 0 && colonIdx < 20 && s.length - colonIdx > 2) {
+          return s.slice(colonIdx + 1).trim();
+        }
+        return s;
+      })
+      .filter(Boolean),
+  }));
+
+  // Cleanup 6 — fallback title and company from work_history
+  if (!normalized.current_title && normalized.work_history.length > 0) {
+    normalized.current_title = normalized.work_history[0].title || null;
+  }
+  if (!normalized.current_company && normalized.work_history.length > 0) {
+    normalized.current_company = normalized.work_history[0].company || null;
+  }
+
+  return normalized;
 }
 
 function hasUsefulParse(record: GeminiParsedResume): boolean {
@@ -183,10 +276,47 @@ async function requestGeminiParse(
   rawResumeText: string,
   compact: boolean,
 ): Promise<GeminiParsedResume> {
-  const apiKey = getApiKey("google");
-  const genAI = new GoogleGenerativeAI(apiKey);
+  const credentialsJson = process.env.GOOGLE_VERTEX_CREDENTIALS;
+  if (!credentialsJson) {
+    throw new Error(
+      "GOOGLE_VERTEX_CREDENTIALS is not set. " +
+        "Add the service account JSON to Vercel env vars.",
+    );
+  }
 
-  const model = genAI.getGenerativeModel({
+  let credentials: {
+    client_email: string;
+    private_key: string;
+    project_id?: string;
+  };
+  try {
+    credentials = JSON.parse(credentialsJson);
+  } catch {
+    throw new Error(
+      "GOOGLE_VERTEX_CREDENTIALS is not valid JSON. " +
+        "Paste the full service account key file contents.",
+    );
+  }
+
+  const project =
+    process.env.GOOGLE_VERTEX_PROJECT ??
+    credentials.project_id ??
+    "karta2026";
+  const location =
+    process.env.GOOGLE_VERTEX_LOCATION ?? "us-central1";
+
+  const vertexAI = new VertexAI({
+    project,
+    location,
+    googleAuthOptions: {
+      credentials: {
+        client_email: credentials.client_email,
+        private_key: credentials.private_key,
+      },
+    },
+  });
+
+  const model = vertexAI.getGenerativeModel({
     model: getGeminiModel(),
     generationConfig: {
       responseMimeType: "application/json",
@@ -248,12 +378,19 @@ Return a JSON object matching this exact schema:
   ]
 }`;
 
-  const text = await callWithRetry(() =>
-    model.generateContent(prompt).then((r) => r.response.text().trim()),
-  );
+  const text = await callWithRetry(async () => {
+    const result = await model.generateContent(prompt);
+    const response = result.response;
+    const candidate = response.candidates?.[0];
+    const parts = candidate?.content?.parts;
+    if (!parts || parts.length === 0) {
+      throw new Error("Vertex AI returned empty response");
+    }
+    return (parts[0].text ?? "").trim();
+  });
 
   if (!text) {
-    throw new Error("Gemini resume parser returned an empty response.");
+    throw new Error("Resume parser returned an empty response.");
   }
 
   return parseGeminiResumeJson(text);

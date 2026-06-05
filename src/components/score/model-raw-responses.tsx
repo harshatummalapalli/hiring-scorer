@@ -50,7 +50,7 @@ export function ModelRawResponsesPanel({ raw }: ModelRawResponsesPanelProps) {
           <p className="mt-2 text-xs text-slate-500">
             {isLegacyMultiModel
               ? "Parsed JSON returned by each evaluator for this legacy multi-model score."
-              : "Parsed JSON returned by GPT-4o mini for this scoring run."}
+              : "Parsed JSON returned by Kharta for this scoring run."}
           </p>
 
           {isLegacyMultiModel ? (

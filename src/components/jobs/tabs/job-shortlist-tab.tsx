@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download, Loader2, Settings, Star } from "lucide-react";
+import { Download, ListChecks, Loader2, Settings } from "lucide-react";
 import { ShortlistColumnConfigModal } from "@/components/shortlist/shortlist-column-config-modal";
 import { ShortlistTableCell } from "@/components/shortlist/shortlist-table-cell";
 import { DEFAULT_SHORTLIST_COLUMNS } from "@/lib/shortlist/default-columns";
@@ -269,12 +269,12 @@ export function JobShortlistTab({
 
       {rows.length === 0 ? (
         <div className={`${karta.card} px-6 py-12 text-center`}>
-          <Star className="mx-auto h-10 w-10 text-amber-300" aria-hidden />
-          <h2 className="mt-6 text-[18px] font-semibold text-[#1E293B]">
-            Your shortlist is empty
+          <ListChecks className="mx-auto h-12 w-12 text-slate-200" aria-hidden />
+          <h2 className="mt-4 text-[18px] font-semibold text-slate-400">
+            No candidates shortlisted
           </h2>
-          <p className="mx-auto mt-2 max-w-md text-sm text-[#64748B]">
-            Evaluate candidates in the Pipeline tab and move the best ones here.
+          <p className="mx-auto mt-2 max-w-md text-sm text-slate-300">
+            Move strong candidates here from the pipeline.
           </p>
         </div>
       ) : (

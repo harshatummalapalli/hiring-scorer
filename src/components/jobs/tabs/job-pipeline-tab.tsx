@@ -2,7 +2,14 @@
 
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   AlertCircle,
   ChevronDown,
@@ -12,6 +19,7 @@ import {
   Loader2,
   RotateCw,
   Upload,
+  Users,
   X,
 } from "lucide-react";
 import { CandidateIdentityCard } from "@/components/candidates/candidate-identity-card";
@@ -28,8 +36,10 @@ import {
 } from "@/lib/candidates/list-filters";
 import type { DuplicateMatch } from "@/lib/candidates/duplicate-messages";
 import { formatTotalExperienceDisplay } from "@/lib/candidates/format-total-experience";
+import { isStuckCandidate } from "@/lib/candidates/stuck-processing";
 import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
 import { CopyButton } from "@/components/ui/copy-button";
+import { EvaluatingDots } from "@/components/ui/evaluating-dots";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
 import { karta } from "@/lib/brand/karta";
 import {
@@ -62,11 +72,15 @@ function candidateTopSkills(c: CandidateListItem): string[] {
 }
 
 function candidateTitle(c: CandidateListItem): string {
-  return c.current_title ?? c.signal_profile?.current_title ?? "";
+  const displayTitle =
+    c.current_title ?? c.signal_profile?.current_title ?? "";
+  return displayTitle.length < 80 ? displayTitle : "";
 }
 
 function candidateCompany(c: CandidateListItem): string {
-  return c.current_company ?? c.signal_profile?.current_company ?? "";
+  const displayCompany =
+    c.current_company ?? c.signal_profile?.current_company ?? "";
+  return displayCompany.length < 80 ? displayCompany : "";
 }
 
 type PendingUpload = {
@@ -218,9 +232,15 @@ export function JobPipelineTab({
       ) as Record<SectionKey, boolean>,
   );
   const [groupedView, setGroupedView] = useState(false);
+  const autoRetriedRef = useRef(new Set<string>());
 
   const { openPanel, refreshPanel, candidateId: openPanelId } =
     useCandidatePanel();
+
+  const isStuck = useCallback(
+    (candidate: CandidateListItem) => isStuckCandidate(candidate, jobId),
+    [jobId],
+  );
 
   const panelOptions = useMemo(
     () => ({ contextJobId: jobId, roleBrief }),
@@ -265,6 +285,23 @@ export function JobPipelineTab({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (loading) return;
+    const stuckCandidates = candidates.filter(isStuck);
+    if (stuckCandidates.length === 0) return;
+
+    const batch = stuckCandidates
+      .filter((c) => !autoRetriedRef.current.has(c.id))
+      .slice(0, 3);
+
+    for (const c of batch) {
+      autoRetriedRef.current.add(c.id);
+      void fetch(`/api/candidates/${c.id}/reparse`, { method: "POST" }).catch(
+        console.warn,
+      );
+    }
+  }, [candidates, isStuck, loading]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -845,21 +882,21 @@ export function JobPipelineTab({
     const verdict = pipelineVerdictForRole(c, jobId);
     switch (verdict) {
       case "EXCEPTIONAL MATCH":
-        return "border-l-4 border-l-violet-400";
+        return "border-l-[3px] border-l-[#7F77DD]";
       case "STRONG MATCH":
-        return "border-l-4 border-l-emerald-400";
+        return "border-l-[3px] border-l-[#1D9E75]";
       case "POTENTIAL MATCH":
-        return "border-l-4 border-l-amber-400";
+        return "border-l-[3px] border-l-[#BA7517]";
       case "WEAK MATCH":
-        return "border-l-4 border-l-orange-300";
+        return "border-l-[3px] border-l-[#D85A30]";
       case "NOT A MATCH":
-        return "border-l-4 border-l-red-300";
+        return "border-l-[3px] border-l-[#E24B4A]";
       default:
-        return "border-l-4 border-l-slate-200";
+        return "border-l-[3px] border-l-slate-200";
     }
   }
 
-  const retryParsing = async (candidateId: string) => {
+  const retryCandidate = async (candidateId: string) => {
     setError(null);
     try {
       const res = await fetch(`/api/candidates/${candidateId}/reparse`, {
@@ -869,27 +906,53 @@ export function JobPipelineTab({
       if (!res.ok) {
         throw new Error(json.error ?? "Retry failed");
       }
-      await load();
+      await load({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Retry failed");
     }
   };
 
-  const renderParsingRow = (c: CandidateListItem) => (
+  const renderStuckRow = (c: CandidateListItem) => (
+    <div
+      key={c.id}
+      className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4"
+    >
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-[#1E293B]">
+          {c.display_name?.trim() || c.resume_filename || "Candidate"}
+        </p>
+        <p className="text-xs text-amber-600">
+          Processing took longer than expected
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={() => void retryCandidate(c.id)}
+        className="shrink-0 text-sm font-medium text-[#0D9488] hover:text-[#0B8276]"
+      >
+        Retry
+      </button>
+    </div>
+  );
+
+  const renderParsingRow = (c: CandidateListItem) => {
+    if (isStuck(c)) return renderStuckRow(c);
+    return (
     <div
       key={c.id}
       className="flex flex-wrap items-center gap-3 border-b border-[#F1F5F9] border-l-4 border-l-[#0D9488]/60 px-4 py-3 last:border-0 bg-[#F8FAFC]/50"
     >
       <div className="h-4 w-4 shrink-0 rounded border border-slate-200 bg-slate-100" />
       <div className="min-w-0 flex-1 space-y-2">
-        <div className="h-4 w-32 animate-pulse rounded bg-slate-200" />
+        <div className="h-4 w-32 rounded skeleton-shimmer" />
         <p className="text-xs text-slate-400">Parsing resume…</p>
       </div>
       <span className="text-xs text-[#64748B]">
         {c.resume_filename ?? "Resume"}
       </span>
     </div>
-  );
+    );
+  };
 
   const renderFailedRow = (c: CandidateListItem) => (
     <div
@@ -905,7 +968,7 @@ export function JobPipelineTab({
       </div>
       <button
         type="button"
-        onClick={() => void retryParsing(c.id)}
+        onClick={() => void retryCandidate(c.id)}
         className={`${karta.btnOutlineTeal} inline-flex items-center gap-1.5 px-3 py-1.5 text-sm`}
       >
         <RotateCw className="h-3.5 w-3.5" />
@@ -918,8 +981,8 @@ export function JobPipelineTab({
     c: CandidateListItem,
     showShortlist: boolean,
     showRejectionReason = false,
-    flatMode = false,
   ) => {
+    if (isStuck(c)) return renderStuckRow(c);
     if (c.parsing_status === "pending") return renderParsingRow(c);
     if (c.parsing_status === "failed") return renderFailedRow(c);
 
@@ -942,7 +1005,7 @@ export function JobPipelineTab({
             openPanel(c.id, panelOptions);
           }
         }}
-        className={`flex flex-wrap items-center gap-3 border-b border-[#F1F5F9] px-4 py-3 last:border-0 hover:bg-slate-50/80 cursor-pointer ${flatMode ? verdictBorderClass(c) : ""}`}
+        className={`flex flex-wrap items-center gap-3 border-b border-[#F1F5F9] px-4 py-3 last:border-0 hover:bg-slate-50/80 cursor-pointer ${verdictBorderClass(c)}`}
       >
         <input
           type="checkbox"
@@ -1032,6 +1095,7 @@ export function JobPipelineTab({
   };
 
   const renderPendingRow = (c: CandidateListItem) => {
+    if (isStuck(c)) return renderStuckRow(c);
     if (c.parsing_status === "pending") return renderParsingRow(c);
     if (c.parsing_status === "failed") return renderFailedRow(c);
 
@@ -1110,7 +1174,7 @@ export function JobPipelineTab({
         </div>
         {awaitingScore ? (
           <span className="inline-flex items-center gap-2 rounded-full border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-1 text-sm text-[#64748B]">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#0D9488]" />
+            <EvaluatingDots />
             Evaluating…
           </span>
         ) : displayScore != null && verdict ? (
@@ -1123,7 +1187,7 @@ export function JobPipelineTab({
           />
         ) : isEvaluating ? (
           <span className="inline-flex items-center gap-2 text-sm text-[#64748B]">
-            <Loader2 className="h-4 w-4 animate-spin text-[#0D9488]" />
+            <EvaluatingDots />
             Evaluating…
           </span>
         ) : (
@@ -1141,6 +1205,7 @@ export function JobPipelineTab({
   };
 
   const renderFlatRow = (c: CandidateListItem) => {
+    if (isStuck(c)) return renderStuckRow(c);
     if (c.parsing_status === "pending") return renderParsingRow(c);
     if (c.parsing_status === "failed") return renderFailedRow(c);
     const isPending = isPipelinePendingEvaluation(c, jobId);
@@ -1151,7 +1216,7 @@ export function JobPipelineTab({
       verdict === "STRONG MATCH" ||
       verdict === "POTENTIAL MATCH";
     const showRejection = verdict === "NOT A MATCH";
-    return renderEvaluatedRow(c, showShortlist, showRejection, true);
+    return renderEvaluatedRow(c, showShortlist, showRejection);
   };
 
   const renderSection = (
@@ -1175,8 +1240,8 @@ export function JobPipelineTab({
           <span className="inline-flex flex-wrap items-center gap-2">
             {meta.label} · {items.length}
             {key === "pending" && showEvaluatingIndicator && (
-              <span className="inline-flex items-center gap-1 text-xs font-normal text-[#64748B]">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-teal-500" />
+              <span className="inline-flex items-center gap-1.5 text-xs font-normal text-[#64748B]">
+                <EvaluatingDots />
                 Evaluating…
               </span>
             )}
@@ -1381,16 +1446,12 @@ export function JobPipelineTab({
         </div>
       ) : !hasAnyCandidate ? (
         <div className={`${karta.card} px-6 py-12 text-center`}>
-          <Upload
-            className="mx-auto h-10 w-10 text-slate-300"
-            aria-hidden
-          />
-          <h2 className="mt-6 text-[18px] font-semibold text-[#1E293B]">
+          <Users className="mx-auto h-12 w-12 text-slate-200" aria-hidden />
+          <h2 className="mt-4 text-[18px] font-semibold text-slate-400">
             No candidates yet
           </h2>
-          <p className="mx-auto mt-2 max-w-md text-sm text-[#64748B]">
-            Upload resumes or share your apply link to start building your
-            pipeline.
+          <p className="mx-auto mt-2 max-w-md text-sm text-slate-300">
+            Upload resumes or share the apply email to start evaluating.
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <label
@@ -1441,7 +1502,7 @@ export function JobPipelineTab({
         <div className={`${karta.card} overflow-hidden`}>
           {showEvaluatingIndicator && (
             <div className="flex items-center gap-2 border-b border-[#F1F5F9] px-4 py-2 text-xs text-[#64748B]">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-teal-500" />
+              <EvaluatingDots />
               Evaluating candidates — scores updating automatically
             </div>
           )}

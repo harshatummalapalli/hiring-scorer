@@ -21,7 +21,7 @@ const SEGMENT_COLORS: Record<DimensionKey, string> = {
   tenure: "#1D9E75",
 };
 
-const LEGEND_SHORT: Record<DimensionKey, string> = {
+const SEGMENT_LEGEND_LABEL: Record<DimensionKey, string> = {
   skills: "Technical",
   trajectory: "Growth",
   domain: "Domain",
@@ -139,19 +139,19 @@ export function DimensionDonut({ result, roleBrief }: DimensionDonutProps) {
           <circle cx={cx} cy={cy} r={rInner - 2} fill="white" />
           <text
             x={cx}
-            y={cy - 4}
+            y={cy - 2}
             textAnchor="middle"
-            className="fill-[#1E293B] text-[22px] font-bold"
-            style={{ fontSize: 22, fontWeight: 700 }}
+            className="fill-[#1E293B]"
+            style={{ fontSize: 28, fontWeight: 500 }}
           >
             {Math.round(result.overall_score)}
           </text>
           <text
             x={cx}
-            y={cy + 14}
+            y={cy + 16}
             textAnchor="middle"
-            className="fill-[#94A3B8]"
-            style={{ fontSize: 10 }}
+            className="fill-slate-400"
+            style={{ fontSize: 12 }}
           >
             / 100
           </text>
@@ -164,7 +164,7 @@ export function DimensionDonut({ result, roleBrief }: DimensionDonutProps) {
                 style={{ backgroundColor: SEGMENT_COLORS[d.key] }}
                 aria-hidden
               />
-              {LEGEND_SHORT[d.key]} {Math.round(d.score)}
+              {SEGMENT_LEGEND_LABEL[d.key]} {Math.round(d.score)}
             </span>
           ))}
         </div>

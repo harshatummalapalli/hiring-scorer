@@ -73,8 +73,7 @@ export function ScoreResultsDetail({
       )}
 
       <p className="text-xs text-slate-600">
-        Scored with GPT-4o mini in one pass against your active role brief
-        (structured JSON, temperature 0).
+        Evaluated by Kharta in one pass against your active role brief.
       </p>
 
       {result.dissent_signals.length > 0 && (
@@ -145,8 +144,8 @@ export function ScoreResultsDetail({
         <section className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
           <p className="font-medium">Human review recommended</p>
           <p className="mt-1 text-xs">
-            GPT-4o mini reported lower confidence on this match. Use the green
-            flags, watch signals, and review flags above before deciding.
+            Kharta reported lower confidence on this match. Use the green flags,
+            watch signals, and review flags above before deciding.
           </p>
         </section>
       )}

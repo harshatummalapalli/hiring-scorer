@@ -1,5 +1,4 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getGeminiModel } from "@/lib/ai/api-keys";
 
 export type ResumeParsingStats = {
   parserLabel: string;
@@ -13,12 +12,6 @@ function startOfUtcMonthIso(): string {
   return new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
   ).toISOString();
-}
-
-function geminiDisplayLabel(modelId: string): string {
-  if (modelId.includes("2.5-flash")) return "Gemini 2.5 Flash";
-  if (modelId.includes("flash")) return "Gemini Flash";
-  return modelId;
 }
 
 export async function fetchResumeParsingStats(): Promise<ResumeParsingStats> {
@@ -50,7 +43,7 @@ export async function fetchResumeParsingStats(): Promise<ResumeParsingStats> {
   }
 
   return {
-    parserLabel: geminiDisplayLabel(getGeminiModel()),
+    parserLabel: "Kharta",
     candidatesParsedThisMonth: parsedCount ?? 0,
     parseFailuresThisMonth: parseFailures,
     monthUtc,

@@ -172,6 +172,7 @@ export type CandidateRoleFitScore = {
   score_snapshot: CandidateScoreResult | null;
   role_brief_snapshot: unknown;
   interview_brief: InterviewBrief | null;
+  brief_content_hash: string | null;
 };
 
 export type CandidateScoreSummary = {

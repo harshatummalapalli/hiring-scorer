@@ -1,5 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { extractCompanyDomain } from "@/lib/auth/email-domains";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
+import { findExistingCompanyWorkspace } from "@/lib/workspace/existing-company-workspace";
+import { applySignupCompanyMetadata } from "@/lib/workspace/signup-company";
 import { ensureWorkspaceSettingsForUser } from "@/lib/workspace/settings";
 
 export const dynamic = "force-dynamic";
@@ -36,13 +40,47 @@ export async function GET(request: NextRequest) {
       if (data.user) {
         try {
           await ensureWorkspaceSettingsForUser(supabase, data.user);
+          if (data.user.email) {
+            await applySignupCompanyMetadata(
+              supabase,
+              data.user.id,
+              data.user.email,
+            );
+          }
         } catch (e) {
           console.error(
             "[auth/callback] Workspace bootstrap error:",
             e,
           );
         }
-        return NextResponse.redirect(`${baseUrl}${next}`);
+
+        const redirectUrl = new URL(next, baseUrl);
+        const email = data.user.email?.trim();
+        const domain = email ? extractCompanyDomain(email) : null;
+        if (domain) {
+          try {
+            const admin = createSupabaseAdminClient();
+            const existing = await findExistingCompanyWorkspace(
+              admin,
+              domain,
+              data.user.id,
+            );
+            if (existing) {
+              redirectUrl.searchParams.set("workspace_hint", "existing");
+              redirectUrl.searchParams.set(
+                "company_name",
+                existing.company_name,
+              );
+            }
+          } catch (e) {
+            console.error(
+              "[auth/callback] Company workspace lookup error:",
+              e,
+            );
+          }
+        }
+
+        return NextResponse.redirect(redirectUrl.toString());
       }
     } catch (e) {
       console.error("[auth/callback] Unexpected error:", e);

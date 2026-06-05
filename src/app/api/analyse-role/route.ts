@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { logWorkspaceActivityIfAuthed } from "@/lib/activity/log";
 import { resolveJobDescriptionAnalysis } from "@/lib/role-brief/resolve-jd-analysis";
+import { sanitizeAiErrorMessage } from "@/lib/errors/sanitize-ai-error-message";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import { getAnalyseRatelimiter, checkRateLimit } from "@/lib/rate-limit";
 import { deriveTitleFromAnalysis, parseRoleBriefRow } from "@/types/role-brief";
@@ -139,10 +140,11 @@ export async function POST(request: Request) {
       last_analysed_at: result.last_analysed_at,
     });
   } catch (err) {
-    const message =
+    const raw =
       err instanceof Error ? err.message : "Failed to analyse job description";
+    const message = sanitizeAiErrorMessage(raw);
     const status =
-      message.includes("ANTHROPIC_API_KEY") || message.includes("401")
+      raw.includes("ANTHROPIC_API_KEY") || raw.includes("401")
         ? 401
         : 500;
     return NextResponse.json({ error: message }, { status });

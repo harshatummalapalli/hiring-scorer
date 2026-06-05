@@ -1,44 +1,33 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { Download, Loader2, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowRight, ClipboardList, Loader2, X } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
-import type { CandidateDetail, CandidateSignalProfile } from "@/types/candidate";
+import type { CandidateDetail } from "@/types/candidate";
 import type { RoleBrief } from "@/types/role-brief";
 import type { FitVerdict } from "@/types/score";
+import { computeBriefContentHash } from "@/lib/role-brief/jd-cache";
 import { scoreToVerdict } from "@/lib/scoring/recruiter-card";
-import type { CandidateScoreResult } from "@/types/score";
-import {
-  ownershipLabel,
-  ownershipScore,
-  ownershipWhy,
-  impactEvidenceLabel,
-  impactScore,
-  impactWhy,
-  careerGrowthLabel,
-  careerGrowthScore,
-  careerGrowthWhy,
-  profileDepthLabel,
-  profileDepthScore,
-  profileDepthWhy,
-} from "@/lib/candidates/signal-labels";
 import {
   pickDefaultScoreId,
   scoresWithSnapshots,
 } from "@/lib/candidates/pick-panel-score";
+import { extractContradictions } from "@/lib/candidates/score-snapshot-utils";
 import { useActiveRoleBrief } from "@/contexts/active-role-brief-context";
 import { karta } from "@/lib/brand/karta";
 import { snapshotToRoleBrief } from "@/lib/saved-scores/build-save-payload";
 import { downloadKartaAssessmentPdf } from "@/lib/reports/karta-assessment-pdf";
 import type { RoleBriefSnapshot } from "@/types/saved-score";
-import { SignalScoreCard } from "@/components/ui/signal-score-card";
-import { SlidingTabs } from "@/components/ui/sliding-tabs";
-import { CandidateDetailsSection } from "./candidate-details-section";
 import { CandidatePanelHeader } from "./candidate-panel-header";
+import {
+  CandidatePanelTabs,
+  type CandidatePanelTabId,
+} from "./candidate-panel-tabs";
+import { CandidatePanelProfileTab } from "./candidate-panel-profile-tab";
 import { ScoreRolePickerModal } from "./score-role-picker-modal";
 import { useScoreCandidate } from "@/lib/candidates/use-score-candidate";
+import { NotAFitModal } from "./not-a-fit-modal";
 import { VerdictBadge } from "./profile-shared";
-import { CandidatePitchCard } from "@/components/pipeline/candidate-pitch-card";
 import { DimensionDonut } from "@/components/candidates/dimension-donut";
 import { ScoreBreakdownSection } from "@/components/candidates/score-breakdown-section";
 import { SkillsMatchSection } from "@/components/candidates/skills-match-section";
@@ -58,170 +47,50 @@ function formatDate(iso: string): string {
   }
 }
 
-function CandidateInsightsBars({
-  profile,
-  animate,
+function ScoreHistorySection({
+  fits,
 }: {
-  profile: CandidateSignalProfile;
-  animate: boolean;
+  fits: CandidateDetail["role_fit_scores"];
 }) {
-  const ownershipCount =
-    profile.resume_quality?.ownership?.ownership_count ?? 0;
-  const ownershipRatio = profile.ownership_ratio_percent ?? 0;
-  const impactRatio = profile.quantification_ratio_percent;
-  const impactLevel = profile.quantification_level ?? "rarely";
-  const velocity = profile.trajectory_velocity ?? "normal";
-  const keywordFlagged = profile.keyword_stuffing_flagged ?? false;
-  const verifiedCount = (profile.skills_verified ?? []).length;
-  const listedCount = (profile.skills_listed_only ?? []).length;
-
-  const oScore = ownershipScore(ownershipCount, ownershipRatio);
-  const iScore = impactScore(impactRatio, impactLevel);
-  const gScore = careerGrowthScore(velocity);
-  const dScore = profileDepthScore(keywordFlagged, verifiedCount, listedCount);
+  const [open, setOpen] = useState(false);
+  if (fits.length === 0) return null;
 
   return (
-    <div className="space-y-3">
-      <SignalScoreCard
-        label="Ownership Drive"
-        score={oScore}
-        wordLabel={ownershipLabel(ownershipCount)}
-        why={ownershipWhy(oScore, ownershipCount, ownershipRatio)}
-        animate={animate}
-        delayMs={0}
-      />
-      <SignalScoreCard
-        label="Impact Evidence"
-        score={iScore}
-        wordLabel={impactEvidenceLabel(impactRatio, impactLevel)}
-        why={impactWhy(iScore, impactRatio, impactLevel)}
-        animate={animate}
-        delayMs={100}
-      />
-      <SignalScoreCard
-        label="Career Growth"
-        score={gScore}
-        wordLabel={careerGrowthLabel(velocity)}
-        why={careerGrowthWhy(gScore, velocity)}
-        animate={animate}
-        delayMs={200}
-      />
-      <SignalScoreCard
-        label="Profile Depth"
-        score={dScore}
-        wordLabel={profileDepthLabel(keywordFlagged)}
-        why={profileDepthWhy(dScore, keywordFlagged, verifiedCount, listedCount)}
-        animate={animate}
-        delayMs={300}
-      />
-    </div>
-  );
-}
-
-function CandidateInsightsProfileExtras({
-  profile,
-}: {
-  profile: CandidateSignalProfile;
-}) {
-  const careerSequence = profile.career_types_sequence ?? [];
-  const education = profile.education ?? [];
-
-  return (
-    <>
-      {careerSequence.length > 0 && (
-        <section>
-          <h3 className={karta.sectionHeading}>Career Path</h3>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-sm">
-            {careerSequence.map((type, i) => (
-              <Fragment key={i}>
-                {i > 0 && <span className="text-[#94A3B8]">→</span>}
-                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-[#334155]">
-                  {type}
-                </span>
-              </Fragment>
-            ))}
-          </div>
-          {profile.shows_product_progression && (
-            <p className="mt-1.5 text-[11px] text-[#0D9488]">
-              ✓ Product company progression
-            </p>
-          )}
-        </section>
+    <section className={`${karta.card} p-4`}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 text-left"
+      >
+        <h3 className={karta.sectionHeading}>Score History</h3>
+        <span className="text-xs font-medium text-[#0D9488]">
+          {open ? "Hide" : `Show ${fits.length}`}
+        </span>
+      </button>
+      {open && (
+        <ul className="mt-3 divide-y divide-[#F1F5F9]">
+          {fits.map((fit) => (
+            <li
+              key={fit.id}
+              className="flex items-center justify-between gap-2 py-2.5 text-sm"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium text-[#1E293B]">
+                  {fit.role_brief_title ?? "Job role"}
+                </p>
+                <p className="text-xs text-[#64748B]">
+                  {formatDate(fit.created_at)}
+                </p>
+              </div>
+              <VerdictBadge
+                verdict={fit.verdict as FitVerdict}
+                score={fit.overall_score}
+                showScore
+              />
+            </li>
+          ))}
+        </ul>
       )}
-      {education.length > 0 && (
-        <section>
-          <h3 className={karta.sectionHeading}>Education</h3>
-          <ul className="mt-2 space-y-1.5">
-            {education.map((edu, i) => (
-              <li key={i} className="text-sm text-[#334155]">
-                <span className="font-medium">
-                  {edu.degree ?? "Degree"}
-                  {edu.field ? ` in ${edu.field}` : ""}
-                </span>
-                <span className="text-[#64748B]">
-                  {" "}
-                  · {edu.institution}
-                  {edu.year ? `, ${edu.year}` : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-    </>
-  );
-}
-
-function GithubPresenceSection({
-  github,
-}: {
-  github: NonNullable<CandidateSignalProfile["github"]>;
-}) {
-  return (
-    <section>
-      <h3 className={karta.sectionHeading}>Technical Presence</h3>
-      <dl className="mt-3 space-y-2 text-sm">
-        <div className="flex justify-between gap-4">
-          <dt className="text-[#64748B]">Activity</dt>
-          <dd
-            className={
-              github.is_active ? "font-medium text-emerald-700" : "text-[#94A3B8]"
-            }
-          >
-            {github.is_active ? "Active" : "Inactive"}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-[#64748B]">Top languages</dt>
-          <dd className="mt-1 flex flex-wrap gap-1">
-            {github.top_languages.length === 0 ? (
-              <span className="text-[#94A3B8]">—</span>
-            ) : (
-              github.top_languages.map((lang) => (
-                <span
-                  key={lang}
-                  className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-[#334155]"
-                >
-                  {lang}
-                </span>
-              ))
-            )}
-          </dd>
-        </div>
-        <div className="flex justify-between gap-4">
-          <dt className="text-[#64748B]">Public repos</dt>
-          <dd className="font-medium text-[#1E293B]">{github.public_repos}</dd>
-        </div>
-        {github.most_starred_repo && (
-          <div className="flex justify-between gap-4">
-            <dt className="text-[#64748B]">Most starred project</dt>
-            <dd className="font-medium text-[#1E293B]">
-              {github.most_starred_repo.name} ({github.most_starred_repo.stars} ★)
-            </dd>
-          </div>
-        )}
-      </dl>
-      <p className="mt-2 text-[11px] text-[#94A3B8]">From public GitHub profile.</p>
     </section>
   );
 }
@@ -250,13 +119,18 @@ export function CandidateSlidePanel({
   const [pdfBusy, setPdfBusy] = useState(false);
   const [cvDownloadBusy, setCvDownloadBusy] = useState(false);
   const [selectedFitId, setSelectedFitId] = useState<string | null>(null);
-  const [panelTab, setPanelTab] = useState<"insights" | "resume">("insights");
+  const [activeTab, setActiveTab] = useState<CandidatePanelTabId>("overview");
   const [panelExiting, setPanelExiting] = useState(false);
-  const [insightsAnimateKey, setInsightsAnimateKey] = useState(0);
   const [inShortlist, setInShortlist] = useState(false);
+  const [shortlistBusy, setShortlistBusy] = useState(false);
+  const [passModalOpen, setPassModalOpen] = useState(false);
+  const [passBusy, setPassBusy] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [archiveBusy, setArchiveBusy] = useState(false);
+  const [moveRoleBusy, setMoveRoleBusy] = useState(false);
+  const [reEvaluateBusy, setReEvaluateBusy] = useState(false);
   const [noteFilter, setNoteFilter] = useState<"all" | "role">(
     contextJobId ? "role" : "all",
   );
@@ -272,8 +146,9 @@ export function CandidateSlidePanel({
   useEffect(() => {
     if (candidateId) {
       setPanelExiting(false);
-      setInsightsAnimateKey((k) => k + 1);
+      setActiveTab("overview");
       setDeleteConfirm(false);
+      setPassModalOpen(false);
     }
   }, [candidateId]);
 
@@ -362,6 +237,15 @@ export function CandidateSlidePanel({
     selectedFit?.role_brief_title ?? roleBrief?.title ?? null;
 
   const scoreRoleBriefId = contextJobId ?? roleBrief?.id ?? null;
+
+  const canReEvaluate = useMemo(() => {
+    if (!displayRoleBrief || !selectedFit) return false;
+    if (!selectedFit.brief_content_hash) return true;
+    const currentHash = computeBriefContentHash(displayRoleBrief);
+    return currentHash !== selectedFit.brief_content_hash;
+  }, [displayRoleBrief, selectedFit]);
+
+  const isArchived = candidate?.tag === "archived";
 
   const {
     scoring: scoringFromPicker,
@@ -489,6 +373,61 @@ export function CandidateSlidePanel({
     }
   };
 
+  const handleArchiveCandidate = async () => {
+    if (!candidateId) return;
+    setArchiveBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/candidates/${candidateId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "archived" }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Archive failed");
+      window.dispatchEvent(
+        new CustomEvent("karta:candidate-updated", {
+          detail: { id: candidateId },
+        }),
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Archive failed");
+    } finally {
+      setArchiveBusy(false);
+    }
+  };
+
+  const handleMoveToRole = async (roleBriefId: string) => {
+    if (!candidateId) return;
+    setMoveRoleBusy(true);
+    setError(null);
+    try {
+      await runScore(candidateId, roleBriefId);
+      await load();
+      onScored?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Move failed");
+    } finally {
+      setMoveRoleBusy(false);
+    }
+  };
+
+  const handleReEvaluate = async () => {
+    if (!candidateId || !scoreRoleBriefId || !canReEvaluate) return;
+    setReEvaluateBusy(true);
+    setError(null);
+    try {
+      await runScore(candidateId, scoreRoleBriefId);
+      await load();
+      onScored?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Re-evaluation failed");
+    } finally {
+      setReEvaluateBusy(false);
+    }
+  };
+
   const handleDeleteCandidate = async () => {
     if (!candidateId) return;
     setDeleteBusy(true);
@@ -535,15 +474,71 @@ export function CandidateSlidePanel({
     }
   };
 
+  const handleShortlist = async () => {
+    if (!candidateId || !contextJobId || inShortlist) return;
+    setShortlistBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/pipeline", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role_brief_id: contextJobId,
+          candidate_ids: [candidateId],
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Shortlist failed");
+      setInShortlist(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Shortlist failed");
+    } finally {
+      setShortlistBusy(false);
+    }
+  };
+
+  const handlePassConfirm = async (reason: string, detail: string | null) => {
+    if (!candidateId || !contextJobId) return;
+    setPassBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/candidates/${candidateId}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roleBriefId: contextJobId,
+          reason,
+          reasonDetail: detail,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to mark not a fit");
+      setPassModalOpen(false);
+      await load();
+      onScored?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to mark not a fit");
+    } finally {
+      setPassBusy(false);
+    }
+  };
+
   if (!candidateId) return null;
 
   const profile = candidate?.signal_profile;
-  const insightsAnimate =
-    panelTab === "insights" && !loading && Boolean(profile);
-  const verdict = selectedFit?.verdict ?? (displayResult
-    ? scoreToVerdict(displayResult.overall_score)
-    : null);
+  const verdict =
+    selectedFit?.verdict ??
+    (displayResult ? scoreToVerdict(displayResult.overall_score) : null);
   const intel = displayResult?.skills_intelligence;
+  const contradictions = extractContradictions(displayResult);
+  const confidenceLevel =
+    displayResult?.confidence_level ?? displayResult?.confidence_label ?? null;
+  const fallbackQuestions =
+    displayResult?.recruiter_card?.interview_questions ?? [];
+  const askThemQuestions =
+    fallbackQuestions.length > 0
+      ? fallbackQuestions
+      : cannotAssessItems.slice(0, 6);
 
   const roleFitHistorySection = candidate ? (
     <section className={`${karta.card} p-4`}>
@@ -577,74 +572,210 @@ export function CandidateSlidePanel({
     </section>
   ) : null;
 
-  const notesSection = (
-    <section className={`${karta.card} p-4`}>
-      <h3 className={karta.sectionHeading}>Notes</h3>
-      {contextJobId && (
-        <div className="mb-3 flex gap-2">
-          <button
-            type="button"
-            onClick={() => setNoteFilter("all")}
-            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-              noteFilter === "all"
-                ? "bg-[#0D9488] text-white"
-                : "bg-slate-100 text-[#64748B] hover:bg-slate-200"
-            }`}
-          >
-            All notes
-          </button>
-          <button
-            type="button"
-            onClick={() => setNoteFilter("role")}
-            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-              noteFilter === "role"
-                ? "bg-[#0D9488] text-white"
-                : "bg-slate-100 text-[#64748B] hover:bg-slate-200"
-            }`}
-          >
-            This role
-          </button>
-        </div>
-      )}
-      {visibleNotes.length > 0 && (
-        <ul className="mb-3 space-y-2">
-          {visibleNotes.map((n) => (
-            <li
-              key={n.id}
-              className="rounded-md bg-[#F8FAFC] px-3 py-2 text-sm text-[#334155]"
+  const renderTabContent = () => {
+    if (!candidate || !profile) return null;
+
+    if (activeTab === "overview") {
+      if (!hasScore || !displayResult || !displayRoleBrief) {
+        return (
+          <div className={`${karta.card} p-6 text-center`}>
+            <p className="text-sm font-medium text-[#1E293B]">
+              This candidate has not been evaluated yet
+            </p>
+            <button
+              type="button"
+              disabled={scoring}
+              onClick={() => void handleScoreNow()}
+              className={`mt-4 ${karta.btnPrimary}`}
             >
-              <p>{n.body}</p>
-              <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#64748B]">
-                <span>{formatDate(n.created_at)}</span>
-                {n.job_id && contextJobId === n.job_id ? (
-                  <span className="text-[10px] text-[#0D9488]">This role</span>
-                ) : n.job_id ? (
-                  <span className="text-[10px] text-[#94A3B8]">Other role</span>
-                ) : (
-                  <span className="text-[10px] text-[#94A3B8]">General</span>
-                )}
+              {scoring ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Analysing…
+                </span>
+              ) : (
+                "Evaluate Now"
+              )}
+            </button>
+          </div>
+        );
+      }
+
+      return (
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+          <div className="min-w-0 space-y-3 lg:w-[60%]">
+            {displayResult.deal_breaker_warning && (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                {displayResult.deal_breaker_warning}
               </p>
-            </li>
-          ))}
-        </ul>
-      )}
-      <textarea
-        value={noteText}
-        onChange={(e) => setNoteText(e.target.value)}
-        rows={3}
-        placeholder="Add a note…"
-        className={karta.input}
+            )}
+            <WhyThisCandidateSection
+              result={displayResult}
+              roleBrief={displayRoleBrief}
+              cannotAssessItems={cannotAssessItems}
+              variant="overview"
+            />
+          </div>
+          <div className="min-w-0 space-y-4 lg:w-[40%]">
+            <DimensionDonut
+              result={displayResult}
+              roleBrief={displayRoleBrief}
+            />
+            <section className={`${karta.card} p-4`}>
+              <h3 className={karta.sectionHeading}>Quick Actions</h3>
+              <div className="mt-3 flex flex-col gap-2">
+                {contextJobId && (
+                  <button
+                    type="button"
+                    disabled={shortlistBusy || inShortlist || !hasScore}
+                    onClick={() => void handleShortlist()}
+                    className={`inline-flex items-center justify-center gap-2 ${karta.btnOutlineTeal}`}
+                  >
+                    {shortlistBusy ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ArrowRight className="h-4 w-4" />
+                    )}
+                    {inShortlist ? "On shortlist" : "Shortlist"}
+                  </button>
+                )}
+                {contextJobId && (
+                  <button
+                    type="button"
+                    disabled={passBusy}
+                    onClick={() => setPassModalOpen(true)}
+                    className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-4 py-2 text-sm font-semibold text-[#64748B] hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    <X className="h-4 w-4" />
+                    Pass
+                  </button>
+                )}
+                {selectedFit && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("interview")}
+                    className={`inline-flex items-center justify-center gap-2 ${karta.btnSecondary}`}
+                  >
+                    <ClipboardList className="h-4 w-4" />
+                    Generate interview brief
+                  </button>
+                )}
+              </div>
+            </section>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeTab === "analysis") {
+      if (!hasScore || !displayResult || !displayRoleBrief) {
+        return (
+          <p className="text-sm text-[#64748B]">
+            Evaluate this candidate to see score analysis.
+          </p>
+        );
+      }
+
+      return (
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+          <div className="min-w-0 space-y-4 lg:w-[60%]">
+            <ScoreBreakdownSection
+              result={displayResult}
+              roleBrief={displayRoleBrief}
+              colorCoded
+            />
+            {intel && <SkillsMatchSection intel={intel} />}
+            {contradictions.length > 0 && (
+              <section className="rounded-lg border border-[#E2E8F0] border-l-[3px] border-l-red-500 bg-white p-4">
+                <h3 className={karta.sectionHeading}>Contradictions</h3>
+                <ul className="mt-2 space-y-2 text-sm text-[#334155]">
+                  {contradictions.map((c, i) => (
+                    <li key={i}>{c}</li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
+          <div className="min-w-0 space-y-4 lg:w-[40%]">
+            {roleFitHistorySection}
+            {candidate.role_fit_scores.length > 1 && (
+              <ScoreHistorySection fits={candidate.role_fit_scores} />
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    if (activeTab === "interview") {
+      if (!selectedFit || !hasScore) {
+        return (
+          <p className="text-sm text-[#64748B]">
+            Evaluate this candidate before generating an interview brief.
+          </p>
+        );
+      }
+
+      return (
+        <InterviewBriefSection
+          key={selectedFit.id}
+          candidateId={candidateId!}
+          savedScoreId={selectedFit.id}
+          candidateName={candidate.display_name}
+          roleTitle={selectedFit.role_brief_title ?? "Role"}
+          storedBrief={selectedFit.interview_brief}
+          roleBriefUpdatedAt={
+            roleBrief?.scoring_prompt_generated_at ??
+            roleBrief?.last_analysed_at ??
+            displayRoleBrief?.scoring_prompt_generated_at ??
+            displayRoleBrief?.last_analysed_at ??
+            null
+          }
+          roleBriefCreatedAt={
+            roleBrief?.created_at ?? displayRoleBrief?.created_at ?? null
+          }
+          onBriefStored={handleBriefStored}
+          onError={setError}
+          fallbackQuestions={askThemQuestions}
+        />
+      );
+    }
+
+    return (
+      <CandidatePanelProfileTab
+        candidate={candidate}
+        noteFilter={noteFilter}
+        onNoteFilterChange={setNoteFilter}
+        contextJobId={contextJobId ?? null}
+        visibleNotes={visibleNotes}
+        noteText={noteText}
+        onNoteTextChange={setNoteText}
+        noteBusy={noteBusy}
+        onAddNote={() => void addNote()}
+        formatDate={formatDate}
+        hasResumeFile={Boolean(candidate.resume_file_path)}
+        cvDownloadBusy={cvDownloadBusy}
+        onDownloadCv={() => void handleDownloadOriginalCv()}
+        pdfBusy={pdfBusy}
+        canDownloadReport={hasScore && Boolean(displayRoleBrief)}
+        onDownloadReport={() => void handleDownloadReport()}
+        showActions={candidate.created_by === currentUserId}
+        deleteConfirm={deleteConfirm}
+        deleteBusy={deleteBusy}
+        onDeleteConfirm={() => void handleDeleteCandidate()}
+        onDeleteCancel={() => setDeleteConfirm(false)}
+        onDeleteRequest={() => setDeleteConfirm(true)}
+        onCandidateUpdated={() => void load()}
+        onArchive={() => handleArchiveCandidate()}
+        archiveBusy={archiveBusy}
+        onMoveToRole={(roleId) => handleMoveToRole(roleId)}
+        moveRoleBusy={moveRoleBusy}
+        onReEvaluate={() => handleReEvaluate()}
+        reEvaluateBusy={reEvaluateBusy}
+        canReEvaluate={canReEvaluate}
+        isArchived={isArchived}
       />
-      <button
-        type="button"
-        disabled={noteBusy || !noteText.trim()}
-        onClick={() => void addNote()}
-        className={`mt-2 ${karta.btnPrimary}`}
-      >
-        {noteBusy ? "Saving…" : "Add note"}
-      </button>
-    </section>
-  );
+    );
+  };
 
   return (
     <>
@@ -662,128 +793,62 @@ export function CandidateSlidePanel({
         }`}
         role="dialog"
         aria-modal
-        aria-label="Candidate insights"
+        aria-label="Candidate profile"
       >
-        <div className="flex items-center justify-end border-b border-[#E2E8F0] px-4 py-2">
-          <button
-            type="button"
-            onClick={handlePanelClose}
-            className="rounded-md p-1.5 text-[#64748B] hover:bg-slate-100"
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+        {loading ? (
+          <div className="flex flex-1 items-center justify-center">
+            <Loader2 className="h-7 w-7 animate-spin text-[#0D9488]" />
+          </div>
+        ) : error && !candidate ? (
+          <p className="p-6 text-sm text-red-600">{error}</p>
+        ) : candidate && profile ? (
+          <>
+            <div className="sticky-header shrink-0">
+              <CandidatePanelHeader
+                candidate={candidate}
+                roleBriefTitle={jobTitleLabel ?? displayRoleBrief?.title ?? null}
+                verdict={verdict}
+                score={displayResult?.overall_score ?? null}
+                confidenceLevel={confidenceLevel}
+                onClose={handlePanelClose}
+              />
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-          {loading ? (
-            <div className="flex justify-center py-16">
-              <Loader2 className="h-7 w-7 animate-spin text-[#0D9488]" />
+              <div className="px-4 pb-2">
+                {!contextJobId && historicalFits.length > 1 ? (
+                  <label className="block">
+                    <span className="sr-only">Evaluated against</span>
+                    <select
+                      value={selectedFitId ?? ""}
+                      onChange={(e) => setSelectedFitId(e.target.value)}
+                      className={`${karta.input} text-xs`}
+                    >
+                      {historicalFits.map((fit) => (
+                        <option key={fit.id} value={fit.id}>
+                          {fit.role_brief_title ?? "Job role"} ·{" "}
+                          {formatDate(fit.created_at)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : contextJobId && jobTitleLabel ? (
+                  <p className="text-xs font-medium text-[#0D9488]">
+                    {jobTitleLabel}
+                  </p>
+                ) : null}
+              </div>
+
+              <CandidatePanelTabs active={activeTab} onChange={setActiveTab} />
             </div>
-          ) : error && !candidate ? (
-            <p className="text-sm text-red-600">{error}</p>
-          ) : candidate && profile ? (
-            <div className="space-y-5">
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
               {error && (
-                <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
                   {error}
                 </p>
               )}
 
-              <div className="sticky top-0 z-10 -mx-4 border-b border-[#F1F5F9] bg-white px-4 pb-4">
-                <CandidatePanelHeader
-                  candidate={candidate}
-                  roleBriefTitle={jobTitleLabel ?? displayRoleBrief?.title ?? null}
-                  verdict={verdict}
-                  score={displayResult?.overall_score ?? null}
-                />
-
-                <div className="mt-2 space-y-2">
-                  {contextJobId && jobTitleLabel ? (
-                    <p className="text-xs font-medium text-[#0D9488]">
-                      {jobTitleLabel}
-                    </p>
-                  ) : null}
-                  {!contextJobId && historicalFits.length > 1 ? (
-                    <div>
-                      <label className="sr-only" htmlFor="panel-job-score-select">
-                        Evaluated against
-                      </label>
-                      <select
-                        id="panel-job-score-select"
-                        value={selectedFitId ?? ""}
-                        onChange={(e) => setSelectedFitId(e.target.value)}
-                        className={`${karta.input} text-sm`}
-                      >
-                        {historicalFits.map((fit) => (
-                          <option key={fit.id} value={fit.id}>
-                            {fit.role_brief_title ?? "Job role"} ·{" "}
-                            {formatDate(fit.created_at)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : !contextJobId && jobTitleLabel && hasScore ? (
-                    <p className="text-xs font-medium text-[#0D9488]">
-                      {jobTitleLabel}
-                      {selectedFit
-                        ? ` · ${formatDate(selectedFit.created_at)}`
-                        : ""}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-                  {candidate.resume_file_path ? (
-                    <button
-                      type="button"
-                      disabled={cvDownloadBusy}
-                      onClick={() => void handleDownloadOriginalCv()}
-                      className="inline-flex items-center gap-1.5 text-sm font-medium text-[#0D9488] hover:text-[#0B8276] disabled:opacity-50"
-                    >
-                      {cvDownloadBusy ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Download className="h-3.5 w-3.5" />
-                      )}
-                      Download Original CV
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    disabled={
-                      pdfBusy ||
-                      loading ||
-                      !hasScore ||
-                      !displayRoleBrief ||
-                      !candidate
-                    }
-                    onClick={() => void handleDownloadReport()}
-                    className={`inline-flex shrink-0 items-center gap-1.5 ${karta.btnOutlineTeal} px-2.5 py-1.5 text-xs`}
-                  >
-                    {pdfBusy ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Download className="h-3.5 w-3.5" />
-                    )}
-                    Download Report
-                  </button>
-                </div>
-
-                <div className="mt-3">
-                  <SlidingTabs
-                    tabs={[
-                      { id: "insights", label: "Insights" },
-                      { id: "resume", label: "Resume" },
-                    ]}
-                    value={panelTab}
-                    onChange={setPanelTab}
-                  />
-                </div>
-              </div>
-
               {candidate.manual_rejection_reason && (
-                <div className="mx-0 mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+                <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-red-600">
                     Not a Fit
                   </p>
@@ -793,237 +858,29 @@ export function CandidateSlidePanel({
                       ? ` — ${candidate.manual_rejection_detail}`
                       : ""}
                   </p>
-                  {candidate.manually_rejected_at && (
-                    <p className="mt-0.5 text-[11px] text-red-400">
-                      {formatDate(candidate.manually_rejected_at)}
-                    </p>
-                  )}
                 </div>
               )}
 
-              {panelTab === "resume" ? (
-                <div className="space-y-4">
-
-                  {/* Work History */}
-                  {(candidate.signal_profile?.experience?.length ?? 0) > 0 && (
-                    <section className={`${karta.card} p-4`}>
-                      <h3 className={karta.sectionHeading}>Work History</h3>
-                      <ol className="mt-3 space-y-4">
-                        {candidate.signal_profile.experience.map((exp, i) => (
-                          <li key={i} className="border-l-2 border-slate-100 pl-3">
-                            <p className="font-semibold text-sm text-[#1E293B]">{exp.title}</p>
-                            <p className="text-xs text-[#64748B]">
-                              {exp.company}
-                              {exp.start_date ? ` · ${exp.start_date}` : ""}
-                              {exp.end_date ? ` – ${exp.end_date}` : ""}
-                            </p>
-                            {(exp.bullets?.length ?? 0) > 0 && (
-                              <ul className="mt-1.5 space-y-1">
-                                {exp.bullets.slice(0, 4).map((b, j) => (
-                                  <li key={j} className="text-xs text-[#334155] leading-relaxed">
-                                    · {b}
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </li>
-                        ))}
-                      </ol>
-                    </section>
-                  )}
-
-                  {/* Education */}
-                  {(candidate.signal_profile?.education?.length ?? 0) > 0 && (
-                    <section className={`${karta.card} p-4`}>
-                      <h3 className={karta.sectionHeading}>Education</h3>
-                      <ul className="mt-3 space-y-2">
-                        {candidate.signal_profile.education.map((ed, i) => (
-                          <li key={i} className="text-sm">
-                            <p className="font-medium text-[#1E293B]">{ed.institution}</p>
-                            <p className="text-xs text-[#64748B]">
-                              {[ed.degree, ed.field, ed.year].filter(Boolean).join(" · ")}
-                            </p>
-                          </li>
-                        ))}
-                      </ul>
-                    </section>
-                  )}
-
-                  <CandidateDetailsSection
-                    candidate={candidate}
-                    onSaved={() => void load()}
-                  />
-                </div>
-              ) : hasScore && displayResult && displayRoleBrief ? (
-                <div className="space-y-4 pt-2">
-                  {displayResult.deal_breaker_warning && (
-                    <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                      {displayResult.deal_breaker_warning}
-                    </p>
-                  )}
-
-                  {inShortlist && selectedFit && (
-                    <CandidatePitchCard
-                      candidate={{
-                        id: "",
-                        role_brief_id: contextJobId ?? "",
-                        candidate_id: candidate.id,
-                        candidate_name: candidate.display_name,
-                        email: candidate.application_email,
-                        phone: candidate.application_phone,
-                        location: candidate.application_location,
-                        fit_score: selectedFit.overall_score,
-                        fit_verdict: selectedFit.verdict,
-                        insights: { signals: [] },
-                        relocation: null,
-                        present_salary: null,
-                        expected_salary: null,
-                        recruiter_notes: null,
-                        custom_fields: {},
-                        added_at: "",
-                        created_by: null,
-                      }}
-                      score={selectedFit}
-                    />
-                  )}
-
-                  <div className="flex flex-col gap-6 lg:flex-row">
-                    <div className="min-w-0 space-y-5 lg:flex-[3]">
-                      <WhyThisCandidateSection
-                        result={displayResult}
-                        roleBrief={displayRoleBrief}
-                        cannotAssessItems={cannotAssessItems}
-                      />
-                      <ScoreBreakdownSection
-                        result={displayResult}
-                        roleBrief={displayRoleBrief}
-                      />
-                      {intel && <SkillsMatchSection intel={intel} />}
-                      {selectedFit && candidateId && (
-                        <InterviewBriefSection
-                          key={selectedFit.id}
-                          candidateId={candidateId}
-                          savedScoreId={selectedFit.id}
-                          candidateName={candidate.display_name}
-                          roleTitle={
-                            selectedFit.role_brief_title ?? "Role"
-                          }
-                          storedBrief={selectedFit.interview_brief}
-                          onBriefStored={handleBriefStored}
-                          onError={setError}
-                        />
-                      )}
-                    </div>
-
-                    <div className="min-w-0 space-y-5 lg:flex-[2]">
-                      <CandidateDetailsSection
-                        candidate={candidate}
-                        onSaved={() => void load()}
-                      />
-                      <DimensionDonut
-                        result={displayResult}
-                        roleBrief={displayRoleBrief}
-                      />
-                      {roleFitHistorySection}
-                      {notesSection}
-                    </div>
-                  </div>
-                </div>
-              ) : panelTab === "insights" ? (
-                <div className="flex flex-col gap-6 pt-2 lg:flex-row">
-                  <div className="min-w-0 space-y-5 lg:flex-[3]">
-                    <section>
-                      <h3 className={karta.sectionHeading}>Candidate Insights</h3>
-                      <div className="mt-3">
-                        <CandidateInsightsBars
-                          key={insightsAnimateKey}
-                          profile={profile}
-                          animate={insightsAnimate}
-                        />
-                      </div>
-                    </section>
-                    <CandidateInsightsProfileExtras profile={profile} />
-                    {profile.github && (
-                      <GithubPresenceSection github={profile.github} />
-                    )}
-                    <div className="rounded-lg border border-dashed border-[#0D9488]/40 bg-teal-50/50 px-4 py-5 text-center">
-                      <p className="text-sm font-medium text-[#1E293B]">
-                        This candidate has not been evaluated yet
-                      </p>
-                      <button
-                        type="button"
-                        disabled={scoring}
-                        onClick={() => void handleScoreNow()}
-                        className={`mt-4 ${karta.btnPrimary}`}
-                      >
-                        {scoring ? (
-                          <span className="inline-flex items-center gap-2">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Analysing…
-                          </span>
-                        ) : (
-                          "Evaluate Now"
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="min-w-0 space-y-5 lg:flex-[2]">
-                    {roleFitHistorySection}
-                    {notesSection}
-                  </div>
-                </div>
-              ) : null}
-
-              {candidateId &&
-                candidate &&
-                candidate.created_by === currentUserId && (
-                  <section className="border-t border-slate-200 pt-6">
-                    {!deleteConfirm ? (
-                      <button
-                        type="button"
-                        onClick={() => setDeleteConfirm(true)}
-                        className="inline-flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Delete candidate
-                      </button>
-                    ) : (
-                      <div className="space-y-3 rounded-lg border border-red-200 bg-red-50/50 p-4">
-                        <p className="text-sm text-[#334155]">
-                          This will permanently remove this candidate and all
-                          their evaluation data. This cannot be undone.
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            disabled={deleteBusy}
-                            onClick={() => void handleDeleteCandidate()}
-                            className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                          >
-                            {deleteBusy ? "Deleting…" : "Yes, delete"}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={deleteBusy}
-                            onClick={() => setDeleteConfirm(false)}
-                            className="rounded-lg px-3 py-1.5 text-sm font-medium text-[#64748B] hover:bg-slate-100"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </section>
-                )}
+              <div key={activeTab} className="panel-tab-content">
+                {renderTabContent()}
+              </div>
             </div>
-          ) : candidate ? (
-            <p className="text-sm text-[#64748B]">
-              Profile data is still loading or unavailable for this candidate.
-              Try closing and reopening the panel, or re-upload the resume.
-            </p>
-          ) : null}
-        </div>
+          </>
+        ) : candidate ? (
+          <p className="p-6 text-sm text-[#64748B]">
+            Profile data is still loading or unavailable for this candidate.
+          </p>
+        ) : null}
       </aside>
+
+      {passModalOpen && candidate && (
+        <NotAFitModal
+          candidateName={candidate.display_name}
+          onClose={() => setPassModalOpen(false)}
+          onConfirm={(reason, detail) => void handlePassConfirm(reason, detail)}
+        />
+      )}
+
       {pickerOpen && pickerCandidate && (
         <ScoreRolePickerModal
           candidateName={pickerCandidate.name}

@@ -1,4 +1,5 @@
 import type { PostgrestError } from "@supabase/supabase-js";
+import { sanitizeAiErrorMessage } from "@/lib/errors/sanitize-ai-error-message";
 
 export function isPostgrestError(err: unknown): err is PostgrestError {
   return (
@@ -15,7 +16,7 @@ export function getErrorMessage(err: unknown, fallback: string): string {
     return parts.join(" — ") || fallback;
   }
   if (err instanceof Error && err.message) {
-    return err.message;
+    return sanitizeAiErrorMessage(err.message);
   }
   return fallback;
 }

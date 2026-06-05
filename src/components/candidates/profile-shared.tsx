@@ -38,9 +38,9 @@ export function VerdictBadge({
   showScore?: boolean;
   /** Play entrance animation when badge mounts with a verdict */
   animateIn?: boolean;
-  /** Show "Preliminary" label under the badge (local pre-score before GPT) */
+  /** Show "Preliminary" label under the badge (local pre-score before full evaluation) */
   preliminary?: boolean;
-  /** Animate score number when GPT score replaces pre-score */
+  /** Animate score number when full score replaces pre-score */
   scoreAnimate?: boolean;
 }) {
   if (!verdict) {

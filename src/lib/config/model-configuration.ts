@@ -13,10 +13,10 @@ export type ModelConfiguration = {
   assignment: RoleAssignment;
 };
 
-/** Production match scoring: GPT-4o mini only. */
+/** Production match scoring: single Kharta evaluator. */
 export const FIXED_MODEL_CONFIGURATION: ModelConfiguration = {
-  id: "gpt4o-mini-scorer",
-  label: "GPT-4o mini (candidate match)",
+  id: "kharta-scorer-v1",
+  label: "Kharta candidate match",
   assignment: {
     gemini: "signal_extractor",
     claude: "devils_advocate",

@@ -7,6 +7,7 @@ import { stripPII } from "@/lib/resume/strip-pii";
 import { buildScoringRunPayloadFromResult } from "@/lib/scoring/build-scoring-run-payload";
 import { insertScoringRun } from "@/lib/supabase/server";
 import type { RoleBrief } from "@/types/role-brief";
+import { sanitizeAiErrorMessage } from "@/lib/errors/sanitize-ai-error-message";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import { getScoreRatelimiter, checkRateLimit } from "@/lib/rate-limit";
 
@@ -100,12 +101,13 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ result, scoringRunId });
   } catch (err) {
-    const message =
+    const raw =
       err instanceof Error ? err.message : "Failed to score candidate";
+    const message = sanitizeAiErrorMessage(raw);
     const status =
-      message.includes("OPENAI_API_KEY") || message.includes("401")
+      raw.includes("OPENAI_API_KEY") || raw.includes("401")
         ? 401
-        : message.includes("Supabase")
+        : raw.includes("Supabase")
           ? 503
           : 500;
     return NextResponse.json({ error: message }, { status });

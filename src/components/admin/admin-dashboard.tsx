@@ -5,7 +5,9 @@ import { useCallback, useEffect, useState } from "react";
 import { Loader2, Search } from "lucide-react";
 import type { AdminOverview, AdminWorkspaceRow } from "@/lib/admin/queries";
 import { AdminCostDashboard } from "@/components/admin/admin-cost-dashboard";
+import { PlatformAnalyticsSection } from "@/components/admin/platform-analytics-section";
 import { ResumeParsingWidget } from "@/components/admin/resume-parsing-widget";
+import { SystemHealthSection } from "@/components/admin/system-health-section";
 import { karta } from "@/lib/brand/karta";
 
 function formatStorageBytes(bytes: number): string {
@@ -460,9 +462,9 @@ function DataQualityCard() {
     <section className={`${karta.card} p-5`}>
       <h3 className={karta.sectionHeading}>Data Quality</h3>
       <p className="mt-1 text-sm text-[#64748B]">
-        Reparse all candidate records using the Gemini parser. This re-extracts
-        names, skills, experience, and contact details for all existing
-        candidates.
+        Reparse all candidate records using the Kharta resume parser. This
+        re-extracts names, skills, experience, and contact details for all
+        existing candidates.
       </p>
       <div className="mt-4 flex flex-wrap items-center gap-4">
         <button
@@ -538,27 +540,25 @@ export function AdminDashboard() {
     return () => clearTimeout(t);
   }, [search, load]);
 
-  if (loading && !overview) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <p className="text-sm text-red-600" role="alert">
-        {error}
-      </p>
-    );
-  }
-
   return (
     <div className="space-y-10">
+      <SystemHealthSection />
+
+      {loading && !overview ? (
+        <div className="flex min-h-[30vh] items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+        </div>
+      ) : error ? (
+        <p className="text-sm text-red-600" role="alert">
+          {error}
+        </p>
+      ) : (
+        <>
       <WorkspaceResetCard onResetComplete={() => void load(search)} />
       <DataQualityCard />
       <EmailInboundCard />
+
+      <PlatformAnalyticsSection />
 
       <section>
         <h2 className={karta.pageTitle}>Platform overview</h2>
@@ -690,6 +690,8 @@ export function AdminDashboard() {
           </p>
         )}
       </section>
+        </>
+      )}
     </div>
   );
 }

@@ -32,6 +32,7 @@ function minimalRoleBrief(
     job_description_hash: null,
     analysis_version: 1,
     last_analysed_at: null,
+    scoring_prompt_generated_at: null,
     deal_breakers: [],
     core_signals: [],
     preferred_signals: [],

@@ -41,14 +41,31 @@ export async function POST(request: Request, { params }: Params) {
       );
     }
 
-    if (candidate.parsing_status !== "failed") {
+    const canRetry =
+      candidate.parsing_status === "failed" ||
+      candidate.parsing_status === "pending" ||
+      (candidate.parsing_status === "complete" &&
+        (candidate.scoring_status === "unscored" ||
+          candidate.scoring_status === "needs_scoring"));
+
+    if (!canRetry) {
       return NextResponse.json(
-        { error: "Candidate is not in failed state." },
+        { error: "Candidate is not eligible for retry." },
         { status: 400 },
       );
     }
 
-    await updateCandidate(id, { parsing_status: "pending" });
+    if (!candidate.resume_text?.trim()) {
+      return NextResponse.json(
+        { error: "Resume text is missing — re-upload the resume." },
+        { status: 400 },
+      );
+    }
+
+    await updateCandidate(id, {
+      parsing_status: "pending",
+      scoring_status: "unscored",
+    });
 
     void triggerParsing(
       id,

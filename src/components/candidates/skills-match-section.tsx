@@ -9,6 +9,12 @@ type SkillsMatchSectionProps = {
 };
 
 export function SkillsMatchSection({ intel }: SkillsMatchSectionProps) {
+  const sortedMatches = [...intel.matches].sort((a, b) => {
+    const aMiss = a.match_type === "not_found" ? 1 : 0;
+    const bMiss = b.match_type === "not_found" ? 1 : 0;
+    return aMiss - bMiss;
+  });
+
   return (
     <section className={`${karta.card} p-4`}>
       <h3 className={karta.sectionHeading}>Skills Match</h3>
@@ -35,7 +41,7 @@ export function SkillsMatchSection({ intel }: SkillsMatchSectionProps) {
         </div>
       </div>
       <ul className="mt-3 space-y-2">
-        {intel.matches.map((m) => (
+        {sortedMatches.map((m) => (
           <li
             key={m.skill}
             className="flex items-start gap-2 text-sm text-[#334155]"

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { trackEvent } from "@/lib/analytics/track";
 import { recordRecruiterDecision } from "@/lib/decisions/recruiter-decisions";
 import { addCandidateToPipeline } from "@/lib/pipeline/add-to-pipeline";
 import { getCandidateById } from "@/lib/supabase/candidates";
@@ -95,6 +96,11 @@ export async function POST(request: Request) {
           roleBrief,
         });
       }
+
+      void trackEvent("candidate_shortlisted", {
+        candidate_id: candidateId,
+        job_id: body.role_brief_id.trim(),
+      });
     }
 
     const board = await getPipelineBoard(user.id);

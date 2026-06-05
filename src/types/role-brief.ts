@@ -81,6 +81,7 @@ export type RoleBrief = {
   job_description_hash: string | null;
   analysis_version: number;
   last_analysed_at: string | null;
+  scoring_prompt_generated_at: string | null;
   deal_breakers: string[];
   core_signals: CoreSignal[];
   preferred_signals: string[];
@@ -397,6 +398,10 @@ export function parseRoleBriefRow(row: Record<string, unknown>): RoleBrief {
     analysis_version: clampWeight(row.analysis_version, 1),
     last_analysed_at:
       row.last_analysed_at != null ? String(row.last_analysed_at) : null,
+    scoring_prompt_generated_at:
+      row.scoring_prompt_generated_at != null
+        ? String(row.scoring_prompt_generated_at)
+        : null,
     deal_breakers,
     core_signals,
     preferred_signals,

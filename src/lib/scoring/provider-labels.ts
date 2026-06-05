@@ -1,8 +1,8 @@
 import type { ModelRole } from "@/types/score";
 
-/** Labels written to scoring_runs for legacy multi-model metadata (production uses GPT-4o mini only). */
+/** Labels written to scoring_runs for legacy multi-model metadata (recruiter-facing roles). */
 export const PROVIDER_LABELS: Record<ModelRole, string> = {
-  claude: "Claude",
-  gpt4o: "GPT-4o",
-  gemini: "Gemini Flash",
+  claude: "Risk reviewer",
+  gpt4o: "Structured scorer",
+  gemini: "Signal extractor",
 };

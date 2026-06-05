@@ -8,6 +8,7 @@ import { filenameToDisplayName } from "@/lib/scoring/recruiter-card";
 import { stripPII } from "@/lib/resume/strip-pii";
 import { insertSavedScoreWithFallback } from "@/lib/saved-scores/insert-with-fallback";
 import { buildSavedScoreInsertPayload } from "@/lib/saved-scores/build-save-payload";
+import { trackEvent } from "@/lib/analytics/track";
 import { scoringStatusFromOverall } from "@/lib/jobs/scoring-status";
 import { scoreToVerdict } from "@/lib/scoring/recruiter-card";
 import {
@@ -18,6 +19,7 @@ import { computeBriefContentHash } from "@/lib/role-brief/jd-cache";
 import { getCandidateById, updateCandidate } from "@/lib/supabase/candidates";
 import { recordRecruiterDecision } from "@/lib/decisions/recruiter-decisions";
 import { logWorkspaceActivityIfAuthed } from "@/lib/activity/log";
+import { sanitizeAiErrorMessage } from "@/lib/errors/sanitize-ai-error-message";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import { parseRoleBriefRow } from "@/types/role-brief";
 import type { CandidateScoreResult } from "@/types/score";
@@ -107,6 +109,14 @@ export async function POST(request: Request, { params }: Params) {
           job_id: candidate.job_id ?? body.roleBriefId,
         });
 
+        void trackEvent("candidate_scored", {
+          candidate_id: id,
+          job_id: body.roleBriefId,
+          score: recomputed,
+          verdict: recomputedVerdict,
+          from_cache: true,
+        });
+
         return NextResponse.json({
           result: cachedResult,
           savedScoreId: String(cacheRow.id),
@@ -194,12 +204,21 @@ export async function POST(request: Request, { params }: Params) {
       roleBrief,
     });
 
+    const verdict = scoreToVerdict(result.overall_score);
+    void trackEvent("candidate_scored", {
+      candidate_id: id,
+      job_id: body.roleBriefId,
+      score: result.overall_score,
+      verdict,
+    });
+
     return NextResponse.json({ result, savedScoreId });
   } catch (err) {
-    const message =
+    const raw =
       err instanceof Error ? err.message : "Failed to score candidate";
+    const message = sanitizeAiErrorMessage(raw);
     const status =
-      message.includes("OPENAI_API_KEY") || message.includes("401")
+      raw.includes("OPENAI_API_KEY") || raw.includes("401")
         ? 401
         : 500;
     return NextResponse.json({ error: message }, { status });

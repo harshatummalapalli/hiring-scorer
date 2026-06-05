@@ -262,7 +262,7 @@ export type FetchOpenAiUsageResult = {
 };
 
 const OPENAI_USAGE_SCOPE_NOTE =
-  "Live OpenAI usage data requires an API key with the api.usage.read scope. Update your key in Vercel environment variables to enable this.";
+  "Live scoring cost data requires an admin API key with usage read access. Update credentials in environment variables to enable this.";
 
 export function getOpenAiUsageScopeNote(): string {
   return OPENAI_USAGE_SCOPE_NOTE;

@@ -73,6 +73,11 @@ function formatDate(iso: string | null): string {
   });
 }
 
+/** Admin cost breakdown — version labels only (no vendor model IDs in UI). */
+function costTierLabel(index: number): string {
+  return `v${index + 1}`;
+}
+
 function CostMetricCard({ label, value }: { label: string; value: string }) {
   return (
     <div className={`${karta.card} p-5`}>
@@ -120,7 +125,9 @@ export function AdminCostDashboard() {
           {data?.fetchedAt && (
             <p className="mt-1 text-xs text-[#94A3B8]">
               Data as of {formatDateTime(data.fetchedAt)}
-              {data.openai.live ? " · OpenAI live" : " · OpenAI cached or unavailable"}
+              {data.openai.live
+                ? " · Scoring costs live"
+                : " · Cost data cached or unavailable"}
             </p>
           )}
         </div>
@@ -175,15 +182,15 @@ export function AdminCostDashboard() {
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <CostMetricCard
-              label="OpenAI (live) this month"
+              label="Scoring costs (this month)"
               value={formatUsd(data.summary.openai_total_usd)}
             />
             <CostMetricCard
-              label="Claude (saved_scores) this month"
+              label="Analysis costs (this month)"
               value={formatUsd(data.summary.claude_total_usd)}
             />
             <CostMetricCard
-              label="Combined API cost"
+              label="Platform costs"
               value={formatUsd(data.summary.combined_total_usd)}
             />
             <CostMetricCard
@@ -201,15 +208,15 @@ export function AdminCostDashboard() {
           </div>
 
           <p className="text-xs text-[#94A3B8]">
-            OpenAI: {data.openai.requests.toLocaleString()} requests ·{" "}
+            Scoring: {data.openai.requests.toLocaleString()} requests ·{" "}
             {data.openai.total_tokens.toLocaleString()} tokens
             {data.openai.by_model.length > 0 && (
               <>
                 {" "}
-                · Models:{" "}
+                · Tiers:{" "}
                 {data.openai.by_model
                   .slice(0, 5)
-                  .map((m) => m.model)
+                  .map((_, i) => costTierLabel(i))
                   .join(", ")}
               </>
             )}
