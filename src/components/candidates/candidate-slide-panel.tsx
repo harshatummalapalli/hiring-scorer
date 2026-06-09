@@ -31,9 +31,11 @@ import { VerdictBadge } from "./profile-shared";
 import { DimensionDonut } from "@/components/candidates/dimension-donut";
 import { ScoreBreakdownSection } from "@/components/candidates/score-breakdown-section";
 import { SkillsMatchSection } from "@/components/candidates/skills-match-section";
+import { RecommendedActionSection } from "@/components/candidates/recommended-action-section";
 import { WhyThisCandidateSection } from "@/components/candidates/why-this-candidate-section";
 import { InterviewBriefSection } from "@/components/candidates/interview-brief-section";
 import type { InterviewBrief } from "@/types/score";
+import { useToast } from "@/components/ui/toast";
 
 function formatDate(iso: string): string {
   try {
@@ -134,6 +136,8 @@ export function CandidateSlidePanel({
   const [noteFilter, setNoteFilter] = useState<"all" | "role">(
     contextJobId ? "role" : "all",
   );
+
+  const { toast } = useToast();
 
   const handlePanelClose = () => {
     setPanelExiting(true);
@@ -319,6 +323,7 @@ export function CandidateSlidePanel({
 
   const handleBriefStored = useCallback(
     (brief: InterviewBrief) => {
+      toast("Interview brief ready");
       setCandidate((prev) => {
         if (!prev || !selectedFitId) return prev;
         return {
@@ -329,7 +334,7 @@ export function CandidateSlidePanel({
         };
       });
     },
-    [selectedFitId],
+    [selectedFitId, toast],
   );
 
   const addNote = async () => {
@@ -348,6 +353,7 @@ export function CandidateSlidePanel({
       if (!res.ok) throw new Error(json.error ?? "Failed to add note");
       setNoteText("");
       await load();
+      toast("Note saved");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add note");
     } finally {
@@ -490,6 +496,7 @@ export function CandidateSlidePanel({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Shortlist failed");
       setInShortlist(true);
+      toast("Candidate added to shortlist");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Shortlist failed");
     } finally {
@@ -514,6 +521,7 @@ export function CandidateSlidePanel({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to mark not a fit");
       setPassModalOpen(false);
+      toast("Candidate marked as not a fit");
       await load();
       onScored?.();
     } catch (err) {
@@ -533,12 +541,7 @@ export function CandidateSlidePanel({
   const contradictions = extractContradictions(displayResult);
   const confidenceLevel =
     displayResult?.confidence_level ?? displayResult?.confidence_label ?? null;
-  const fallbackQuestions =
-    displayResult?.recruiter_card?.interview_questions ?? [];
-  const askThemQuestions =
-    fallbackQuestions.length > 0
-      ? fallbackQuestions
-      : cannotAssessItems.slice(0, 6);
+  const askThemQuestions = cannotAssessItems.slice(0, 6);
 
   const roleFitHistorySection = candidate ? (
     <section className={`${karta.card} p-4`}>
@@ -604,6 +607,7 @@ export function CandidateSlidePanel({
       return (
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
           <div className="min-w-0 space-y-3 lg:w-[60%]">
+            <RecommendedActionSection result={displayResult} />
             {displayResult.deal_breaker_warning && (
               <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                 {displayResult.deal_breaker_warning}
@@ -686,8 +690,10 @@ export function CandidateSlidePanel({
             />
             {intel && <SkillsMatchSection intel={intel} />}
             {contradictions.length > 0 && (
-              <section className="rounded-lg border border-[#E2E8F0] border-l-[3px] border-l-red-500 bg-white p-4">
-                <h3 className={karta.sectionHeading}>Contradictions</h3>
+              <section className="rounded-lg border-l-[3px] border-red-400 bg-gradient-to-r from-red-50/50 to-transparent p-4">
+                <h3 className={`${karta.sectionHeading} section-heading-accent`}>
+                  Contradictions
+                </h3>
                 <ul className="mt-2 space-y-2 text-sm text-[#334155]">
                   {contradictions.map((c, i) => (
                     <li key={i}>{c}</li>

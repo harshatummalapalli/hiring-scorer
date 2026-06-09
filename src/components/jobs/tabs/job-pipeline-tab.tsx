@@ -40,6 +40,8 @@ import { isStuckCandidate } from "@/lib/candidates/stuck-processing";
 import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
 import { CopyButton } from "@/components/ui/copy-button";
 import { EvaluatingDots } from "@/components/ui/evaluating-dots";
+import { useToast } from "@/components/ui/toast";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
 import { karta } from "@/lib/brand/karta";
 import {
@@ -192,6 +194,29 @@ function pipelineDisplayScore(
   return { gptScore, displayScore, verdict, isPreliminary };
 }
 
+function verdictLeftColor(
+  c: CandidateListItem,
+  jobId: string,
+  evaluating = false,
+): string {
+  if (evaluating) return "#0D9488";
+  const verdict = pipelineVerdictForRole(c, jobId);
+  switch (verdict) {
+    case "EXCEPTIONAL MATCH":
+      return "#7C3AED";
+    case "STRONG MATCH":
+      return "#059669";
+    case "POTENTIAL MATCH":
+      return "#D97706";
+    case "WEAK MATCH":
+      return "#EA580C";
+    case "NOT A MATCH":
+      return "#DC2626";
+    default:
+      return "#E2E8F0";
+  }
+}
+
 export function JobPipelineTab({
   jobId,
   jobTitle,
@@ -232,9 +257,15 @@ export function JobPipelineTab({
       ) as Record<SectionKey, boolean>,
   );
   const [groupedView, setGroupedView] = useState(false);
+  const [focusedCandidateId, setFocusedCandidateId] = useState<string | null>(
+    null,
+  );
+  const [isDragging, setIsDragging] = useState(false);
+  const [showShortcutHint, setShowShortcutHint] = useState(true);
   const autoRetriedRef = useRef(new Set<string>());
+  const { toast } = useToast();
 
-  const { openPanel, refreshPanel, candidateId: openPanelId } =
+  const { openPanel, refreshPanel, candidateId: openPanelId, closePanel } =
     useCandidatePanel();
 
   const isStuck = useCallback(
@@ -248,6 +279,11 @@ export function JobPipelineTab({
   );
 
   const uploading = uploadUi.phase === "uploading";
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setShowShortcutHint(false), 10000);
+    return () => window.clearTimeout(t);
+  }, []);
 
   const load = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) setLoading(true);
@@ -525,6 +561,19 @@ export function JobPipelineTab({
     return [...scored, ...pending];
   }, [groups, pipelineIds, optimisticShortlistedIds]);
 
+  useEffect(() => {
+    if (flatList.length === 0) {
+      setFocusedCandidateId(null);
+      return;
+    }
+    if (
+      !focusedCandidateId ||
+      !flatList.some((c) => c.id === focusedCandidateId)
+    ) {
+      setFocusedCandidateId(flatList[0]?.id ?? null);
+    }
+  }, [flatList, focusedCandidateId]);
+
   const visibleApplicants = useMemo(
     () =>
       candidates.filter(
@@ -645,6 +694,7 @@ export function JobPipelineTab({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Shortlist failed");
       setPipelineIds((prev) => new Set(prev).add(targetId));
+      toast("Candidate added to shortlist");
     } catch (err) {
       setOptimisticShortlistedIds((prev) => {
         const next = new Set(prev);
@@ -724,6 +774,7 @@ export function JobPipelineTab({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to mark not a fit");
       setRejectTarget(null);
+      toast("Candidate marked as not a fit");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to mark not a fit");
@@ -839,6 +890,9 @@ export function JobPipelineTab({
           files: nextFiles,
           count: successCount,
         });
+        toast(
+          `${successCount} resume${successCount > 1 ? "s" : ""} uploaded — evaluating...`,
+        );
         window.setTimeout(() => setUploadUi({ phase: "idle" }), 5000);
       }
     } catch (err) {
@@ -878,23 +932,65 @@ export function JobPipelineTab({
     return best;
   }, [groups.notAMatch]);
 
-  function verdictBorderClass(c: CandidateListItem): string {
-    const verdict = pipelineVerdictForRole(c, jobId);
-    switch (verdict) {
-      case "EXCEPTIONAL MATCH":
-        return "border-l-[3px] border-l-[#7F77DD]";
-      case "STRONG MATCH":
-        return "border-l-[3px] border-l-[#1D9E75]";
-      case "POTENTIAL MATCH":
-        return "border-l-[3px] border-l-[#BA7517]";
-      case "WEAK MATCH":
-        return "border-l-[3px] border-l-[#D85A30]";
-      case "NOT A MATCH":
-        return "border-l-[3px] border-l-[#E24B4A]";
-      default:
-        return "border-l-[3px] border-l-slate-200";
+  const handleDroppedFiles = (files: File[]) => {
+    if (files.length === 0) return;
+    const dt = new DataTransfer();
+    for (const file of files) {
+      dt.items.add(file);
     }
-  }
+    void uploadFiles(dt.files);
+  };
+
+  const focusedCandidate = useMemo(
+    () => flatList.find((c) => c.id === focusedCandidateId) ?? null,
+    [flatList, focusedCandidateId],
+  );
+
+  const shortcutHandlers = useMemo(
+    () => ({
+      "?": () => setShowShortcutHint(true),
+      j: () => {
+        if (flatList.length === 0) return;
+        const idx = Math.max(
+          0,
+          flatList.findIndex((c) => c.id === focusedCandidateId),
+        );
+        const next = flatList[Math.min(flatList.length - 1, idx + 1)];
+        if (next) setFocusedCandidateId(next.id);
+      },
+      k: () => {
+        if (flatList.length === 0) return;
+        const idx = Math.max(
+          0,
+          flatList.findIndex((c) => c.id === focusedCandidateId),
+        );
+        const prev = flatList[Math.max(0, idx - 1)];
+        if (prev) setFocusedCandidateId(prev.id);
+      },
+      s: () => {
+        if (focusedCandidate) void shortlistOne(focusedCandidate);
+      },
+      x: () => {
+        if (focusedCandidate) setRejectTarget(focusedCandidate);
+      },
+      enter: () => {
+        if (focusedCandidateId) {
+          openPanel(focusedCandidateId, panelOptions);
+        }
+      },
+      escape: () => closePanel(),
+    }),
+    [
+      flatList,
+      focusedCandidateId,
+      focusedCandidate,
+      panelOptions,
+      openPanel,
+      closePanel,
+    ],
+  );
+
+  useKeyboardShortcuts(shortcutHandlers, flatList.length > 0);
 
   const retryCandidate = async (candidateId: string) => {
     setError(null);
@@ -989,6 +1085,9 @@ export function JobPipelineTab({
     const { gptScore, displayScore, verdict, isPreliminary } =
       pipelineDisplayScore(c, jobId);
     const isSelected = selected.has(c.id);
+    const isEvaluating = (c.scoring_status as string) === "evaluating";
+    const isFocused = focusedCandidateId === c.id;
+    const leftColor = verdictLeftColor(c, jobId, isEvaluating);
 
     return (
       <div
@@ -997,15 +1096,20 @@ export function JobPipelineTab({
         tabIndex={0}
         onClick={(e) => {
           if ((e.target as HTMLElement).closest("button,input,label,a")) return;
+          setFocusedCandidateId(c.id);
           openPanel(c.id, panelOptions);
         }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
+            setFocusedCandidateId(c.id);
             openPanel(c.id, panelOptions);
           }
         }}
-        className={`flex flex-wrap items-center gap-3 border-b border-[#F1F5F9] px-4 py-3 last:border-0 hover:bg-slate-50/80 cursor-pointer ${verdictBorderClass(c)}`}
+        className={`flex flex-wrap items-center gap-3 rounded-xl border border-slate-200/60 bg-white p-4 shadow-sm transition-all duration-200 hover:border-slate-300/60 hover:shadow-md border-l-[3px] cursor-pointer ${
+          isFocused ? "ring-2 ring-teal-400/40" : ""
+        } ${isEvaluating ? "pipeline-row-evaluating" : ""}`}
+        style={{ borderLeftColor: leftColor }}
       >
         <input
           type="checkbox"
@@ -1046,6 +1150,7 @@ export function JobPipelineTab({
             }
             skillsVerified={c.signal_profile?.skills_verified ?? []}
             professionalSummary={c.signal_profile?.professional_summary ?? ""}
+            verdict={verdict}
           />
           {showRejectionReason && c.manual_rejection_reason && (
             <span className="mt-0.5 inline-block rounded bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-600">
@@ -1165,6 +1270,7 @@ export function JobPipelineTab({
             }
             skillsVerified={c.signal_profile?.skills_verified ?? []}
             professionalSummary={c.signal_profile?.professional_summary ?? ""}
+            verdict={verdict}
           />
         </div>
         <div className="hidden shrink-0 text-sm text-slate-600 sm:block">
@@ -1257,7 +1363,7 @@ export function JobPipelineTab({
             Most common: {topRejectionReason}
           </p>
         )}
-        {open && <div>{items.map((c) => renderRow(c))}</div>}
+        {open && <div className="space-y-3 p-3">{items.map((c) => renderRow(c))}</div>}
       </section>
     );
   };
@@ -1445,20 +1551,23 @@ export function JobPipelineTab({
           </p>
         </div>
       ) : !hasAnyCandidate ? (
-        <div className={`${karta.card} px-6 py-12 text-center`}>
-          <Users className="mx-auto h-12 w-12 text-slate-200" aria-hidden />
-          <h2 className="mt-4 text-[18px] font-semibold text-slate-400">
+        <div className="flex flex-col items-center justify-center px-8 py-16">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-teal-50">
+            <Users className="h-8 w-8 text-teal-400" aria-hidden />
+          </div>
+          <h3 className="mb-2 text-lg font-semibold text-slate-700">
             No candidates yet
-          </h2>
-          <p className="mx-auto mt-2 max-w-md text-sm text-slate-300">
-            Upload resumes or share the apply email to start evaluating.
+          </h3>
+          <p className="mb-6 max-w-sm text-center text-sm text-slate-500">
+            Upload resumes to start evaluating, or share your apply email with
+            candidates.
           </p>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <div className="flex gap-3">
             <label
-              className={`inline-flex cursor-pointer items-center gap-2 ${karta.btnOutlineTeal}`}
+              className={`inline-flex cursor-pointer items-center gap-2 ${karta.btnPrimary}`}
             >
               <Upload className="h-4 w-4" />
-              Upload Resumes
+              Upload resumes
               <input
                 type="file"
                 accept=".pdf,.doc,.docx,.txt"
@@ -1473,13 +1582,46 @@ export function JobPipelineTab({
             {(roleBrief.inbound_email ?? roleBrief.apply_link) && (
               <CopyButton
                 text={roleBrief.inbound_email ?? roleBrief.apply_link ?? ""}
-                label="Copy Apply Link"
-                className="text-sm"
+                label="Copy apply email"
+                toastMessage="Apply email copied to clipboard"
+                className={`${karta.btnSecondary} !text-slate-700`}
               />
             )}
           </div>
         </div>
-      ) : groupedView ? (
+      ) : (
+        <div
+          className="relative"
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            const files = Array.from(e.dataTransfer.files).filter(
+              (f) =>
+                f.type === "application/pdf" ||
+                f.name.endsWith(".pdf") ||
+                f.name.endsWith(".docx"),
+            );
+            if (files.length > 0) {
+              handleDroppedFiles(files);
+            }
+          }}
+        >
+          {isDragging && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-teal-400 bg-teal-50/80 backdrop-blur-sm">
+              <div className="text-center">
+                <p className="text-lg font-semibold text-teal-700">
+                  Drop resumes here
+                </p>
+                <p className="mt-1 text-sm text-teal-600">PDF or DOCX files</p>
+              </div>
+            </div>
+          )}
+          {groupedView ? (
         <div className="space-y-4">
           {renderSection("exceptional", groups.exceptionalMatch, (c) =>
             renderEvaluatedRow(c, true),
@@ -1499,14 +1641,45 @@ export function JobPipelineTab({
           )}
         </div>
       ) : (
-        <div className={`${karta.card} overflow-hidden`}>
+        <div className="space-y-3">
           {showEvaluatingIndicator && (
-            <div className="flex items-center gap-2 border-b border-[#F1F5F9] px-4 py-2 text-xs text-[#64748B]">
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200/60 bg-white px-4 py-2 text-xs text-slate-500 shadow-sm">
               <EvaluatingDots />
               Evaluating candidates — scores updating automatically
             </div>
           )}
           {flatList.length === 0 ? null : flatList.map((c) => renderFlatRow(c))}
+        </div>
+      )}
+        </div>
+      )}
+
+      {showShortcutHint && flatList.length > 0 && (
+        <div className="fixed bottom-4 right-4 flex items-center gap-3 rounded-lg border border-slate-100 bg-white/80 px-3 py-2 text-[11px] text-slate-400 shadow-sm backdrop-blur-sm">
+          <span>
+            <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px]">
+              J
+            </kbd>
+            <span className="ml-1">Next</span>
+          </span>
+          <span>
+            <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px]">
+              K
+            </kbd>
+            <span className="ml-1">Prev</span>
+          </span>
+          <span>
+            <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px]">
+              S
+            </kbd>
+            <span className="ml-1">Shortlist</span>
+          </span>
+          <span>
+            <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px]">
+              X
+            </kbd>
+            <span className="ml-1">Pass</span>
+          </span>
         </div>
       )}
 

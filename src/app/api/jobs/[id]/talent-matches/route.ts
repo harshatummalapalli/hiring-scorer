@@ -31,11 +31,20 @@ export async function GET(_request: Request, { params }: Params) {
     const allCandidates = await listCandidates(user.id);
     const pool = allCandidates.filter((c) => c.job_id !== jobId);
 
-    const { data: scoreRows } = await supabase
+    const candidateIds = pool.map((c) => c.id);
+    let scoreQuery = supabase
       .from("saved_scores")
-      .select("candidate_id, role_brief_id, role_brief_title, overall_score, created_at")
+      .select(
+        "candidate_id, role_brief_id, role_brief_title, overall_score, created_at",
+      )
       .not("candidate_id", "is", null)
       .order("created_at", { ascending: false });
+
+    if (candidateIds.length > 0) {
+      scoreQuery = scoreQuery.in("candidate_id", candidateIds);
+    }
+
+    const { data: scoreRows } = await scoreQuery;
 
     const lastRoleByCandidate = new Map<
       string,
@@ -60,11 +69,14 @@ export async function GET(_request: Request, { params }: Params) {
       resume_text: c.resume_text,
     }));
 
-    const ranked = scoreAllTalentRecommendations(job, inputs)
-      .filter((r) => r.score > 0 || r.matchedSkills.length > 0)
-      .slice(0, 5);
+    const ranked = scoreAllTalentRecommendations(job, inputs).filter(
+      (r) => r.score > 0 || r.matchedSkills.length > 0,
+    );
 
-    const matches = ranked.map((r) => {
+    const strongMatches = ranked.filter((r) => r.score >= 60).length;
+    const top = ranked.slice(0, 12);
+
+    const matches = top.map((r) => {
       const prev = lastRoleByCandidate.get(r.candidateId);
       return {
         candidateId: r.candidateId,
@@ -79,7 +91,11 @@ export async function GET(_request: Request, { params }: Params) {
       };
     });
 
-    return NextResponse.json({ matches });
+    return NextResponse.json({
+      matches,
+      poolTotal: ranked.length,
+      strongMatches,
+    });
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to compute talent matches";

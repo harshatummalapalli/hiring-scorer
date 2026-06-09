@@ -4,12 +4,14 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { karta } from "@/lib/brand/karta";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { useToast } from "@/components/ui/toast";
 import {
   getWorkspaceProfile,
   upsertWorkspaceSettings,
 } from "@/lib/workspace/settings";
 
 export default function SettingsPage() {
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [firstName, setFirstName] = useState("");
@@ -52,6 +54,7 @@ export default function SettingsPage() {
         company_name: companyName.trim(),
       });
       setMessage("Settings saved.");
+      toast("Settings updated");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
     } finally {

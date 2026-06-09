@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Loader2, Mail, Settings } from "lucide-react";
+import { TalentRediscoveryBanner } from "@/components/jobs/talent-rediscovery-banner";
 import { JobPipelineTab } from "@/components/jobs/tabs/job-pipeline-tab";
 import { JobShortlistTab } from "@/components/jobs/tabs/job-shortlist-tab";
 import { JobSettingsPanel } from "@/components/jobs/job-settings-panel";
@@ -176,11 +177,14 @@ export function JobWorkspace({ jobId }: { jobId: string }) {
       />
 
       {tab === "pipeline" && (
-        <JobPipelineTab
-          jobId={job.id}
-          jobTitle={job.title}
-          roleBrief={job}
-        />
+        <>
+          <TalentRediscoveryBanner jobId={job.id} />
+          <JobPipelineTab
+            jobId={job.id}
+            jobTitle={job.title}
+            roleBrief={job}
+          />
+        </>
       )}
       {tab === "shortlist" && (
         <JobShortlistTab

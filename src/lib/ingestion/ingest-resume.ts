@@ -1,3 +1,4 @@
+import { extractResumeTextFromBytes } from "@/lib/resume/parse-resume";
 import { normalizeResumeText } from "@/lib/resume/normalize-resume-text";
 import { parseResumeWithGemini } from "@/lib/ai/gemini-resume-parser";
 import type { GeminiParsedResume } from "@/lib/ai/gemini-resume-parser";
@@ -112,12 +113,12 @@ function ingestWithLegacyParser(
   };
 }
 
-// Fallback for email-inbound path (receives raw bytes)
+// Email-inbound path (receives raw PDF/DOCX/TXT bytes)
 export async function ingestResumeFromBytes(
   bytes: ArrayBuffer,
   filename: string,
 ): Promise<IngestResumeResult> {
-  const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  const text = await extractResumeTextFromBytes(bytes, filename);
   return ingestResumeFromText(text, filename);
 }
 

@@ -22,7 +22,6 @@ export async function triggerParsing(
   resumeText: string,
   resumeFilename: string,
   jobId: string | null,
-  request: Request,
 ): Promise<void> {
   try {
     const ingested = await withTimeout(
@@ -101,7 +100,7 @@ export async function triggerParsing(
         }
 
         void withTimeout(
-          triggerAutoEvaluation(candidateId, jobId, request),
+          triggerAutoEvaluation(candidateId, jobId),
           AUTO_EVAL_TIMEOUT_MS,
         ).catch((err) => {
           console.error(

@@ -12,6 +12,24 @@ import {
 } from "@/lib/candidates/candidate-identity-display";
 import { estimateYearsExperience } from "@/lib/candidates/parse-resume-structure";
 import type { EducationEntry, ExperienceEntry } from "@/types/candidate";
+import type { FitVerdict } from "@/types/score";
+
+function verdictAvatarClass(verdict?: FitVerdict | null): string {
+  switch (verdict) {
+    case "EXCEPTIONAL MATCH":
+      return "bg-violet-100 text-violet-700";
+    case "STRONG MATCH":
+      return "bg-emerald-100 text-emerald-700";
+    case "POTENTIAL MATCH":
+      return "bg-amber-100 text-amber-700";
+    case "WEAK MATCH":
+      return "bg-orange-100 text-orange-700";
+    case "NOT A MATCH":
+      return "bg-red-100 text-red-600";
+    default:
+      return "bg-slate-100 text-slate-600";
+  }
+}
 
 // ─── Helpers (duplicated from candidate-panel-header to keep
 //     components self-contained) ──────────────────────────────
@@ -168,6 +186,7 @@ export type CandidateIdentityCardProps = {
   experience?: ExperienceEntry[] | null;
   careerGaps?: Array<{ months: number }> | null;
   scoredJobTitle?: string | null;
+  verdict?: FitVerdict | null;
   verdictBadge?: ReactNode;
   showMetaRow?: boolean;
   enforceMinHeight?: boolean;
@@ -190,6 +209,7 @@ export function CandidateIdentityCard({
   experience,
   careerGaps,
   scoredJobTitle,
+  verdict = null,
   verdictBadge,
   compact = false,
 }: CandidateIdentityCardProps) {
@@ -305,8 +325,7 @@ export function CandidateIdentityCard({
       {/* Initials avatar */}
       <div className="shrink-0">
         <div
-          className="flex h-10 w-10 items-center justify-center rounded-full
-          bg-[#0D9488]/15 text-sm font-bold text-[#0D9488] select-none"
+          className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold select-none ${verdictAvatarClass(verdict)}`}
         >
           {initials}
         </div>

@@ -34,19 +34,13 @@ export function CandidatePanelTabs({
             key={tab.id}
             type="button"
             onClick={() => onChange(tab.id)}
-            className={`relative px-3 py-2 text-sm font-medium transition-colors ${
+            className={`relative px-3 py-2 text-sm transition-colors ${
               isActive
-                ? "text-[#0D9488]"
-                : "text-[#475569] hover:text-[#0D9488]"
+                ? "tab-active font-semibold text-teal-600"
+                : "font-medium text-slate-500 hover:text-teal-600"
             }`}
           >
             {tab.label}
-            {isActive && (
-              <span
-                className="absolute inset-x-1 bottom-0 h-0.5 rounded-full bg-[#0D9488]"
-                aria-hidden
-              />
-            )}
           </button>
         );
       })}

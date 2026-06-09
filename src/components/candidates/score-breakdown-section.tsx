@@ -14,10 +14,11 @@ const DIMENSION_KEYS: DimensionKey[] = [
 ];
 
 function scoreBarColor(score: number): string {
-  if (score >= 80) return "bg-[#0D9488]";
-  if (score >= 60) return "bg-blue-500";
-  if (score >= 40) return "bg-amber-500";
-  return "bg-red-500";
+  if (score >= 80) return "score-bar-exceptional";
+  if (score >= 65) return "score-bar-strong";
+  if (score >= 50) return "score-bar-potential";
+  if (score >= 35) return "score-bar-weak";
+  return "score-bar-poor";
 }
 
 type ScoreBreakdownSectionProps = {

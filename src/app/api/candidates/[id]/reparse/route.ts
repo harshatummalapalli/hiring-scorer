@@ -72,7 +72,6 @@ export async function POST(request: Request, { params }: Params) {
       candidate.resume_text,
       candidate.resume_filename ?? "candidate-resume.pdf",
       candidate.job_id ?? null,
-      request,
     ).catch(console.warn);
 
     return NextResponse.json({ status: "retrying" });

@@ -38,18 +38,20 @@ export function WhyThisCandidateSection({
   if (!hasContent) return null;
 
   if (variant === "overview") {
+    const headingClass = `${karta.sectionHeading} section-heading-accent`;
+
     return (
       <div className="space-y-3">
         {summary.trim().length > 0 && (
-          <section className="rounded-lg border border-[#E2E8F0] border-l-[3px] border-l-[#0D9488] bg-white px-3 py-2.5">
-            <h3 className={karta.sectionHeading}>Why This Candidate</h3>
-            <p className="mt-1.5 text-sm italic text-[#64748B]">{summary}</p>
+          <section className="rounded-lg border-l-[3px] border-teal-400 bg-gradient-to-r from-teal-50/50 to-transparent p-4">
+            <h3 className={headingClass}>Why This Candidate</h3>
+            <p className="mt-1.5 text-[14px] italic text-slate-700">{summary}</p>
           </section>
         )}
 
         {card.what_stands_out.length > 0 && (
           <section className="rounded-lg border border-[#E2E8F0] border-l-[3px] border-l-emerald-500 bg-white px-3 py-2.5">
-            <h3 className={karta.sectionHeading}>Strengths</h3>
+            <h3 className={headingClass}>Strengths</h3>
             <ul className="mt-2 space-y-2.5">
               {card.what_stands_out.map((item, i) => (
                 <li key={i} className="text-sm text-[#334155]">
@@ -66,8 +68,8 @@ export function WhyThisCandidateSection({
         )}
 
         {watchPoints.length > 0 && (
-          <section className="rounded-lg border border-[#E2E8F0] border-l-[3px] border-l-amber-500 bg-white px-3 py-2.5">
-            <h3 className={karta.sectionHeading}>Watch Points</h3>
+          <section className="rounded-lg border-l-[3px] border-amber-400 bg-gradient-to-r from-amber-50/50 to-transparent p-4">
+            <h3 className={headingClass}>Watch Points</h3>
             <ul className="mt-2 space-y-1 text-sm text-amber-900">
               {visibleWatch.map((item, i) => (
                 <li key={i}>{item}</li>
@@ -87,7 +89,7 @@ export function WhyThisCandidateSection({
 
         {verifyItems.length > 0 && (
           <section className="rounded-lg border border-[#E2E8F0] bg-white px-3 py-2.5">
-            <h3 className={karta.sectionHeading}>Verify in Conversation</h3>
+            <h3 className={headingClass}>Verify in Conversation</h3>
             <ul className="mt-2 space-y-1">
               {verifyItems.map((item, i) => (
                 <li

@@ -314,12 +314,22 @@ export async function listCandidatesWithSummaries(
   if (rows.length === 0) return [];
 
   const supabase = await getServerSupabase();
-  const { data: scoreRows, error } = await supabase
+  const candidateIds = rows.map((c) => c.id);
+  let scoreQuery = supabase
     .from("saved_scores")
     .select(
       "id, candidate_id, candidate_filename, overall_score, role_brief_id, role_brief_title, created_at",
     )
     .order("created_at", { ascending: false });
+
+  if (userId) {
+    scoreQuery = scoreQuery.eq("created_by", userId);
+  }
+  if (candidateIds.length > 0) {
+    scoreQuery = scoreQuery.in("candidate_id", candidateIds);
+  }
+
+  const { data: scoreRows, error } = await scoreQuery;
 
   if (error && !error.message?.includes("does not exist")) {
     throw new Error(error.message);

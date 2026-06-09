@@ -15,29 +15,29 @@ export const VERDICT_COLORS: Record<
   { bg: string; text: string; border: string }
 > = {
   "EXCEPTIONAL MATCH": {
-    bg: "bg-violet-100",
-    text: "text-violet-800",
-    border: "border-violet-200",
+    bg: "bg-gradient-to-r from-violet-50 to-purple-50",
+    text: "text-violet-700",
+    border: "border-violet-200/80",
   },
   "STRONG MATCH": {
-    bg: "bg-emerald-100",
-    text: "text-emerald-800",
-    border: "border-emerald-200",
+    bg: "bg-gradient-to-r from-emerald-50 to-green-50",
+    text: "text-emerald-700",
+    border: "border-emerald-200/80",
   },
   "POTENTIAL MATCH": {
-    bg: "bg-amber-100",
-    text: "text-amber-800",
-    border: "border-amber-200",
+    bg: "bg-gradient-to-r from-amber-50 to-yellow-50",
+    text: "text-amber-700",
+    border: "border-amber-200/80",
   },
   "WEAK MATCH": {
-    bg: "bg-orange-100",
-    text: "text-orange-800",
-    border: "border-orange-200",
+    bg: "bg-gradient-to-r from-orange-50 to-amber-50",
+    text: "text-orange-700",
+    border: "border-orange-200/80",
   },
   "NOT A MATCH": {
-    bg: "bg-red-100",
-    text: "text-red-700",
-    border: "border-red-200",
+    bg: "bg-gradient-to-r from-red-50 to-rose-50",
+    text: "text-red-600",
+    border: "border-red-200/80",
   },
 };
 
@@ -107,11 +107,11 @@ export const karta = {
   nav: "bg-[#1E293B] text-white border-b border-white/[0.08]",
   page: "bg-[#F8FAFC]",
   card:
-    "rounded-[10px] border border-[#E2E8F0] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)] transition-[box-shadow,border-color] duration-150 ease-out",
+    "rounded-xl border border-slate-200/60 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] transition-all duration-200 ease-out",
   cardHover:
-    "hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:border-[rgba(13,148,136,0.3)]",
+    "hover:shadow-[0_4px_16px_rgba(0,0,0,0.06),0_2px_4px_rgba(0,0,0,0.03)] hover:border-teal-200/60 hover:-translate-y-[1px]",
   cardClickable:
-    "cursor-pointer rounded-[10px] border border-[#E2E8F0] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)] transition-[box-shadow,border-color] duration-150 ease-out hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:border-[rgba(13,148,136,0.3)] cursor-pointer",
+    "cursor-pointer rounded-xl border border-slate-200/60 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-all duration-200 ease-out hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] hover:border-teal-200/60 hover:-translate-y-[1px] active:translate-y-0 active:shadow-sm",
   heading: "text-[#1E293B] font-semibold leading-[1.2]",
   body: "text-[15px] font-normal text-[#334155] leading-[1.5]",
   muted: "text-[13px] font-normal text-[#64748B] leading-[1.5]",
@@ -121,13 +121,13 @@ export const karta = {
   cardTitle: "text-[16px] font-semibold text-[#1E293B] leading-[1.2]",
   badge: "text-[12px] font-medium leading-[1.2]",
   btnPrimary:
-    "btn-press rounded-md bg-[#0D9488] px-4 py-2 text-[15px] font-semibold text-white transition hover:bg-[#0B8276] disabled:opacity-50 disabled:pointer-events-none",
+    "rounded-lg bg-gradient-to-b from-teal-500 to-teal-600 px-4 py-2.5 text-[14px] font-semibold text-white shadow-[0_1px_2px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,0.15)] transition-all duration-150 hover:from-teal-400 hover:to-teal-500 hover:shadow-[0_2px_8px_rgba(13,148,136,0.25)] active:from-teal-600 active:to-teal-700 disabled:opacity-50 disabled:pointer-events-none",
   btnSecondary:
-    "btn-press rounded-md border border-[#1E293B] bg-white px-4 py-2 text-[15px] font-semibold text-[#1E293B] transition hover:bg-slate-50 disabled:opacity-50 disabled:pointer-events-none",
+    "rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-[14px] font-semibold text-slate-700 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-150 hover:bg-slate-50 hover:border-slate-300 hover:shadow-[0_2px_4px_rgba(0,0,0,0.06)] active:bg-slate-100 disabled:opacity-50 disabled:pointer-events-none",
   btnOutlineTeal:
     "btn-press rounded-md border border-[#0D9488] bg-white px-4 py-2 text-[15px] font-semibold text-[#0D9488] transition hover:bg-teal-50 disabled:opacity-50 disabled:pointer-events-none",
   input:
-    "rounded-md border border-[#E2E8F0] bg-white px-3 py-2 text-[15px] text-[#334155] leading-[1.5] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#0D9488]/30",
+    "rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-[14px] text-slate-700 leading-[1.5] shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] placeholder:text-slate-400 focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:shadow-[0_0_0_3px_rgba(13,148,136,0.08)] transition-all duration-150",
   barTrack: "h-2 rounded-md bg-[#E2E8F0] overflow-hidden",
   barFill: "h-full rounded-md bg-[#0D9488]",
   accentTealSection: "rounded-[10px] border border-[#E2E8F0] border-l-[3px] border-l-[#0D9488] bg-[#F0FDFA] p-5",

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { OutcomeFunnel, type OutcomeFunnelStats } from "./outcome-funnel";
+
 type DashboardStats = {
   activeJobs: number;
   inPipeline: number;
@@ -11,20 +13,24 @@ type DashboardStats = {
   shortlistedThisWeek: number;
   evaluatedToday: number;
   totalCandidates: number;
+  funnel?: OutcomeFunnelStats;
 };
 
+type DashboardMetricKey = Exclude<keyof DashboardStats, "funnel">;
+
 const METRICS: {
-  key: keyof DashboardStats;
+  key: DashboardMetricKey;
   label: string;
-  color: string;
+  borderClass: string;
+  valueClass: string;
 }[] = [
-  { key: "activeJobs", label: "Active Jobs", color: "#0D9488" },
-  { key: "inPipeline", label: "In Pipeline", color: "#378ADD" },
-  { key: "exceptionalMatches", label: "Exceptional Matches", color: "#7F77DD" },
-  { key: "strongMatches", label: "Strong Matches", color: "#1D9E75" },
-  { key: "shortlistedThisWeek", label: "Shortlisted This Week", color: "#BA7517" },
-  { key: "evaluatedToday", label: "Evaluated Today", color: "#5DCAA5" },
-  { key: "totalCandidates", label: "Total Candidates", color: "#888780" },
+  { key: "activeJobs", label: "Active Jobs", borderClass: "border-t-slate-600", valueClass: "text-slate-600" },
+  { key: "inPipeline", label: "In Pipeline", borderClass: "border-t-blue-500", valueClass: "text-blue-600" },
+  { key: "exceptionalMatches", label: "Exceptional Matches", borderClass: "border-t-violet-500", valueClass: "text-violet-600" },
+  { key: "strongMatches", label: "Strong Matches", borderClass: "border-t-emerald-500", valueClass: "text-emerald-600" },
+  { key: "shortlistedThisWeek", label: "Shortlisted This Week", borderClass: "border-t-amber-500", valueClass: "text-amber-600" },
+  { key: "evaluatedToday", label: "Evaluated Today", borderClass: "border-t-teal-500", valueClass: "text-teal-600" },
+  { key: "totalCandidates", label: "Total Candidates", borderClass: "border-t-slate-400", valueClass: "text-slate-500" },
 ];
 
 function SkeletonTile() {
@@ -60,7 +66,7 @@ export function DashboardStrip() {
     };
   }, []);
 
-  function handleStatClick(key: keyof DashboardStats) {
+  function handleStatClick(key: DashboardMetricKey) {
     switch (key) {
       case "activeJobs":
         document
@@ -93,27 +99,35 @@ export function DashboardStrip() {
   if (!loading && !stats) return null;
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-      {loading
-        ? METRICS.map((m) => <SkeletonTile key={m.key} />)
-        : stats &&
-          METRICS.map((m) => (
-            <button
-              key={m.key}
-              type="button"
-              onClick={() => handleStatClick(m.key)}
-              className="stat-card w-full cursor-pointer rounded-lg border border-slate-200 bg-white p-4 text-left transition-colors hover:bg-slate-50/80"
-              style={{ borderTopColor: m.color }}
-            >
-              <p
-                className="stat-number"
-                style={{ color: m.color }}
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+        {loading
+          ? METRICS.map((m) => <SkeletonTile key={m.key} />)
+          : stats &&
+            METRICS.map((m, index) => (
+              <button
+                key={m.key}
+                type="button"
+                onClick={() => handleStatClick(m.key)}
+                className={`stat-card w-full cursor-pointer rounded-xl border border-slate-200/60 bg-white p-4 text-left shadow-sm transition-colors hover:bg-slate-50/80 border-t-2 ${m.borderClass}`}
+                style={{ animationDelay: `${index * 80}ms` }}
               >
-                {stats[m.key]}
-              </p>
-              <p className="mt-1 text-xs text-[#64748B]">{m.label}</p>
-            </button>
-          ))}
+                <p
+                  className={`text-2xl font-semibold ${m.valueClass}`}
+                  style={{
+                    animation: "count-fade 0.4s ease-out backwards",
+                    animationDelay: `${index * 80}ms`,
+                  }}
+                >
+                  {stats[m.key]}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">{m.label}</p>
+              </button>
+            ))}
+      </div>
+      {!loading && stats?.funnel && (
+        <OutcomeFunnel funnel={stats.funnel} />
+      )}
     </div>
   );
 }

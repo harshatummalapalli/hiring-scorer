@@ -2,19 +2,30 @@
 
 import { useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { useToast } from "@/components/ui/toast";
 
 type CopyButtonProps = {
   text: string;
   className?: string;
   label?: string;
+  toastMessage?: string;
 };
 
-export function CopyButton({ text, className = "", label = "Copy" }: CopyButtonProps) {
+export function CopyButton({
+  text,
+  className = "",
+  label = "Copy",
+  toastMessage,
+}: CopyButtonProps) {
   const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
 
   const copy = async () => {
     await navigator.clipboard.writeText(text);
     setCopied(true);
+    if (toastMessage) {
+      toast(toastMessage);
+    }
     window.setTimeout(() => setCopied(false), 2000);
   };
 

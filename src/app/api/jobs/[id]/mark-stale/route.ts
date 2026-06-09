@@ -56,7 +56,7 @@ export async function POST(request: Request, { params }: Params) {
     for (const row of rows ?? []) {
       const candidateId = row.id != null ? String(row.id) : "";
       if (!candidateId) continue;
-      void triggerAutoEvaluation(candidateId, jobId, request);
+      void triggerAutoEvaluation(candidateId, jobId);
     }
 
     return NextResponse.json({

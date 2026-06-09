@@ -268,13 +268,16 @@ export function JobShortlistTab({
       )}
 
       {rows.length === 0 ? (
-        <div className={`${karta.card} px-6 py-12 text-center`}>
-          <ListChecks className="mx-auto h-12 w-12 text-slate-200" aria-hidden />
-          <h2 className="mt-4 text-[18px] font-semibold text-slate-400">
+        <div className="flex flex-col items-center justify-center py-16">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50">
+            <ListChecks className="h-8 w-8 text-emerald-400" aria-hidden />
+          </div>
+          <h3 className="mb-2 text-lg font-semibold text-slate-700">
             No candidates shortlisted
-          </h2>
-          <p className="mx-auto mt-2 max-w-md text-sm text-slate-300">
-            Move strong candidates here from the pipeline.
+          </h3>
+          <p className="max-w-sm text-center text-sm text-slate-500">
+            Strong and exceptional candidates can be moved here from the
+            pipeline.
           </p>
         </div>
       ) : (

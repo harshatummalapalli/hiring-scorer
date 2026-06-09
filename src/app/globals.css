@@ -12,6 +12,23 @@
   --karta-bar-track: #e2e8f0;
   --background: #f8fafc;
   --foreground: #334155;
+  --karta-surface: #ffffff;
+  --karta-surface-raised: #ffffff;
+  --karta-surface-sunken: #f1f5f9;
+  --karta-glow-teal: rgba(13, 148, 136, 0.06);
+  --karta-glow-violet: rgba(124, 58, 237, 0.06);
+  --karta-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --karta-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --karta-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --karta-shadow-glow: 0 0 0 1px rgba(13, 148, 136, 0.1),
+    0 4px 16px rgba(13, 148, 136, 0.08);
+  --karta-radius: 12px;
+  --karta-radius-sm: 8px;
+  --karta-radius-lg: 16px;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 @theme inline {
@@ -27,6 +44,45 @@ body {
   font-size: 15px;
   font-weight: 400;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: -1;
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    rgba(0, 0, 0, 0.015) 1px,
+    transparent 0
+  );
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+
+::selection {
+  background: rgba(13, 148, 136, 0.15);
+  color: #0f172a;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  transition: all 0.15s ease;
+}
+
+*:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.3);
+  border-radius: 4px;
 }
 
 h1,
@@ -359,16 +415,139 @@ h4,
   position: sticky;
   top: 0;
   z-index: 10;
-  background: rgba(255, 255, 255, 0.97);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
+  background: #ffffff;
+  border-bottom: 1px solid #f1f5f9;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 
-@media (prefers-color-scheme: dark) {
-  .sticky-header {
-    background: rgba(30, 41, 59, 0.85);
+/* Panel tab underline */
+.tab-active::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #0d9488;
+  border-radius: 2px;
+  animation: tab-underline 0.2s ease;
+}
+
+@keyframes tab-underline {
+  from {
+    transform: scaleX(0);
   }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.section-heading-accent {
+  padding-left: 0.75rem;
+  border-left: 2px solid #2dd4bf;
+}
+
+/* Toast */
+@keyframes toast-in {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes toast-out {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+}
+
+/* Stat count animation */
+@keyframes count-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Evaluating dots (compact) */
+@keyframes eval-bounce {
+  0%,
+  80%,
+  100% {
+    transform: scale(0);
+    opacity: 0.3;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.eval-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #0d9488;
+  margin: 0 2px;
+  animation: eval-bounce 1.2s infinite ease-in-out;
+}
+
+.eval-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.eval-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+/* Score bar gradients */
+.score-bar-exceptional {
+  background: linear-gradient(90deg, #7c3aed, #8b5cf6);
+}
+
+.score-bar-strong {
+  background: linear-gradient(90deg, #059669, #10b981);
+}
+
+.score-bar-potential {
+  background: linear-gradient(90deg, #d97706, #f59e0b);
+}
+
+.score-bar-weak {
+  background: linear-gradient(90deg, #ea580c, #f97316);
+}
+
+.score-bar-poor {
+  background: linear-gradient(90deg, #dc2626, #ef4444);
+}
+
+/* Pipeline evaluating border pulse */
+@keyframes border-pulse {
+  0%,
+  100% {
+    border-left-color: #0d9488;
+  }
+  50% {
+    border-left-color: #5eead4;
+  }
+}
+
+.pipeline-row-evaluating {
+  animation: border-pulse 2s ease infinite;
 }
 
 /* Button press */

@@ -109,9 +109,11 @@ function JobCard({
         }
       }}
       className={`job-card relative flex h-full min-h-[240px] cursor-pointer flex-col ${karta.card} p-5 ${
-        job.status === "paused" ? "opacity-70" : ""
-      } ${isArchived ? "opacity-60" : ""} ${
-        job.status === "active" && !isArchived ? karta.jobCardActive : ""
+        job.status === "paused" ? "border-l-[3px] border-l-amber-400 opacity-70" : ""
+      } ${isArchived ? "border-l-[3px] border-l-slate-300 opacity-60" : ""} ${
+        job.status === "active" && !isArchived
+          ? "border-l-[3px] border-l-teal-500"
+          : ""
       }`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -289,7 +291,7 @@ export function JobsPage() {
     } finally {
       setLoading(false);
     }
-  }, [loadUsage]);
+  }, [loadUsage, setError]);
 
   useEffect(() => {
     void loadJobs();
@@ -297,7 +299,7 @@ export function JobsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="-mx-4 mb-2 border-b border-slate-100 bg-gradient-to-br from-slate-50 via-white to-teal-50/30 px-4 py-6 sm:-mx-6 sm:px-8">
+      <div className="-mx-4 mb-2 border-b border-slate-100 bg-gradient-to-br from-slate-50 via-white to-teal-50/20 px-4 pt-6 pb-4 sm:-mx-6 sm:px-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className={karta.pageTitle}>Jobs</h1>
@@ -315,7 +317,7 @@ export function JobsPage() {
           <button
             type="button"
             onClick={() => router.push("/jobs/new")}
-            className={`inline-flex items-center gap-2 ${karta.btnPrimary}`}
+            className={`inline-flex items-center gap-2 ${karta.btnPrimary} hover:shadow-[0_2px_12px_rgba(13,148,136,0.3)]`}
           >
             <Plus className="h-4 w-4" />
             Post a Job

@@ -12,7 +12,10 @@ import {
   filenameToDisplayName,
   quoteExistsInResume,
 } from "@/lib/scoring/recruiter-card";
-import { normalizeInterviewQuestions } from "@/lib/scoring/interview-questions";
+import {
+  resumeWasTruncatedForScoring,
+  truncateResumeForScoring,
+} from "@/lib/scoring/truncate-resume-for-scoring";
 import type { CandidateSignalProfile } from "@/types/candidate";
 import type { RoleBrief, TitleBand } from "@/types/role-brief";
 import { expandEquivalents } from "@/lib/intelligence/tech-graph";
@@ -26,8 +29,6 @@ import type {
   StandoutBullet,
 } from "@/types/score";
 import { DIMENSION_LABELS } from "@/types/score";
-
-const SYSTEM_PROMPT = `You are a senior recruiting analyst with 18 years of experience hiring for engineering, product, and business roles at product companies. You assess candidates with rigorous honesty. Your reputation is built on two things: you only claim a signal exists when you can quote the exact text from the resume that proves it, and you distinguish between candidates who did things versus candidates who watched things happen. You never reward keyword stuffing. A skill listed in a skills section without appearing in a work description is worth almost nothing to you. A skill demonstrated with a quantified outcome in a work description is the strongest signal you know. You assess. You do not encourage. Evidence changes your score. Claims without evidence do not.`;
 
 const DIMENSION_KEYS: DimensionKey[] = [
   "skills",
@@ -172,6 +173,41 @@ const CONFIDENCE_DERIVATION_SECTION =
   `Non-empty contradictions array caps confidence ` +
   `at medium or lower.`;
 
+const SYSTEM_PROMPT = `You are a senior recruiting analyst with 18 years of experience hiring for engineering, product, and business roles at product companies. You assess candidates with rigorous honesty. Your reputation is built on two things: you only claim a signal exists when you can quote the exact text from the resume that proves it, and you distinguish between candidates who did things versus candidates who watched things happen. You never reward keyword stuffing. A skill listed in a skills section without appearing in a work description is worth almost nothing to you. A skill demonstrated with a quantified outcome in a work description is the strongest signal you know. You assess. You do not encourage. Evidence changes your score. Claims without evidence do not.
+
+SCORING RULES:
+Rule one — before assigning any dimension score above 60 you must find and include the exact quote from the resume that justifies that score. If you cannot find a direct quote the score must be 60 or below.
+Rule two — skills appearing only in a skills section score maximum 45 for the skills dimension. Skills appearing in work descriptions score higher. Skills appearing in work descriptions with quantified outcomes score highest.
+Rule three — participation language such as part of the team, assisted, supported, contributed to, or helped with scores maximum 55 for relevant dimensions. Ownership language such as built, designed, led, architected, launched, established, or drove scores higher.
+Rule four — missing must-haves are surfaced as warnings but do not automatically cap the score. Surface them clearly and let the recruiter decide.
+Rule five — profile classification: Before scoring, characterise what kind of engineer this candidate primarily is, based on their full career arc — not just their most recent role.
+
+primary_type definitions:
+- ai_engineer: AI/ML is the primary thread across multiple roles. Has built, trained, or deployed AI systems as a core job responsibility.
+- backend_with_ai: Strong backend foundation. AI adopted in recent roles as an addition, not a primary responsibility.
+- data_scientist_with_ai: Statistical or analytical background. ML modelling focus. Limited production engineering or deployment experience.
+- ml_researcher: Academic or research orientation. Papers, experiments, benchmarks over shipped products.
+- devops_with_ai: Infrastructure primary. AI appears in a supporting or tooling capacity.
+- fullstack_with_ai: Web or product engineering primary. AI as a feature layer.
+- pure_backend: Backend engineering with no meaningful AI exposure.
+- pure_frontend: Frontend engineering.
+- other_technical: Technical but does not fit above.
+
+ai_depth definitions:
+- native: Has built, trained, fine-tuned, or deployed AI systems as primary job responsibility across two or more roles.
+- applied: Has integrated AI APIs, used pre-trained models, or built AI features as part of a broader engineering role.
+- peripheral: Has used AI tools, listed AI frameworks in skills, or worked adjacent to AI teams without direct AI system ownership.
+- none: No meaningful AI exposure.
+
+Rule six — for any candidate where ai_depth is peripheral or none, automatically add a watch point:
+"Primary background is [lean_summary]. Verify AI engineering depth before progressing."
+
+${SCORING_ANCHORS_SECTION}
+
+${CONTRADICTION_CHECKS_SECTION}
+
+${CONFIDENCE_DERIVATION_SECTION}`;
+
 export function profileDepthFromProfile(
   profile: CandidateSignalProfile,
 ): "Deep" | "Moderate" | "Surface" {
@@ -259,9 +295,10 @@ Most starred project: ${starred}`;
 
 function buildUserMessage(
   roleBrief: RoleBrief,
-  strippedResume: string,
+  strippedResumeForPrompt: string,
   signals: BeyondKeywordSignals,
   github?: CandidateSignalProfile["github"] | null,
+  truncated?: boolean,
 ): string {
   const titleLine = `${roleBrief.title}${roleBrief.title_band ? ` · ${roleBrief.title_band}` : ""}`;
 
@@ -302,8 +339,8 @@ ${niceToHaves}
 
 Title band (${roleBrief.title_band ?? "unspecified"}): ${titleBandDescription(roleBrief.title_band)}
 
-CANDIDATE PROFILE:
-${strippedResume}
+CANDIDATE PROFILE${truncated ? " (opening section — focus on recent roles shown below)" : ""}:
+${strippedResumeForPrompt}
 
 INDEPENDENT SIGNALS — PRE-CALCULATED:
 Ownership drive: ${signals.ownership_ratio_percent}% — measures first-person active language versus participation language in work descriptions.
@@ -312,40 +349,6 @@ Profile depth: ${signals.profile_depth} — whether skills are demonstrated in w
 Verified skills (in work descriptions): ${verifiedList}
 Listed-only skills (skills section only): ${listedOnlyList}
 ${github ? `\n${buildGithubPromptBlock(github)}\n` : ""}
-SCORING INSTRUCTIONS:
-Rule one — before assigning any dimension score above 60 you must find and include the exact quote from the resume that justifies that score. If you cannot find a direct quote the score must be 60 or below.
-Rule two — skills appearing only in a skills section score maximum 45 for the skills dimension. Skills appearing in work descriptions score higher. Skills appearing in work descriptions with quantified outcomes score highest.
-Rule three — participation language such as part of the team, assisted, supported, contributed to, or helped with scores maximum 55 for relevant dimensions. Ownership language such as built, designed, led, architected, launched, established, or drove scores higher.
-Rule four — every interview question must reference specific content from this candidate's resume. A question that could be asked of any candidate for this role is not acceptable. Each question must be unanswerable without knowing this specific candidate's background.
-Rule five — missing must-haves are surfaced as warnings but do not automatically cap the score. Surface them clearly and let the recruiter decide.
-Rule six — profile classification: Before scoring, characterise what kind of engineer this candidate primarily is, based on their full career arc — not just their most recent role.
-
-primary_type definitions:
-- ai_engineer: AI/ML is the primary thread across multiple roles. Has built, trained, or deployed AI systems as a core job responsibility.
-- backend_with_ai: Strong backend foundation. AI adopted in recent roles as an addition, not a primary responsibility.
-- data_scientist_with_ai: Statistical or analytical background. ML modelling focus. Limited production engineering or deployment experience.
-- ml_researcher: Academic or research orientation. Papers, experiments, benchmarks over shipped products.
-- devops_with_ai: Infrastructure primary. AI appears in a supporting or tooling capacity.
-- fullstack_with_ai: Web or product engineering primary. AI as a feature layer.
-- pure_backend: Backend engineering with no meaningful AI exposure.
-- pure_frontend: Frontend engineering.
-- other_technical: Technical but does not fit above.
-
-ai_depth definitions:
-- native: Has built, trained, fine-tuned, or deployed AI systems as primary job responsibility across two or more roles.
-- applied: Has integrated AI APIs, used pre-trained models, or built AI features as part of a broader engineering role.
-- peripheral: Has used AI tools, listed AI frameworks in skills, or worked adjacent to AI teams without direct AI system ownership.
-- none: No meaningful AI exposure.
-
-Rule seven — for any candidate where ai_depth is peripheral or none, automatically add a watch point:
-"Primary background is [lean_summary]. Verify AI engineering depth before progressing."
-
-${SCORING_ANCHORS_SECTION}
-
-${CONTRADICTION_CHECKS_SECTION}
-
-${CONFIDENCE_DERIVATION_SECTION}
-
 OUTPUT FORMAT:
 Return this exact JSON schema with no preamble and no text outside the JSON:
 {
@@ -373,7 +376,6 @@ Return this exact JSON schema with no preamble and no text outside the JSON:
       { "concern": "specific concern", "evidence_basis": "what evidence or absence caused this" }
     ]
   },
-  "interview_questions": ["question 1", "question 2"],
   "profile_classification": {
     "primary_type": "ai_engineer" | "backend_with_ai" |
                     "data_scientist_with_ai" | "ml_researcher" |
@@ -570,12 +572,11 @@ function resolveConfidence(
 
 function mapConfidence(
   level: GptConfidence,
-  reason: string,
+  _reason: string,
 ): Pick<
   CandidateScoreResult,
   "confidence_level" | "confidence_label" | "review_recommended"
 > {
-  const label = reason.trim() || "Assessment complete";
   switch (level) {
     case "high":
       return {
@@ -654,16 +655,6 @@ function buildRecruiterCardFromGpt(
     .filter(Boolean)
     .slice(0, 2);
 
-  const interview_questions = normalizeInterviewQuestions(
-    raw.interview_questions ?? [],
-  );
-  // Do not pad with generic questions.
-  // If GPT returned fewer than 2 specific questions,
-  // show only what was returned.
-  // A generic fallback violates Rule four of the
-  // scoring prompt — every question must reference
-  // this specific candidate's resume.
-
   return {
     candidate_header: {
       display_name: filenameToDisplayName("candidate-resume.pdf"),
@@ -673,7 +664,7 @@ function buildRecruiterCardFromGpt(
     },
     what_stands_out,
     worth_exploring,
-    interview_questions,
+    interview_questions: [],
   };
 }
 
@@ -778,17 +769,20 @@ export async function scoreCandidate(
   }
 
   const client = new OpenAI({ apiKey: getApiKey("openai") });
+  const truncated = resumeWasTruncatedForScoring(stripped);
+  const resumeForPrompt = truncateResumeForScoring(stripped);
   const userMessage = buildUserMessage(
     roleBrief,
-    stripped,
+    resumeForPrompt,
     beyondKeywordSignals,
     github,
+    truncated,
   );
 
   const completion = await client.chat.completions.create({
     model: "gpt-4o-mini-2024-07-18",
     temperature: 0,
-    max_tokens: 2000,
+    max_tokens: 1200,
     response_format: { type: "json_object" },
     messages: [
       { role: "system", content: SYSTEM_PROMPT },

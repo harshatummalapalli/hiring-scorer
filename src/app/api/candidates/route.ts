@@ -204,7 +204,6 @@ export async function POST(request: Request) {
       resumeText,
       resumeFilename,
       jobId,
-      request,
     ).catch(console.warn);
 
     void trackEvent("candidate_uploaded", {
