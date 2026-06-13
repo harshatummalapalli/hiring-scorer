@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, LogOut, Settings, Shield } from "lucide-react";
 import { signOutAndRedirectToSignIn } from "@/lib/auth/sign-out-client";
+import {
+  getClientSuperAdminEmails,
+  isSuperAdminEmail,
+} from "@/lib/admin/super-admin-emails";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import {
   displayNameFromProfile,
@@ -27,19 +31,25 @@ export function UserMenu() {
       } = await supabase.auth.getUser();
       if (!user) return;
       setEmail(user.email ?? null);
+
+      const publicAdminEmails = getClientSuperAdminEmails();
+      if (publicAdminEmails.length > 0) {
+        setIsAdmin(isSuperAdminEmail(user.email, publicAdminEmails));
+      } else {
+        try {
+          const res = await fetch("/api/admin/session", { cache: "no-store" });
+          const json = (await res.json()) as { isSuperAdmin?: boolean };
+          setIsAdmin(Boolean(json.isSuperAdmin));
+        } catch {
+          setIsAdmin(false);
+        }
+      }
+
       try {
         const ws = await getWorkspaceProfile(supabase, user.id);
         setProfile(ws);
       } catch {
         setProfile({ first_name: "", company_name: "" });
-      }
-
-      try {
-        const res = await fetch("/api/admin/session", { cache: "no-store" });
-        const json = (await res.json()) as { isSuperAdmin?: boolean };
-        setIsAdmin(Boolean(json.isSuperAdmin));
-      } catch {
-        setIsAdmin(false);
       }
     })();
   }, []);

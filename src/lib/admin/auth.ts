@@ -1,16 +1,18 @@
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
-import { hasUnlimitedWorkspaceEmail } from "@/lib/workspace/limits";
+import {
+  getServerSuperAdminEmails,
+  isSuperAdminEmail,
+} from "@/lib/admin/super-admin-emails";
 
-export async function isSuperAdmin(): Promise<boolean> {
+async function userIsSuperAdmin(
+  user: { id: string; email?: string | null },
+): Promise<boolean> {
+  if (isSuperAdminEmail(user.email, getServerSuperAdminEmails())) {
+    return true;
+  }
+
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return false;
-
-  if (hasUnlimitedWorkspaceEmail(user.email)) return true;
-
   const { data, error } = await supabase
     .from("profiles")
     .select("is_super_admin")
@@ -21,22 +23,24 @@ export async function isSuperAdmin(): Promise<boolean> {
   return data?.is_super_admin === true;
 }
 
-/** Returns the signed-in super admin user id, or triggers a 404 page. */
+export async function isSuperAdmin(): Promise<boolean> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return false;
+  return userIsSuperAdmin(user);
+}
+
+/** Redirects unauthenticated or non-admin users; returns admin user id. */
 export async function requireSuperAdmin(): Promise<string> {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) notFound();
+  if (!user) redirect("/auth/signin");
 
-  if (hasUnlimitedWorkspaceEmail(user.email)) return user.id;
+  if (await userIsSuperAdmin(user)) return user.id;
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("is_super_admin")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (error || !data?.is_super_admin) notFound();
-  return user.id;
+  redirect("/jobs");
 }
