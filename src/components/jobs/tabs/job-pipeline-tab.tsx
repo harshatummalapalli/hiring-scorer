@@ -36,6 +36,13 @@ import {
   pipelineVerdictForRole,
 } from "@/lib/candidates/list-filters";
 import type { DuplicateMatch } from "@/lib/candidates/duplicate-messages";
+import {
+  candidateNeedsPipelinePoll,
+  countPipelineProgress,
+  getPipelinePollIntervalMs,
+} from "@/lib/jobs/pipeline-polling";
+import { PipelineStageDisplay } from "@/components/jobs/pipeline-stage-display";
+import { isUnlikelyFitStatus } from "@/types/job";
 import { formatTotalExperienceDisplay } from "@/lib/candidates/format-total-experience";
 import { isStuckCandidate } from "@/lib/candidates/stuck-processing";
 import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
@@ -255,6 +262,86 @@ function pipelineDisplayScore(
   return { gptScore, displayScore, verdict, isPreliminary };
 }
 
+function candidateSkillTags(c: CandidateListItem): string[] {
+  const top = candidateTopSkills(c);
+  if (top.length > 0) return top;
+  return (c.signal_profile?.skills_verified ?? []).map((s) =>
+    typeof s === "string" ? s : s.skill,
+  );
+}
+
+function candidateTitleLine(c: CandidateListItem): string | null {
+  const title = candidateTitle(c);
+  const company = candidateCompany(c);
+  if (title && company) return `${title} · ${company}`;
+  return title || company || null;
+}
+
+function resolveVerdictBadgeProps(
+  c: CandidateListItem,
+  jobId: string,
+): {
+  show: boolean;
+  verdict: FitVerdict | null;
+  displayScore: number | null;
+  isPreliminary: boolean;
+  gptScore: number | null;
+} {
+  const { gptScore, displayScore, verdict, isPreliminary } = pipelineDisplayScore(
+    c,
+    jobId,
+  );
+
+  if (hasEvaluatedScoreForRole(c, jobId) && verdict) {
+    return { show: true, verdict, displayScore, isPreliminary, gptScore };
+  }
+
+  if (isUnlikelyFitStatus(c.scoring_status)) {
+    return {
+      show: true,
+      verdict: "NOT A MATCH",
+      displayScore: displayScore ?? gptScore ?? 0,
+      isPreliminary: false,
+      gptScore,
+    };
+  }
+
+  if (displayScore != null && verdict) {
+    return { show: true, verdict, displayScore, isPreliminary, gptScore };
+  }
+
+  return { show: false, verdict, displayScore, isPreliminary, gptScore };
+}
+
+function isCandidateScoringInProgress(
+  c: CandidateListItem,
+  jobId: string,
+): boolean {
+  if (hasEvaluatedScoreForRole(c, jobId)) return false;
+  const parsing = c.parsing_status as string;
+  if (parsing === "pending" || parsing === "parsing" || parsing === "failed") {
+    return false;
+  }
+  return (
+    (c.scoring_status as string) === "evaluating" ||
+    isPipelinePendingEvaluation(c, jobId)
+  );
+}
+
+function pipelineBannerText(
+  progress: ReturnType<typeof countPipelineProgress>,
+): string | null {
+  const { parsing, scoring, done, total } = progress;
+  if (parsing === 0 && scoring === 0) return null;
+  if (parsing > 0 && scoring === 0) {
+    return `Reading ${parsing} resume${parsing === 1 ? "" : "s"}... • ${done} of ${total} evaluated`;
+  }
+  if (scoring > 0) {
+    return `Scoring ${scoring} candidate${scoring === 1 ? "" : "s"}... • ${done} of ${total} evaluated`;
+  }
+  return null;
+}
+
 function verdictLeftColor(
   c: CandidateListItem,
   jobId: string,
@@ -350,7 +437,11 @@ export function JobPipelineTab({
   const load = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) setLoading(true);
     try {
-      await fetch(`/api/jobs/${jobId}/reclassify-applicants`, { method: "POST" });
+      if (!options?.silent) {
+        await fetch(`/api/jobs/${jobId}/reclassify-applicants`, {
+          method: "POST",
+        });
+      }
       const [candRes, pipeRes] = await Promise.all([
         fetch(`/api/jobs/${jobId}/candidates`),
         fetch(`/api/pipeline?role_brief_id=${encodeURIComponent(jobId)}`),
@@ -383,6 +474,50 @@ export function JobPipelineTab({
   useEffect(() => {
     void load();
   }, [load]);
+
+  const visibleCandidates = useMemo(
+    () =>
+      candidates.filter(
+        (c) => !isExcluded(c, pipelineIds, optimisticShortlistedIds),
+      ),
+    [candidates, pipelineIds, optimisticShortlistedIds],
+  );
+
+  const needsPipelinePoll = useMemo(
+    () => visibleCandidates.some((c) => candidateNeedsPipelinePoll(c, jobId)),
+    [visibleCandidates, jobId],
+  );
+
+  const pipelineProgress = useMemo(
+    () => countPipelineProgress(visibleCandidates, jobId),
+    [visibleCandidates, jobId],
+  );
+
+  const progressBannerText = pipelineBannerText(pipelineProgress);
+
+  const pollIntervalMs = useMemo(
+    () => getPipelinePollIntervalMs(visibleCandidates, jobId),
+    [visibleCandidates, jobId],
+  );
+
+  useEffect(() => {
+    if (loading || !needsPipelinePoll) return;
+
+    let cancelled = false;
+
+    const poll = () => {
+      if (!cancelled) void load({ silent: true });
+    };
+
+    poll();
+
+    const intervalId = window.setInterval(poll, pollIntervalMs);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [loading, needsPipelinePoll, pollIntervalMs, load]);
 
   useEffect(() => {
     if (loading) return;
@@ -454,18 +589,6 @@ export function JobPipelineTab({
     window.addEventListener("karta:candidate-updated", handler);
     return () => window.removeEventListener("karta:candidate-updated", handler);
   }, []);
-
-  const showEvaluatingIndicator = useMemo(
-    () =>
-      candidates.some(
-        (c) =>
-          c.scoring_status === "unscored" ||
-          (c.scoring_status as string) === "evaluating",
-      ) ||
-      scoringId != null ||
-      batchEvaluating,
-    [candidates, scoringId, batchEvaluating],
-  );
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -1126,9 +1249,8 @@ export function JobPipelineTab({
       className="flex flex-wrap items-center gap-3 border-b border-[#F1F5F9] border-l-4 border-l-[#0D9488]/60 px-4 py-3 last:border-0 bg-[#F8FAFC]/50"
     >
       <div className="h-4 w-4 shrink-0 rounded border border-slate-200 bg-slate-100" />
-      <div className="min-w-0 flex-1 space-y-2">
-        <div className="h-4 w-32 rounded skeleton-shimmer" />
-        <p className="text-xs text-slate-400">Parsing resume…</p>
+      <div className="min-w-0 flex-1">
+        <PipelineStageDisplay stage="parsing" />
       </div>
       <span className="text-xs text-[#64748B]">
         {c.resume_filename ?? "Resume"}
@@ -1196,10 +1318,11 @@ export function JobPipelineTab({
     }
     if (c.parsing_status === "failed") return renderFailedRow(c);
 
-    const { gptScore, displayScore, verdict, isPreliminary } =
-      pipelineDisplayScore(c, jobId);
+    const badge = resolveVerdictBadgeProps(c, jobId);
+    const scoringInProgress = isCandidateScoringInProgress(c, jobId);
+    const isEvaluating =
+      scoringInProgress || (c.scoring_status as string) === "evaluating";
     const isSelected = selected.has(c.id);
-    const isEvaluating = (c.scoring_status as string) === "evaluating";
     const isFocused = focusedCandidateId === c.id;
     const leftColor = verdictLeftColor(c, jobId, isEvaluating);
 
@@ -1264,7 +1387,7 @@ export function JobPipelineTab({
             }
             skillsVerified={c.signal_profile?.skills_verified ?? []}
             professionalSummary={c.signal_profile?.professional_summary ?? ""}
-            verdict={verdict}
+            verdict={badge.verdict}
           />
           {showRejectionReason && c.manual_rejection_reason && (
             <span className="mt-0.5 inline-block rounded bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-600">
@@ -1275,20 +1398,34 @@ export function JobPipelineTab({
             </span>
           )}
         </div>
-        {displayScore != null && verdict && (
+        {badge.show && badge.verdict ? (
           <VerdictBadge
-            verdict={verdict}
-            score={displayScore}
+            verdict={badge.verdict}
+            score={badge.displayScore ?? 0}
             showScore
-            preliminary={isPreliminary}
-            animateIn={!isPreliminary}
-            scoreAnimate={gptScore != null}
+            preliminary={badge.isPreliminary}
+            animateIn={!badge.isPreliminary}
+            scoreAnimate={badge.gptScore != null}
           />
-        )}
+        ) : null}
         <div
           className="flex shrink-0 items-center gap-2"
           onClick={(e) => e.stopPropagation()}
         >
+          {scoringInProgress ? (
+            <div className="min-w-[200px] max-w-xs">
+              <PipelineStageDisplay
+                stage="scoring"
+                displayName={candidateDisplayName(c)}
+                titleLine={candidateTitleLine(c)}
+                skills={candidateSkillTags(c)}
+                yearsExperience={formatTotalExperienceDisplay(
+                  c.signal_profile?.total_years_experience,
+                )}
+              />
+            </div>
+          ) : (
+            <>
           {showShortlist && (
             <button
               type="button"
@@ -1308,6 +1445,8 @@ export function JobPipelineTab({
             <X className="h-3 w-3" aria-hidden />
             Not a Fit
           </button>
+            </>
+          )}
         </div>
       </div>
     );
@@ -1323,18 +1462,15 @@ export function JobPipelineTab({
     }
     if (c.parsing_status === "failed") return renderFailedRow(c);
 
-    const { displayScore, verdict, isPreliminary } = pipelineDisplayScore(
-      c,
-      jobId,
-    );
-    const awaitingScore =
-      c.parsing_status === "complete" &&
-      isPipelinePendingEvaluation(c, jobId);
-    const isEvaluating =
+    const badge = resolveVerdictBadgeProps(c, jobId);
+    const scoringInProgress =
+      isCandidateScoringInProgress(c, jobId) ||
       scoringId === c.id ||
-      batchEvaluating ||
-      awaitingScore;
+      (batchEvaluating && isPipelinePendingEvaluation(c, jobId));
     const isSelected = selected.has(c.id);
+    const yearsExp = formatTotalExperienceDisplay(
+      c.signal_profile?.total_years_experience,
+    );
 
     return (
       <div
@@ -1389,32 +1525,32 @@ export function JobPipelineTab({
             }
             skillsVerified={c.signal_profile?.skills_verified ?? []}
             professionalSummary={c.signal_profile?.professional_summary ?? ""}
-            verdict={verdict}
+            verdict={badge.verdict}
           />
         </div>
-        <div className="hidden shrink-0 text-sm text-slate-600 sm:block">
-          {formatTotalExperienceDisplay(
-            c.signal_profile?.total_years_experience,
-          )}
-        </div>
-        {awaitingScore ? (
-          <span className="inline-flex items-center gap-2 rounded-full border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-1 text-sm text-[#64748B]">
-            <EvaluatingDots />
-            Evaluating…
-          </span>
-        ) : displayScore != null && verdict ? (
+        {!scoringInProgress && (
+          <div className="hidden shrink-0 text-sm text-slate-600 sm:block">
+            {yearsExp}
+          </div>
+        )}
+        {scoringInProgress ? (
+          <div className="min-w-[200px] max-w-xs">
+            <PipelineStageDisplay
+              stage="scoring"
+              displayName={candidateDisplayName(c)}
+              titleLine={candidateTitleLine(c)}
+              skills={candidateSkillTags(c)}
+              yearsExperience={yearsExp}
+            />
+          </div>
+        ) : badge.show && badge.verdict ? (
           <VerdictBadge
-            verdict={verdict}
-            score={displayScore}
+            verdict={badge.verdict}
+            score={badge.displayScore ?? 0}
             showScore
-            preliminary={isPreliminary}
+            preliminary={badge.isPreliminary}
             animateIn={false}
           />
-        ) : isEvaluating ? (
-          <span className="inline-flex items-center gap-2 text-sm text-[#64748B]">
-            <EvaluatingDots />
-            Evaluating…
-          </span>
         ) : (
           <button
             type="button"
@@ -1469,10 +1605,10 @@ export function JobPipelineTab({
         >
           <span className="inline-flex flex-wrap items-center gap-2">
             {meta.label} · {items.length}
-            {key === "pending" && showEvaluatingIndicator && (
+            {key === "pending" && progressBannerText && (
               <span className="inline-flex items-center gap-1.5 text-xs font-normal text-[#64748B]">
                 <EvaluatingDots />
-                Evaluating…
+                {progressBannerText}
               </span>
             )}
           </span>
@@ -1731,6 +1867,12 @@ export function JobPipelineTab({
           )}
           {groupedView ? (
         <div className="space-y-4">
+          {progressBannerText && (
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200/60 bg-white px-4 py-2 text-xs text-slate-500 shadow-sm">
+              <EvaluatingDots />
+              {progressBannerText}
+            </div>
+          )}
           {totalScored === 0 && <GroupedViewEmptyState />}
           {renderSection("exceptional", groups.exceptionalMatch, (c) =>
             renderEvaluatedRow(c, true),
@@ -1751,10 +1893,10 @@ export function JobPipelineTab({
         </div>
       ) : (
         <div className="space-y-3">
-          {showEvaluatingIndicator && (
+          {progressBannerText && (
             <div className="flex items-center gap-2 rounded-xl border border-slate-200/60 bg-white px-4 py-2 text-xs text-slate-500 shadow-sm">
               <EvaluatingDots />
-              Evaluating candidates — scores updating automatically
+              {progressBannerText}
             </div>
           )}
           {flatList.length === 0 ? null : flatList.map((c) => renderFlatRow(c))}

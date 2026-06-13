@@ -96,15 +96,17 @@ export function hasEvaluatedScoreForRole(
   return getScoreForRole(item, roleBriefId) != null;
 }
 
-/** Pending only when there is no score for this job yet. */
+/** Pending when there is no score for this job yet (includes auto-eval in flight). */
 export function isPipelinePendingEvaluation(
   item: CandidateListItem,
   roleBriefId: string,
 ): boolean {
   if (hasEvaluatedScoreForRole(item, roleBriefId)) return false;
+  const status = item.scoring_status as string;
   return (
-    item.scoring_status === "unscored" ||
-    item.scoring_status === "needs_scoring"
+    status === "unscored" ||
+    status === "needs_scoring" ||
+    status === "evaluating"
   );
 }
 
