@@ -89,6 +89,34 @@ export async function markIngestionJobComplete(jobId: string): Promise<void> {
   }
 }
 
+export async function resetIngestionJobForRetry(
+  candidateId: string,
+): Promise<void> {
+  try {
+    const supabase = createSupabaseAdminClient();
+    const { error } = await supabase
+      .from("candidate_ingestion_jobs")
+      .update({
+        status: "pending",
+        attempts: 0,
+        last_error: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("candidate_id", candidateId);
+    if (error) {
+      console.warn(
+        "[ingestion-jobs] retry reset failed:",
+        error.message,
+      );
+    }
+  } catch (err) {
+    console.warn(
+      "[ingestion-jobs] retry reset failed:",
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+
 export async function markIngestionJobFailed(
   jobId: string,
   lastError: string,

@@ -140,6 +140,7 @@ export function TalentPoolWorkspace() {
   const [duplicateNotices, setDuplicateNotices] = useState<
     { fileName: string; existingId: string; existingName: string }[]
   >([]);
+  const [retryingFailed, setRetryingFailed] = useState(false);
   const stuckRetryCountsRef = useRef(new Map<string, number>());
   const { toast } = useToast();
 
@@ -279,6 +280,41 @@ export function TalentPoolWorkspace() {
     () => filtered.filter((c) => c.role_scores.length === 0),
     [filtered],
   );
+
+  const failedCount = useMemo(
+    () => candidates.filter((c) => c.parsing_status === "failed").length,
+    [candidates],
+  );
+
+  const retryFailedCandidates = async () => {
+    const failed = candidates.filter((c) => c.parsing_status === "failed");
+    if (failed.length === 0) return;
+
+    setRetryingFailed(true);
+    setError(null);
+    try {
+      for (const c of failed) {
+        const res = await fetch(`/api/candidates/${c.id}/reparse`, {
+          method: "POST",
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(
+            json.error ?? `Retry failed for ${c.display_name ?? "candidate"}`,
+          );
+        }
+      }
+      toast(
+        `Retrying ${failed.length} failed candidate${failed.length === 1 ? "" : "s"}`,
+        "info",
+      );
+      await loadCandidates();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Retry failed");
+    } finally {
+      setRetryingFailed(false);
+    }
+  };
 
   const toggleOne = (id: string) => {
     setSelected((prev) => {
@@ -477,6 +513,22 @@ export function TalentPoolWorkspace() {
         <p className="mb-4 text-sm text-red-600" role="alert">
           {error}
         </p>
+      )}
+
+      {failedCount > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            disabled={retryingFailed || uploading || batchScoring}
+            onClick={() => void retryFailedCandidates()}
+            className={`${karta.btnOutlineTeal} inline-flex items-center gap-2 px-3 py-1.5 text-sm disabled:opacity-50`}
+          >
+            {retryingFailed && (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            )}
+            Retry {failedCount} failed candidate{failedCount === 1 ? "" : "s"}
+          </button>
+        </div>
       )}
 
       <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-end">

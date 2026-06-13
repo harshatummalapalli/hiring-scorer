@@ -65,15 +65,22 @@ export async function triggerParsing(
     "[trigger-parsing] START",
     JSON.stringify({
       candidateId,
-      jobId,
+      jobId: jobId ?? "TALENT_POOL",
       hasJobId: !!jobId,
     }),
   );
+
+  await adminPatchCandidate(candidateId, { parsing_status: "parsing" });
   const ingestionJob = await getLatestIngestionJob(candidateId);
   if (ingestionJob) {
     if (ingestionJob.attempts >= ingestionJob.max_attempts) {
-      console.log(
-        `[trigger-parsing] Max ingestion attempts reached for ${candidateId}`,
+      console.warn(
+        "[trigger-parsing] Max ingestion attempts reached",
+        JSON.stringify({
+          candidateId,
+          attempts: ingestionJob.attempts,
+          maxAttempts: ingestionJob.max_attempts,
+        }),
       );
       return;
     }
@@ -109,9 +116,21 @@ export async function triggerParsing(
     const fullResumeText = ingested.resumeText;
 
     const githubUser = extractGithubUsername(resumeText);
-    const githubData = githubUser
-      ? await enrichGithubProfile(githubUser)
-      : null;
+    let githubData = null;
+    if (githubUser) {
+      try {
+        githubData = await enrichGithubProfile(githubUser);
+      } catch (err) {
+        console.warn(
+          "[trigger-parsing] GitHub enrichment skipped",
+          JSON.stringify({
+            candidateId,
+            username: githubUser,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+      }
+    }
 
     const profile = {
       ...signal_profile,
@@ -180,6 +199,7 @@ export async function triggerParsing(
             "[trigger-parsing] COMPLETE",
             JSON.stringify({
               candidateId,
+              jobId,
               parsingStatus: "complete",
             }),
           );
@@ -192,6 +212,7 @@ export async function triggerParsing(
             "[trigger-scoring] STARTED",
             JSON.stringify({
               candidateId,
+              jobId,
             }),
           );
         } catch (err) {
@@ -199,11 +220,20 @@ export async function triggerParsing(
             "[trigger-scoring] FAILED",
             JSON.stringify({
               candidateId,
+              jobId,
               error: err instanceof Error ? err.message : String(err),
             }),
           );
         }
       }
+    } else {
+      console.log(
+        "[trigger-parsing] No jobId — skipping prefilter and auto-eval",
+        JSON.stringify({ candidateId }),
+      );
+      await adminPatchCandidate(candidateId, {
+        scoring_status: "unscored",
+      });
     }
 
     if (ingestionJob) {
@@ -213,6 +243,7 @@ export async function triggerParsing(
       "[trigger-parsing] COMPLETE",
       JSON.stringify({
         candidateId,
+        jobId: jobId ?? "TALENT_POOL",
         parsingStatus: "complete",
       }),
     );

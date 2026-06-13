@@ -176,10 +176,10 @@ export async function POST(request: Request) {
       activity: [createActivity("added", "Candidate added")],
       parsing_status: "pending",
       scoring_status: "unscored",
+      source,
       ...(jobId
         ? {
             job_id: jobId,
-            source,
             applied_at: new Date().toISOString(),
           }
         : {}),

@@ -1,5 +1,6 @@
 import { after } from "next/server";
 import { NextResponse } from "next/server";
+import { resetIngestionJobForRetry } from "@/lib/ingestion/ingestion-jobs";
 import { triggerParsing } from "@/lib/ingestion/trigger-parsing";
 import { getCandidateById, updateCandidate } from "@/lib/supabase/candidates";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
@@ -67,6 +68,8 @@ export async function POST(request: Request, { params }: Params) {
       parsing_status: "pending",
       scoring_status: "unscored",
     });
+
+    await resetIngestionJobForRetry(id);
 
     const candidateId = id;
     const resumeText = candidate.resume_text;
