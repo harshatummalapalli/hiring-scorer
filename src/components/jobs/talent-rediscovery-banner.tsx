@@ -1,169 +1,238 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import { Loader2, Sparkles, Users } from "lucide-react";
-import { useCandidatePanel } from "@/contexts/candidate-panel-context";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import type { LocalMatchResult } from "@/lib/intelligence/local-talent-match";
 import { karta } from "@/lib/brand/karta";
-
-type TalentMatch = {
-  candidateId: string;
-  candidateName: string;
-  yearsExperience: string;
-  matchPercent: number;
-  matchedSkills: string[];
-  seniorityNote: string | null;
-  previousRoleTitle: string;
-  previousScore: number | null;
-};
+import { useToast } from "@/components/ui/toast";
 
 type TalentMatchesResponse = {
-  matches: TalentMatch[];
-  poolTotal: number;
-  strongMatches: number;
+  matches: LocalMatchResult[];
+  totalPoolSize: number;
 };
 
 type TalentRediscoveryBannerProps = {
   jobId: string;
 };
 
-export function TalentRediscoveryBanner({ jobId }: TalentRediscoveryBannerProps) {
-  const { openPanel } = useCandidatePanel();
-  const [data, setData] = useState<TalentMatchesResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [dismissed, setDismissed] = useState(false);
+const CACHE_DURATION_MS = 5 * 60 * 1000;
 
-  const load = useCallback(async () => {
-    setLoading(true);
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+}
+
+function signalQualityLabel(quality: LocalMatchResult["signalQuality"]): string {
+  switch (quality) {
+    case "high":
+      return "◆ High";
+    case "low":
+      return "○ Low";
+    default:
+      return "◇ Medium";
+  }
+}
+
+function signalQualityColor(quality: LocalMatchResult["signalQuality"]): string {
+  switch (quality) {
+    case "high":
+      return "#1D9E75";
+    case "low":
+      return "var(--color-text-secondary, #64748B)";
+    default:
+      return "#BA7517";
+  }
+}
+
+export function TalentRediscoveryBanner({ jobId }: TalentRediscoveryBannerProps) {
+  const { toast } = useToast();
+  const [talentMatches, setTalentMatches] = useState<LocalMatchResult[]>([]);
+  const [checkingMatches, setCheckingMatches] = useState(true);
+  const [expanded, setExpanded] = useState(true);
+  const [pipelineExpandedDefaultSet, setPipelineExpandedDefaultSet] =
+    useState(false);
+  const [evaluatingId, setEvaluatingId] = useState<string | null>(null);
+  const matchesFetchedAtRef = useRef<number | null>(null);
+
+  const fetchTalentMatches = useCallback(async () => {
+    if (
+      matchesFetchedAtRef.current &&
+      Date.now() - matchesFetchedAtRef.current < CACHE_DURATION_MS
+    ) {
+      setCheckingMatches(false);
+      return;
+    }
+
+    setCheckingMatches(true);
     try {
-      const res = await fetch(`/api/jobs/${jobId}/talent-matches`);
-      const json = (await res.json()) as TalentMatchesResponse & {
+      const [matchRes, pipelineRes] = await Promise.all([
+        fetch(`/api/jobs/${jobId}/talent-matches`),
+        fetch(`/api/jobs/${jobId}/candidates`),
+      ]);
+
+      const matchJson = (await matchRes.json()) as TalentMatchesResponse & {
         error?: string;
       };
-      if (res.ok) setData(json);
+      if (matchRes.ok) {
+        setTalentMatches(matchJson.matches ?? []);
+        matchesFetchedAtRef.current = Date.now();
+      }
+
+      if (pipelineRes.ok && !pipelineExpandedDefaultSet) {
+        const pipelineJson = (await pipelineRes.json()) as {
+          candidates?: unknown[];
+        };
+        const count = pipelineJson.candidates?.length ?? 0;
+        setExpanded(count === 0);
+        setPipelineExpandedDefaultSet(true);
+      }
     } catch {
       /* non-blocking */
     } finally {
-      setLoading(false);
+      setCheckingMatches(false);
     }
-  }, [jobId]);
+  }, [jobId, pipelineExpandedDefaultSet]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void fetchTalentMatches();
+  }, [fetchTalentMatches, jobId]);
 
-  if (dismissed || loading) {
-    if (loading) {
-      return (
-        <div className="flex items-center gap-2 rounded-xl border border-slate-200/60 bg-white px-4 py-3 text-sm text-[#64748B]">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Searching talent pool for matches…
-        </div>
+  const evaluateMatch = async (match: LocalMatchResult) => {
+    setEvaluatingId(match.candidateId);
+    try {
+      const res = await fetch(`/api/candidates/${match.candidateId}/score`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roleBriefId: jobId }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error ?? "Failed to evaluate candidate");
+      }
+
+      setTalentMatches((prev) =>
+        prev.filter((m) => m.candidateId !== match.candidateId),
       );
+      window.dispatchEvent(
+        new CustomEvent("karta:job-scores-recomputed", {
+          detail: { jobId },
+        }),
+      );
+      toast("Added to pipeline — evaluating now");
+    } catch (err) {
+      toast(
+        err instanceof Error ? err.message : "Failed to evaluate candidate",
+        "error",
+      );
+    } finally {
+      setEvaluatingId(null);
     }
+  };
+
+  if (checkingMatches) {
+    return (
+      <p className="mb-4 text-sm text-[#64748B]">Checking talent pool...</p>
+    );
+  }
+
+  if (talentMatches.length === 0) {
     return null;
   }
 
-  if (!data || data.poolTotal === 0) return null;
-
-  const topMatches = data.matches.slice(0, 5);
-  if (topMatches.length === 0) return null;
+  const matchLabel =
+    talentMatches.length === 1
+      ? "1 candidate in your Talent Pool may fit this role"
+      : `${talentMatches.length} candidates in your Talent Pool may fit this role`;
 
   return (
-    <section className={`${karta.accentTealSection} space-y-4`}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-100 text-teal-700">
-            <Sparkles className="h-5 w-5" />
-          </div>
-          <div>
-            <h2 className="text-base font-semibold text-[#1E293B]">
-              Talent rediscovery
-            </h2>
-            <p className="mt-1 text-sm text-[#64748B]">
-              Kharta found{" "}
-              <span className="font-semibold text-[#1E293B]">
-                {data.poolTotal}
-              </span>{" "}
-              candidates in your pool who may fit this role
-              {data.strongMatches > 0 && (
-                <>
-                  {" "}
-                  —{" "}
-                  <span className="font-semibold text-teal-700">
-                    {data.strongMatches} strong matches
-                  </span>{" "}
-                  before uploading new resumes
-                </>
-              )}
-              .
-            </p>
-          </div>
+    <section className={`mb-4 ${karta.card} overflow-hidden`}>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50/80"
+      >
+        <div>
+          <p className="text-sm font-semibold text-[#1E293B]">✦ {matchLabel}</p>
+          <p className="mt-0.5 text-xs text-[#64748B]">
+            Local match — not yet evaluated against this JD
+          </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setDismissed(true)}
-          className="text-xs font-medium text-[#64748B] hover:text-[#1E293B]"
-        >
-          Dismiss
-        </button>
-      </div>
+        {expanded ? (
+          <ChevronDown className="h-4 w-4 shrink-0 text-[#64748B]" />
+        ) : (
+          <ChevronRight className="h-4 w-4 shrink-0 text-[#64748B]" />
+        )}
+      </button>
 
-      <ul className="divide-y divide-teal-100/80 rounded-lg border border-teal-100 bg-white/80">
-        {topMatches.map((m) => (
-          <li
-            key={m.candidateId}
-            className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
-          >
-            <div className="min-w-0">
-              <button
-                type="button"
-                onClick={() =>
-                  openPanel(m.candidateId, { contextJobId: jobId })
-                }
-                className="text-left text-sm font-semibold text-[#1E293B] hover:text-teal-700"
-              >
-                {m.candidateName}
-              </button>
-              <p className="mt-0.5 text-xs text-[#64748B]">
-                {m.yearsExperience || "Experience unknown"}
-                {m.previousScore != null && (
-                  <> · Last scored {m.previousScore} for {m.previousRoleTitle}</>
-                )}
-              </p>
-              {m.matchedSkills.length > 0 && (
-                <p className="mt-1 text-xs text-teal-800">
-                  {m.matchedSkills.slice(0, 4).join(", ")}
-                </p>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="rounded-full bg-teal-100 px-2.5 py-1 text-xs font-semibold text-teal-800">
-                {m.matchPercent}% fit
-              </span>
-              <button
-                type="button"
-                onClick={() =>
-                  openPanel(m.candidateId, { contextJobId: jobId })
-                }
-                className="text-xs font-semibold text-teal-700 hover:underline"
-              >
-                Evaluate
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
+      {expanded && (
+        <ul className="divide-y divide-[#F1F5F9] border-t border-[#F1F5F9]">
+          {talentMatches.map((match) => {
+            const titleLine = [match.currentTitle, match.currentCompany]
+              .filter(Boolean)
+              .join(" · ");
+            const yearsLabel =
+              match.totalYearsExperience != null
+                ? `${match.totalYearsExperience} yrs`
+                : null;
+            const skillsLabel = match.skillOverlap.slice(0, 3).join(", ");
+            const metaParts = [yearsLabel, skillsLabel].filter(Boolean);
+            const mustHaveLabel =
+              match.mustHaveTotal > 0
+                ? `${match.mustHaveHits.length} of ${match.mustHaveTotal} must-haves`
+                : "No must-haves defined";
+            const isEvaluating = evaluatingId === match.candidateId;
 
-      <div className="flex flex-wrap items-center gap-3 text-sm">
-        <Link
-          href="/talent-pool"
-          className="inline-flex items-center gap-1.5 font-semibold text-teal-700 hover:underline"
-        >
-          <Users className="h-4 w-4" />
-          Open talent pool
-        </Link>
-      </div>
+            return (
+              <li
+                key={match.candidateId}
+                className="flex flex-wrap items-center gap-3 px-4 py-3"
+              >
+                <div
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-50 text-xs font-semibold text-teal-700"
+                  aria-hidden
+                >
+                  {initials(match.displayName)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-[#1E293B]">
+                    {match.displayName}
+                  </p>
+                  {titleLine && (
+                    <p className="truncate text-xs text-[#64748B]">{titleLine}</p>
+                  )}
+                  {metaParts.length > 0 && (
+                    <p className="mt-0.5 truncate text-xs text-[#64748B]">
+                      {metaParts.join(" · ")}
+                    </p>
+                  )}
+                  <p className="mt-1 text-xs text-[#64748B]">
+                    Local match:{" "}
+                    <span className="font-semibold text-[#1E293B]">
+                      {match.localScore}
+                    </span>
+                    {" · "}
+                    {mustHaveLabel}
+                    {" · "}
+                    <span style={{ color: signalQualityColor(match.signalQuality) }}>
+                      {signalQualityLabel(match.signalQuality)}
+                    </span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={isEvaluating}
+                  onClick={() => void evaluateMatch(match)}
+                  className={`${karta.btnOutlineTeal} shrink-0 px-3 py-1.5 text-sm disabled:opacity-50`}
+                >
+                  {isEvaluating ? "Adding..." : "→ Evaluate"}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </section>
   );
 }

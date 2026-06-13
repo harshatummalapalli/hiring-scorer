@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import {
-  scoreAllTalentRecommendations,
-  type RecommendationCandidateInput,
-} from "@/lib/recommendations/local-recommendation";
-import { getJobById } from "@/lib/supabase/jobs";
-import { listCandidates } from "@/lib/supabase/candidates";
+  computeLocalMatch,
+  type LocalMatchResult,
+} from "@/lib/intelligence/local-talent-match";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 
 type Params = { params: Promise<{ id: string }> };
@@ -16,85 +14,79 @@ export async function GET(_request: Request, { params }: Params) {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      return NextResponse.json(
-        { error: "Authentication required." },
-        { status: 401 },
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { id: jobId } = await params;
-    const job = await getJobById(jobId);
-    if (!job) {
-      return NextResponse.json({ error: "Job not found." }, { status: 404 });
-    }
 
-    const allCandidates = await listCandidates(user.id);
-    const pool = allCandidates.filter((c) => c.job_id !== jobId);
-
-    const candidateIds = pool.map((c) => c.id);
-    let scoreQuery = supabase
-      .from("saved_scores")
+    const { data: role, error: roleError } = await supabase
+      .from("role_briefs")
       .select(
-        "candidate_id, role_brief_id, role_brief_title, overall_score, created_at",
+        "id, title, deal_breakers, core_signals, preferred_signals, title_band, experience_years",
       )
-      .not("candidate_id", "is", null)
-      .order("created_at", { ascending: false });
+      .eq("id", jobId)
+      .eq("created_by", user.id)
+      .maybeSingle();
 
-    if (candidateIds.length > 0) {
-      scoreQuery = scoreQuery.in("candidate_id", candidateIds);
+    if (roleError || !role) {
+      return NextResponse.json({ matches: [], totalPoolSize: 0 });
     }
 
-    const { data: scoreRows } = await scoreQuery;
+    const { data: candidates, error: candError } = await supabase
+      .from("candidates")
+      .select(
+        "id, display_name, current_title, current_company, signal_profile, scoring_status, top_skills, parsing_status, updated_at",
+      )
+      .eq("created_by", user.id)
+      .is("job_id", null)
+      .eq("parsing_status", "complete")
+      .order("updated_at", { ascending: false })
+      .limit(200);
 
-    const lastRoleByCandidate = new Map<
-      string,
-      { role_brief_id: string; role_brief_title: string | null; overall_score: number }
-    >();
-    for (const raw of scoreRows ?? []) {
-      const row = raw as Record<string, unknown>;
-      const cid = String(row.candidate_id);
-      if (lastRoleByCandidate.has(cid)) continue;
-      lastRoleByCandidate.set(cid, {
-        role_brief_id: String(row.role_brief_id ?? ""),
-        role_brief_title:
-          row.role_brief_title != null ? String(row.role_brief_title) : null,
-        overall_score: Number(row.overall_score ?? 0),
-      });
+    if (candError || !candidates || candidates.length === 0) {
+      return NextResponse.json({ matches: [], totalPoolSize: 0 });
     }
 
-    const inputs: RecommendationCandidateInput[] = pool.map((c) => ({
-      id: c.id,
-      display_name: c.display_name,
-      signal_profile: c.signal_profile,
-      resume_text: c.resume_text,
-    }));
+    const experienceYears =
+      role.experience_years != null ? Number(role.experience_years) : null;
 
-    const ranked = scoreAllTalentRecommendations(job, inputs).filter(
-      (r) => r.score > 0 || r.matchedSkills.length > 0,
+    const results: LocalMatchResult[] = candidates
+      .map((c) =>
+        computeLocalMatch(
+          {
+            id: String(c.id),
+            display_name: String(c.display_name ?? "Candidate"),
+            current_title:
+              c.current_title != null ? String(c.current_title) : null,
+            current_company:
+              c.current_company != null ? String(c.current_company) : null,
+            signal_profile:
+              (c.signal_profile as Record<string, unknown> | null) ?? {},
+            scoring_status: String(c.scoring_status ?? "unscored"),
+          },
+          {
+            deal_breakers: role.deal_breakers,
+            core_signals: role.core_signals,
+            title_band:
+              role.title_band != null ? String(role.title_band) : null,
+            experience_years: Number.isFinite(experienceYears)
+              ? experienceYears
+              : null,
+            title: String(role.title ?? "Role"),
+          },
+        ),
+      )
+      .filter((r) => r.localScore >= 25)
+      .sort((a, b) => b.localScore - a.localScore)
+      .slice(0, 8);
+
+    console.log(
+      `[talent-matches] jobId=${jobId} pool=${candidates.length} matches=${results.length}`,
     );
 
-    const strongMatches = ranked.filter((r) => r.score >= 60).length;
-    const top = ranked.slice(0, 12);
-
-    const matches = top.map((r) => {
-      const prev = lastRoleByCandidate.get(r.candidateId);
-      return {
-        candidateId: r.candidateId,
-        candidateName: r.candidateName,
-        yearsExperience: r.yearsExperience,
-        matchPercent: r.score,
-        matchedSkills: r.matchedSkills,
-        seniorityNote: r.seniorityNote ?? null,
-        previousRoleTitle: prev?.role_brief_title ?? "Another role",
-        previousRoleId: prev?.role_brief_id ?? null,
-        previousScore: prev?.overall_score ?? null,
-      };
-    });
-
     return NextResponse.json({
-      matches,
-      poolTotal: ranked.length,
-      strongMatches,
+      matches: results,
+      totalPoolSize: candidates.length,
     });
   } catch (err) {
     const message =
