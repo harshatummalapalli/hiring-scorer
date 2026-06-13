@@ -6,8 +6,8 @@ import { ClickableCandidateName } from "@/components/candidates/clickable-candid
 import { SkillPill } from "@/components/ui/skill-pill";
 import type { OpenCandidatePanelOptions } from "@/contexts/candidate-panel-context";
 import {
-  isInvalidDisplayTitle,
   resolveDisplayRole,
+  sanitizeProfessionalSummaryForDisplay,
   topSkillsForDisplay,
 } from "@/lib/candidates/candidate-identity-display";
 import { estimateYearsExperience } from "@/lib/candidates/parse-resume-structure";
@@ -229,12 +229,12 @@ export function CandidateIdentityCard({
           ? company
           : null;
 
+  const cleanedSummary = sanitizeProfessionalSummaryForDisplay(
+    professionalSummary,
+  );
   const summaryLine =
-    !roleLine &&
-    professionalSummary?.trim() &&
-    professionalSummary.length <= 140 &&
-    !isInvalidDisplayTitle(professionalSummary)
-      ? professionalSummary.trim()
+    !roleLine && cleanedSummary && cleanedSummary.length <= 140
+      ? cleanedSummary
       : null;
 
   const subtitleLine = roleLine ?? summaryLine;

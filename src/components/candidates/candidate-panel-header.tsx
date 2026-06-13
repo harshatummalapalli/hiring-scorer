@@ -178,7 +178,16 @@ export function CandidatePanelHeader({
   confidenceLevel = null,
   onClose,
 }: CandidatePanelHeaderProps) {
-  const profile = candidate.signal_profile;
+  const rawProfile = candidate.signal_profile;
+  const profile = rawProfile ?? {
+    display_name: candidate.display_name || candidate.resume_filename || "Candidate",
+    linkedin_url: candidate.linkedin_url,
+    current_title: candidate.current_title,
+    current_company: candidate.current_company,
+    education: [] as EducationEntry[],
+    skills_verified: [] as { skill: string }[],
+    total_years_experience: null as string | null,
+  };
 
   const name = cleanDisplayText(
     resolvePanelDisplayName(candidate.display_name, profile.display_name),

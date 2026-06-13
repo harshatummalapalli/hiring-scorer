@@ -1,5 +1,8 @@
-import { VertexAI } from "@google-cloud/vertexai";
-import { getGeminiModel } from "@/lib/ai/api-keys";
+import {
+  GEMINI_PARSE_MODEL,
+  geminiParseLane,
+  getGeminiClient,
+} from "@/lib/gemini-client";
 
 export type GeminiParsedResume = {
   full_name: string | null;
@@ -276,54 +279,7 @@ async function requestGeminiParse(
   rawResumeText: string,
   compact: boolean,
 ): Promise<GeminiParsedResume> {
-  const credentialsJson = process.env.GOOGLE_VERTEX_CREDENTIALS;
-  if (!credentialsJson) {
-    throw new Error(
-      "GOOGLE_VERTEX_CREDENTIALS is not set. " +
-        "Add the service account JSON to Vercel env vars.",
-    );
-  }
-
-  let credentials: {
-    client_email: string;
-    private_key: string;
-    project_id?: string;
-  };
-  try {
-    credentials = JSON.parse(credentialsJson);
-  } catch {
-    throw new Error(
-      "GOOGLE_VERTEX_CREDENTIALS is not valid JSON. " +
-        "Paste the full service account key file contents.",
-    );
-  }
-
-  const project =
-    process.env.GOOGLE_VERTEX_PROJECT ??
-    credentials.project_id ??
-    "karta2026";
-  const location =
-    process.env.GOOGLE_VERTEX_LOCATION ?? "us-central1";
-
-  const vertexAI = new VertexAI({
-    project,
-    location,
-    googleAuthOptions: {
-      credentials: {
-        client_email: credentials.client_email,
-        private_key: credentials.private_key,
-      },
-    },
-  });
-
-  const model = vertexAI.getGenerativeModel({
-    model: getGeminiModel(),
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature: 0,
-      maxOutputTokens: MAX_OUTPUT_TOKENS,
-    },
-  });
+  const client = getGeminiClient();
 
   const compactRules = compact
     ? `
@@ -379,14 +335,30 @@ Return a JSON object matching this exact schema:
 }`;
 
   const text = await callWithRetry(async () => {
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    const candidate = response.candidates?.[0];
-    const parts = candidate?.content?.parts;
-    if (!parts || parts.length === 0) {
-      throw new Error("Vertex AI returned empty response");
+    const parseStart = Date.now();
+    const response = await client.models.generateContent({
+      model: GEMINI_PARSE_MODEL,
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        responseMimeType: "application/json",
+        temperature: 0,
+        maxOutputTokens: MAX_OUTPUT_TOKENS,
+      },
+    });
+    const parseMs = Date.now() - parseStart;
+    console.log(
+      `[gemini-parse] model=${GEMINI_PARSE_MODEL} lane=${geminiParseLane()} duration=${parseMs}ms`,
+    );
+
+    const rawText =
+      response.text ??
+      response.candidates?.[0]?.content?.parts?.[0]?.text ??
+      "";
+    const trimmed = rawText.trim();
+    if (!trimmed) {
+      throw new Error("Gemini returned empty response");
     }
-    return (parts[0].text ?? "").trim();
+    return trimmed;
   });
 
   if (!text) {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, LogOut, Settings } from "lucide-react";
+import { ChevronDown, LogOut, Settings, Shield } from "lucide-react";
 import { signOutAndRedirectToSignIn } from "@/lib/auth/sign-out-client";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import {
@@ -16,6 +16,7 @@ export function UserMenu() {
   const menuRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [profile, setProfile] = useState<WorkspaceProfile | null>(null);
 
   useEffect(() => {
@@ -31,6 +32,14 @@ export function UserMenu() {
         setProfile(ws);
       } catch {
         setProfile({ first_name: "", company_name: "" });
+      }
+
+      try {
+        const res = await fetch("/api/admin/session", { cache: "no-store" });
+        const json = (await res.json()) as { isSuperAdmin?: boolean };
+        setIsAdmin(Boolean(json.isSuperAdmin));
+      } catch {
+        setIsAdmin(false);
       }
     })();
   }, []);
@@ -99,6 +108,17 @@ export function UserMenu() {
             <Settings className="h-4 w-4 text-[#64748B]" />
             Settings
           </Link>
+          {isAdmin && (
+            <Link
+              href="/admin"
+              role="menuitem"
+              className="flex items-center gap-2 px-4 py-2 text-sm text-[#334155] hover:bg-slate-50"
+              onClick={() => setOpen(false)}
+            >
+              <Shield className="h-4 w-4 text-[#64748B]" />
+              Admin
+            </Link>
+          )}
           <button
             type="button"
             role="menuitem"

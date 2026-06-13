@@ -50,6 +50,9 @@ const SECTION_NAME_PHRASE =
 const BAD_NAME_PATTERNS =
   /^(?:candidate|profile|resume|cv|document|file|upload|test|sample|demo|mid-level engineer|not stated|unknown)$/i;
 
+const ORG_NAME_PATTERN =
+  /\b(?:solutions|technologies|technology|systems|software|consulting|consultancy|services|labs|studio|group|holdings|pvt|ltd|limited|inc|corp|llc)\b/i;
+
 function replaceGenericDisplayName(name: string): string {
   const cleaned = cleanDisplayName(name);
   if (GENERIC_DISPLAY_NAMES.has(cleaned.toLowerCase())) {
@@ -220,6 +223,7 @@ export function isBadDisplayName(name: string | null | undefined): boolean {
   if (words.length > 4) return true;
   if (words.some((w) => COMPANY_WORD.test(w))) return true;
   if (/^projects?$/i.test(words[0] ?? "")) return true;
+  if (words.length <= 3 && ORG_NAME_PATTERN.test(n)) return true;
 
   return false;
 }

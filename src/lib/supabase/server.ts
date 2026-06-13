@@ -14,10 +14,10 @@ async function getAuthedSupabase(): Promise<{
 export async function insertScoringRun(
   row: Record<string, unknown>,
 ): Promise<{ id: string }> {
-  const { supabase } = await getAuthedSupabase();
+  const { supabase, userId } = await getAuthedSupabase();
   const { data, error } = await supabase
     .from("scoring_runs")
-    .insert(row)
+    .insert({ ...row, user_id: userId })
     .select("id")
     .single();
 

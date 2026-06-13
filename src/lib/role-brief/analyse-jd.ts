@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getApiKey } from "@/lib/ai/api-keys";
+import { CLAUDE_MODEL } from "@/lib/ai/model-constants";
 import { parseJsonFromModel } from "@/lib/ai/parse-json";
 import { dedupeRoleBriefAnalysis } from "@/lib/role-brief/dedupe-skills";
 import type { JdRecruiterContext } from "@/types/job-posting";
@@ -126,7 +127,7 @@ export async function analyseJobDescription(
   const contextBlock = buildRecruiterContextBlock(recruiterContext);
 
   const message = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: CLAUDE_MODEL,
     max_tokens: 8192,
     system: ANALYSE_JD_SYSTEM,
     messages: [

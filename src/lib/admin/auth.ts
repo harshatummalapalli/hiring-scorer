@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
+import { hasUnlimitedWorkspaceEmail } from "@/lib/workspace/limits";
 
 export async function isSuperAdmin(): Promise<boolean> {
   const supabase = await createSupabaseServerClient();
@@ -7,6 +8,8 @@ export async function isSuperAdmin(): Promise<boolean> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return false;
+
+  if (hasUnlimitedWorkspaceEmail(user.email)) return true;
 
   const { data, error } = await supabase
     .from("profiles")
@@ -25,6 +28,8 @@ export async function requireSuperAdmin(): Promise<string> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) notFound();
+
+  if (hasUnlimitedWorkspaceEmail(user.email)) return user.id;
 
   const { data, error } = await supabase
     .from("profiles")

@@ -1,5 +1,5 @@
+import { after } from "next/server";
 import { NextResponse } from "next/server";
-import { requireSuperAdmin } from "@/lib/admin/auth";
 import { createActivity } from "@/lib/candidates/activity";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { insertApplicationCandidate } from "@/lib/supabase/candidates";
@@ -8,21 +8,21 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-function isCronAuthorised(request: Request): boolean {
-  const secret = process.env.CRON_SECRET ?? "";
-    if (!secret) return false;
+function requireCronSecret(request: Request): NextResponse | null {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const auth = request.headers.get("authorization");
-  return auth === `Bearer ${secret}`;
+  if (auth !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return null;
 }
 
 export async function POST(request: Request) {
-  if (!isCronAuthorised(request)) {
-    try {
-      await requireSuperAdmin();
-    } catch {
-      return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
-    }
-  }
+  const denied = requireCronSecret(request);
+  if (denied) return denied;
 
   const adminSupabase = createSupabaseAdminClient();
 
@@ -135,15 +135,21 @@ export async function POST(request: Request) {
       { onConflict: "message_id", ignoreDuplicates: true },
     );
 
-    const { runCronAutoEvaluation } =
-      await import("@/lib/scoring/run-cron-auto-evaluation");
-    void runCronAutoEvaluation(
-      adminSupabase,
-      candidate.id,
-      item.job_id,
-      ownerUserId,
-    ).catch((err) => {
-      console.error("[email-process] Auto-evaluation failed:", err);
+    const candidateId = candidate.id;
+    const jobId = item.job_id;
+    after(async () => {
+      try {
+        const { runCronAutoEvaluation } =
+          await import("@/lib/scoring/run-cron-auto-evaluation");
+        await runCronAutoEvaluation(
+          adminSupabase,
+          candidateId,
+          jobId,
+          ownerUserId,
+        );
+      } catch (err) {
+        console.error("[email-process] Auto-evaluation failed:", err);
+      }
     });
 
     return NextResponse.json({
@@ -171,13 +177,8 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
-  if (!isCronAuthorised(request)) {
-    try {
-      await requireSuperAdmin();
-    } catch {
-      return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
-    }
-  }
+  const denied = requireCronSecret(request);
+  if (denied) return denied;
 
   const adminSupabase = createSupabaseAdminClient();
 

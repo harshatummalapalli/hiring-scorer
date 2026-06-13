@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { signOutAndRedirectToSignIn } from "@/lib/auth/sign-out-client";
 import { karta } from "@/lib/brand/karta";

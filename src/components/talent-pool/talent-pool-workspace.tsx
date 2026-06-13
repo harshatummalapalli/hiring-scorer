@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronDown,
@@ -32,7 +32,14 @@ import {
 } from "@/lib/candidates/list-filters";
 import { getPrimaryRoleScore } from "@/lib/candidates/active-role-score";
 import { CANDIDATE_VERDICT_FILTER_OPTIONS } from "@/lib/candidates/verdict-filter-options";
+import { ResumeDropZone } from "@/components/candidates/resume-drop-zone";
+import { ResumeUploadFileHint } from "@/components/candidates/resume-upload-file-hint";
+import { isStuckCandidate } from "@/lib/candidates/stuck-processing";
 import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
+import {
+  filesToFileList,
+  validateResumeUpload,
+} from "@/lib/resume/accepted-resume-files";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
 import { karta } from "@/lib/brand/karta";
 import type {
@@ -45,6 +52,7 @@ import type {
   CandidateVerdictFilter,
 } from "@/types/candidate";
 import { sourceBadgeLabel } from "@/types/job";
+import { useToast } from "@/components/ui/toast";
 
 type UploadUiState =
   | { phase: "idle" }
@@ -132,6 +140,8 @@ export function TalentPoolWorkspace() {
   const [duplicateNotices, setDuplicateNotices] = useState<
     { fileName: string; existingId: string; existingName: string }[]
   >([]);
+  const stuckRetryCountsRef = useRef(new Map<string, number>());
+  const { toast } = useToast();
 
   const uploading = uploadUi.phase === "processing";
 
@@ -177,6 +187,26 @@ export function TalentPoolWorkspace() {
   useEffect(() => {
     void loadCandidates();
   }, [loadCandidates]);
+
+  useEffect(() => {
+    if (loading) return;
+
+    const stuckCandidates = candidates.filter((c) => isStuckCandidate(c));
+    if (stuckCandidates.length === 0) return;
+
+    const batch = stuckCandidates
+      .filter((c) => (stuckRetryCountsRef.current.get(c.id) ?? 0) < 3)
+      .slice(0, 3);
+
+    for (const c of batch) {
+      const attempts = stuckRetryCountsRef.current.get(c.id) ?? 0;
+      stuckRetryCountsRef.current.set(c.id, attempts + 1);
+      toast(`Retrying stuck candidate: ${c.display_name}`, "info");
+      void fetch(`/api/candidates/${c.id}/reparse`, { method: "POST" }).catch(
+        console.warn,
+      );
+    }
+  }, [candidates, loading, toast]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -284,6 +314,14 @@ export function TalentPoolWorkspace() {
     const fileList = Array.from(files);
     setError(null);
 
+    for (const file of fileList) {
+      const validationError = validateResumeUpload(file);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+    }
+
     const initial: ResumeUploadFileItem[] = fileList.map((f) => ({
       name: f.name,
       status: "pending",
@@ -381,14 +419,17 @@ export function TalentPoolWorkspace() {
             All candidates across every job — search, filter, and open profiles.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowUpload((s) => !s)}
-          className={`inline-flex items-center gap-2 ${karta.btnPrimary}`}
-        >
-          <Upload className="h-4 w-4" />
-          Upload Resumes
-        </button>
+        <div className="flex flex-col items-end gap-1">
+          <button
+            type="button"
+            onClick={() => setShowUpload((s) => !s)}
+            className={`inline-flex items-center gap-2 ${karta.btnPrimary}`}
+          >
+            <Upload className="h-4 w-4" />
+            Upload Resumes
+          </button>
+          <ResumeUploadFileHint />
+        </div>
       </div>
 
       {showUpload && (
@@ -399,22 +440,17 @@ export function TalentPoolWorkspace() {
               <X className="h-4 w-4 text-slate-400" />
             </button>
           </div>
-          <label
-            className={`flex cursor-pointer flex-col items-center rounded-lg border-2 border-dashed border-slate-300 py-8 text-sm text-slate-600 ${uploading ? "opacity-60" : ""}`}
-          >
-            <input
-              type="file"
-              accept=".pdf,.doc,.docx,.txt"
-              multiple
-              className="sr-only"
-              disabled={uploading}
-              onChange={(e) => {
-                void handleFiles(e.target.files);
-                e.target.value = "";
-              }}
-            />
-            Drop resumes or click to browse
-          </label>
+          {error && (
+            <p className="mb-3 text-sm text-red-600" role="alert">
+              {error}
+            </p>
+          )}
+          <ResumeDropZone
+            uploading={uploading}
+            onFilesSelected={(files) => {
+              void handleFiles(filesToFileList(files));
+            }}
+          />
         </div>
       )}
 
@@ -551,6 +587,7 @@ export function TalentPoolWorkspace() {
             <Upload className="h-4 w-4" />
             Upload Resumes
           </button>
+          <ResumeUploadFileHint className="mt-2" />
         </div>
       ) : filtered.length === 0 ? (
         <EmptyState

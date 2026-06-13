@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { NextResponse } from "next/server";
 import { triggerParsing } from "@/lib/ingestion/trigger-parsing";
 import { getCandidateById, updateCandidate } from "@/lib/supabase/candidates";
@@ -67,12 +68,30 @@ export async function POST(request: Request, { params }: Params) {
       scoring_status: "unscored",
     });
 
-    void triggerParsing(
-      id,
-      candidate.resume_text,
-      candidate.resume_filename ?? "candidate-resume.pdf",
-      candidate.job_id ?? null,
-    ).catch(console.warn);
+    const candidateId = id;
+    const resumeText = candidate.resume_text;
+    const resumeFilename = candidate.resume_filename ?? "candidate-resume.pdf";
+    const candidateJobId = candidate.job_id ?? null;
+    const ownerUserId = user.id;
+    after(async () => {
+      try {
+        await triggerParsing(
+          candidateId,
+          resumeText,
+          resumeFilename,
+          candidateJobId,
+          ownerUserId,
+        );
+      } catch (err) {
+        console.error(
+          "[after] triggerParsing failed:",
+          JSON.stringify({
+            candidateId,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+      }
+    });
 
     return NextResponse.json({ status: "retrying" });
   } catch (err) {

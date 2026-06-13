@@ -12,6 +12,7 @@ create table if not exists public.scoring_runs (
   per_model_scores jsonb,
   confidence_levels jsonb,
   spreads jsonb,
+  user_id uuid references auth.users (id) on delete set null,
   created_at timestamptz not null default now()
 );
 
@@ -21,6 +22,9 @@ create index if not exists scoring_runs_candidate_scenario_idx
 create index if not exists scoring_runs_scenario_label_idx
   on public.scoring_runs (scenario_label);
 
+create index if not exists scoring_runs_user_id_idx
+  on public.scoring_runs (user_id);
+
 alter table public.scoring_runs enable row level security;
 
 drop policy if exists "Allow public read on scoring_runs" on public.scoring_runs;
@@ -28,11 +32,13 @@ drop policy if exists "Allow public insert on scoring_runs" on public.scoring_ru
 drop policy if exists "Allow public update on scoring_runs" on public.scoring_runs;
 drop policy if exists "Allow public delete on scoring_runs" on public.scoring_runs;
 
-create policy "Allow public read on scoring_runs"
-  on public.scoring_runs for select using (true);
+create policy "Users read own scoring_runs"
+  on public.scoring_runs for select
+  using (auth.uid() = user_id);
 
-create policy "Allow public insert on scoring_runs"
-  on public.scoring_runs for insert with check (true);
+create policy "Users insert own scoring_runs"
+  on public.scoring_runs for insert
+  with check (auth.uid() = user_id);
 
 create policy "Allow public update on scoring_runs"
   on public.scoring_runs for update using (true) with check (true);

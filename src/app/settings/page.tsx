@@ -16,6 +16,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [companyName, setCompanyName] = useState("");
+  const [email, setEmail] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,6 +28,7 @@ export default function SettingsPage() {
           data: { user },
         } = await supabase.auth.getUser();
         if (!user) return;
+        setEmail(user.email ?? null);
         const profile = await getWorkspaceProfile(supabase, user.id);
         setFirstName(profile.first_name);
         setCompanyName(profile.company_name);
@@ -80,24 +82,61 @@ export default function SettingsPage() {
         onSubmit={(e) => void save(e)}
         className={`mt-8 space-y-4 ${karta.card} p-6`}
       >
-        <label className="block text-sm font-medium text-[#334155]">
-          First name
+        <div>
+          <label
+            htmlFor="fullName"
+            className="block text-sm font-medium text-[#334155]"
+          >
+            Full Name
+          </label>
           <input
+            id="fullName"
+            name="fullName"
             type="text"
+            placeholder="Your full name"
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
             className={`mt-1 w-full ${karta.input}`}
           />
-        </label>
-        <label className="block text-sm font-medium text-[#334155]">
-          Company name
+        </div>
+        <div>
+          <label
+            htmlFor="companyName"
+            className="block text-sm font-medium text-[#334155]"
+          >
+            Company name
+          </label>
           <input
+            id="companyName"
+            name="companyName"
             type="text"
+            placeholder="Your company name"
             value={companyName}
             onChange={(e) => setCompanyName(e.target.value)}
             className={`mt-1 w-full ${karta.input}`}
           />
-        </label>
+        </div>
+        <div>
+          <label
+            htmlFor="settings-email"
+            style={{
+              fontSize: "12px",
+              color: "var(--color-text-secondary)",
+            }}
+          >
+            Email
+          </label>
+          <p
+            id="settings-email"
+            style={{
+              fontSize: "14px",
+              color: "var(--color-text-primary)",
+              margin: "4px 0 0",
+            }}
+          >
+            {email ?? "—"}
+          </p>
+        </div>
         {error && (
           <p className="text-sm text-red-600" role="alert">
             {error}

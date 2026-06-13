@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -9,7 +9,6 @@ import {
   Link2,
   Loader2,
   Mail,
-  Upload,
   X,
 } from "lucide-react";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -27,7 +26,10 @@ import {
   formatWizardJobLocation,
   type WorkMode,
 } from "@/lib/jobs/wizard-constants";
+import { ResumeDropZone } from "@/components/candidates/resume-drop-zone";
+import { ResumeUploadFileHint } from "@/components/candidates/resume-upload-file-hint";
 import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
+import { filesToFileList } from "@/lib/resume/accepted-resume-files";
 import { jobPostingToJdContext } from "@/types/job-posting";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -325,7 +327,6 @@ export function JobCreationWizard() {
   const [createdJob, setCreatedJob] = useState<Job | null>(null);
   const [showJobLimitModal, setShowJobLimitModal] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -949,41 +950,14 @@ export function JobCreationWizard() {
           </div>
 
           <div className="mt-8 grid gap-4 sm:grid-cols-1">
-            <div className="rounded-lg border border-slate-200 p-4">
-              <Upload className="h-6 w-6 text-[#0D9488]" aria-hidden />
-              <p className="mt-2 text-sm font-medium text-[#1E293B]">
-                Upload resumes
-              </p>
-              <p className="mt-1 text-xs text-[#64748B]">
-                Drag and drop PDFs or click to browse
-              </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.doc,.docx,.txt"
-                multiple
-                className="sr-only"
-                onChange={(e) => {
-                  void handleUploadFiles(e.target.files);
-                  e.target.value = "";
-                }}
-              />
-              <button
-                type="button"
-                disabled={uploading}
-                onClick={() => fileInputRef.current?.click()}
-                className={`mt-3 ${karta.btnOutlineTeal} text-sm`}
-              >
-                {uploading ? (
-                  <span className="inline-flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Uploading…
-                  </span>
-                ) : (
-                  "Upload files"
-                )}
-              </button>
-            </div>
+            <ResumeDropZone
+              uploading={uploading}
+              className="border-slate-200"
+              onFilesSelected={(files) => {
+                void handleUploadFiles(filesToFileList(files));
+              }}
+            />
+            <ResumeUploadFileHint className="text-center" />
 
             {inboundEmail && (
               <div className="rounded-lg border border-slate-200 p-4">

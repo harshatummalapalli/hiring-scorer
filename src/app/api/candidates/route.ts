@@ -1,5 +1,6 @@
-import { createHash } from "crypto";
+import { after } from "next/server";
 import { NextResponse } from "next/server";
+import { computeResumeContentHash } from "@/lib/candidates/resume-content-hash";
 import { storeUploadedResumeForCandidate } from "@/lib/candidates/store-uploaded-resume";
 import { createActivity } from "@/lib/candidates/activity";
 import { trackEvent } from "@/lib/analytics/track";
@@ -16,10 +17,6 @@ import { limitErrorResponse } from "@/lib/workspace/limits";
 import { filenameToDisplayName } from "@/lib/scoring/recruiter-card";
 
 export const maxDuration = 60;
-
-function computeResumeHash(text: string): string {
-  return createHash("sha256").update(text.slice(0, 10000)).digest("hex");
-}
 
 export async function GET() {
   try {
@@ -143,7 +140,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const resumeHash = computeResumeHash(resumeText);
+    const resumeHash = computeResumeContentHash(resumeText);
 
     if (!body.forceUpload) {
       const { data: hashMatch } = await supabase
@@ -190,21 +187,73 @@ export async function POST(request: Request) {
 
     if (resumeFile) {
       const userId = await getAuthenticatedUserId(supabase);
-      void storeUploadedResumeForCandidate(
-        supabase,
-        userId,
-        id,
-        jobId,
-        resumeFile,
-      ).catch(console.warn);
+      try {
+        await storeUploadedResumeForCandidate(
+          supabase,
+          userId,
+          id,
+          jobId,
+          resumeFile,
+        );
+      } catch (storageErr) {
+        console.warn(
+          `[candidates] Resume file storage failed for ${id}:`,
+          storageErr,
+        );
+      }
     }
 
-    void triggerParsing(
-      id,
-      resumeText,
-      resumeFilename,
-      jobId,
-    ).catch(console.warn);
+    const { error: ingestionJobError } = await supabase
+      .from("candidate_ingestion_jobs")
+      .insert({
+        candidate_id: id,
+        job_id: jobId,
+        owner_user_id: user.id,
+        status: "pending",
+      });
+    if (ingestionJobError) {
+      console.warn(
+        `[candidates] Ingestion job insert failed for ${id}:`,
+        ingestionJobError.message,
+      );
+    }
+
+    const { count } = await supabase
+      .from("candidates")
+      .select("*", { count: "exact", head: true })
+      .eq("created_by", user.id)
+      .in("parsing_status", ["parsing", "pending"]);
+
+    const activeParses = count ?? 0;
+    const MAX_CONCURRENT_PARSES = 10;
+
+    if (activeParses < MAX_CONCURRENT_PARSES) {
+      const candidateId = id;
+      const ownerUserId = user.id;
+      after(async () => {
+        try {
+          await triggerParsing(
+            candidateId,
+            resumeText,
+            resumeFilename,
+            jobId,
+            ownerUserId,
+          );
+        } catch (err) {
+          console.error(
+            "[after] triggerParsing failed:",
+            JSON.stringify({
+              candidateId,
+              error: err instanceof Error ? err.message : String(err),
+            }),
+          );
+        }
+      });
+    } else {
+      console.log(
+        `[upload] Parse deferred for ${id} — ${activeParses} active`,
+      );
+    }
 
     void trackEvent("candidate_uploaded", {
       candidate_id: id,

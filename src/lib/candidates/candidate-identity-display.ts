@@ -60,6 +60,54 @@ const AT_MONTH_OR_YEAR_RE =
 const DATE_RANGE_RE =
   /(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}\s*[-–—]\s*(?:Present|Current|Now|\d{4})/i;
 
+const PII_PLACEHOLDER_RE =
+  /\[(?:EMAIL|PHONE|URL|CANDIDATE|REDACTED[^\]]*)\]/i;
+
+export function containsPiiPlaceholder(text: string): boolean {
+  return PII_PLACEHOLDER_RE.test(text);
+}
+
+export function stripPiiPlaceholders(text: string): string {
+  return text
+    .replace(/\[(?:EMAIL|PHONE|URL|CANDIDATE|REDACTED[^\]]*)\]/gi, "")
+    .replace(/\s*[·•|]\s*(?=[·•|]|\s*$)/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+/** Drop header junk and PII tokens from one-line subtitles / summaries. */
+export function sanitizeProfessionalSummaryForDisplay(
+  raw: string | null | undefined,
+): string | null {
+  if (!raw?.trim()) return null;
+  let s = stripPiiPlaceholders(raw.trim());
+  if (!s || containsPiiPlaceholder(s)) return null;
+  if (s.length < 20) return null;
+  if (PHONE_IN_SUBTITLE.test(s) || EMAIL_IN_SUBTITLE.test(s)) return null;
+  if (/^[A-Z][A-Z\s.'-]{6,}$/.test(s) && s.split(/\s+/).length <= 5) {
+    return null;
+  }
+  if (s.length <= 80 && isInvalidDisplayTitle(s)) return null;
+  return s.length > 160 ? `${s.slice(0, 157)}…` : s;
+}
+
+function stripDuplicateNamePrefixFromTitle(title: string): string {
+  const words = title.trim().split(/\s+/);
+  if (words.length < 3) return title;
+  let i = 0;
+  while (
+    i < words.length - 1 &&
+    words[i] === words[i].toUpperCase() &&
+    /^[A-Z]/.test(words[i])
+  ) {
+    i += 1;
+  }
+  if (i >= 2 && i < words.length) {
+    return words.slice(i).join(" ");
+  }
+  return title;
+}
+
 function isDateAtSuffix(atPart: string): boolean {
   const fragment = atPart.trim();
   if (!fragment) return false;
@@ -85,6 +133,7 @@ export function sanitizeSubtitle(
   if (AT_DATE_SUFFIX_RE.test(s)) return null;
   if (AT_MONTH_OR_YEAR_RE.test(s)) return null;
   if (DATE_RANGE_RE.test(s)) return null;
+  if (containsPiiPlaceholder(s)) return null;
   if (s.length > 80) return null;
   return s;
 }
@@ -122,7 +171,7 @@ export function sanitizeDisplayTitle(
   options?: { roleBriefTitle?: string | null },
 ): string | null {
   if (isInvalidDisplayTitle(title)) return null;
-  let trimmed = title!.trim();
+  let trimmed = stripDuplicateNamePrefixFromTitle(title!.trim());
   const atGarbage = trimmed.match(/^(.+?)\s+at\s+(.+)$/i);
   if (atGarbage?.[1] && atGarbage[2]) {
     if (isDateAtSuffix(atGarbage[2])) {

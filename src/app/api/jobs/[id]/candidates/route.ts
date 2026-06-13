@@ -15,7 +15,7 @@ export async function GET(_request: Request, { params }: Params) {
 
     const supabase = await createSupabaseServerClient();
     const candidateIds = rows.map((c) => c.id);
-    const [byRoleRes, byCandidateRes] = await Promise.all([
+    const [byRoleRes, byCandidateRes, ingestionJobsRes] = await Promise.all([
       supabase
         .from("saved_scores")
         .select(
@@ -33,10 +33,37 @@ export async function GET(_request: Request, { params }: Params) {
             .is("role_brief_id", null)
             .order("created_at", { ascending: false })
         : Promise.resolve({ data: [], error: null }),
+      candidateIds.length > 0
+        ? supabase
+            .from("candidate_ingestion_jobs")
+            .select("candidate_id, status, attempts, max_attempts, created_at")
+            .in("candidate_id", candidateIds)
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
     if (byRoleRes.error) throw new Error(byRoleRes.error.message);
     if (byCandidateRes.error) throw new Error(byCandidateRes.error.message);
+    if (ingestionJobsRes.error) {
+      console.warn(
+        "[jobs/candidates] ingestion jobs load failed:",
+        ingestionJobsRes.error.message,
+      );
+    }
+
+    const latestIngestionByCandidate = new Map<
+      string,
+      { status: string; attempts: number; max_attempts: number }
+    >();
+    for (const row of ingestionJobsRes.data ?? []) {
+      const cid = String(row.candidate_id);
+      if (latestIngestionByCandidate.has(cid)) continue;
+      latestIngestionByCandidate.set(cid, {
+        status: String(row.status),
+        attempts: Number(row.attempts ?? 0),
+        max_attempts: Number(row.max_attempts ?? 3),
+      });
+    }
 
     const scoresByCandidate = new Map<string, CandidateScoreSummary[]>();
     const seenScoreIds = new Set<string>();
@@ -75,8 +102,16 @@ export async function GET(_request: Request, { params }: Params) {
         role_scores.length > 0
           ? Math.max(...role_scores.map((s) => s.overall_score))
           : 0;
+      const ingestion = latestIngestionByCandidate.get(c.id);
       const { resume_text: _omit, ...rest } = c;
-      return { ...rest, role_scores, highest_score };
+      return {
+        ...rest,
+        role_scores,
+        highest_score,
+        ingestion_job_status: ingestion?.status ?? null,
+        ingestion_attempts: ingestion?.attempts ?? null,
+        ingestion_max_attempts: ingestion?.max_attempts ?? null,
+      };
     });
 
     return NextResponse.json({ candidates });

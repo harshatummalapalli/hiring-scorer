@@ -14,6 +14,7 @@ import {
   recomputeOverallFromSnapshot,
   recomputeVerdict,
 } from "@/lib/scoring/recompute-from-snapshot";
+import { computeConfidence } from "@/lib/scoring/compute-confidence";
 import { filenameToDisplayName, scoreToVerdict } from "@/lib/scoring/recruiter-card";
 import { getCandidateById, updateCandidate } from "@/lib/supabase/candidates";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
@@ -159,6 +160,7 @@ export async function executeCandidateScore(
     candidate.signal_profile?.github,
   );
   applyProfileToRecruiterCard(result, candidate, filename);
+  result.confidence = computeConfidence(candidate.signal_profile, result);
 
   const savePayload = {
     ...buildSavedScoreInsertPayload(filename, roleBrief, result, "", ""),

@@ -191,6 +191,10 @@ export type CandidateListItem = Omit<CandidateRow, "resume_text"> & {
   resume_subtitle_fallback?: string | null;
   role_scores: CandidateScoreSummary[];
   highest_score: number;
+  /** Latest ingestion job audit row (when present). */
+  ingestion_job_status?: string | null;
+  ingestion_attempts?: number | null;
+  ingestion_max_attempts?: number | null;
 };
 
 export type CandidateDetail = CandidateRow & {

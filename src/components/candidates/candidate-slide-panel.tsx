@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowRight, ClipboardList, Loader2, X } from "lucide-react";
+import { ArrowRight, ClipboardList, Loader2, RotateCw, X } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
-import type { CandidateDetail } from "@/types/candidate";
+import type { CandidateDetail, CandidateSignalProfile } from "@/types/candidate";
 import type { RoleBrief } from "@/types/role-brief";
 import type { FitVerdict } from "@/types/score";
 import { computeBriefContentHash } from "@/lib/role-brief/jd-cache";
@@ -31,9 +31,12 @@ import { VerdictBadge } from "./profile-shared";
 import { DimensionDonut } from "@/components/candidates/dimension-donut";
 import { ScoreBreakdownSection } from "@/components/candidates/score-breakdown-section";
 import { SkillsMatchSection } from "@/components/candidates/skills-match-section";
+import { ConfidenceIndicator } from "@/components/candidates/confidence-indicator";
 import { RecommendedActionSection } from "@/components/candidates/recommended-action-section";
 import { WhyThisCandidateSection } from "@/components/candidates/why-this-candidate-section";
 import { InterviewBriefSection } from "@/components/candidates/interview-brief-section";
+import { CandidateResumeSection } from "@/components/candidates/candidate-resume-section";
+import { ParseFailureHelp } from "@/components/candidates/parse-failure-help";
 import type { InterviewBrief } from "@/types/score";
 import { useToast } from "@/components/ui/toast";
 
@@ -47,6 +50,94 @@ function formatDate(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+function resolvePanelProfile(candidate: CandidateDetail): CandidateSignalProfile {
+  const raw = candidate.signal_profile;
+  if (raw && typeof raw === "object") {
+    return {
+      ...raw,
+      display_name: raw.display_name?.trim() || candidate.display_name || "Candidate",
+      skills_verified: raw.skills_verified ?? [],
+      skills_listed_only: raw.skills_listed_only ?? [],
+      experience: raw.experience ?? [],
+      education: raw.education ?? [],
+      positive_signals: raw.positive_signals ?? [],
+      watch_signals: raw.watch_signals ?? [],
+      portfolio_links: raw.portfolio_links ?? [],
+      career_types_sequence: raw.career_types_sequence ?? [],
+      core_strength_breakdown: raw.core_strength_breakdown ?? {},
+    };
+  }
+  return {
+    display_name: candidate.display_name || "Candidate",
+    first_name: "",
+    last_name: "",
+    current_title: candidate.current_title,
+    most_recent_title: candidate.current_title ?? "",
+    current_company: candidate.current_company,
+    location: null,
+    total_years_experience: "",
+    linkedin_url: null,
+    portfolio_links: [],
+    career_pattern: "",
+    career_types_sequence: [],
+    shows_product_progression: false,
+    professional_summary: "",
+    resume_quality: {
+      ownership: {
+        ratio_percent: 0,
+        ownership_examples: [],
+        participation_examples: [],
+        ownership_count: 0,
+        participation_count: 0,
+        neutral_count: 0,
+        total_bullets: 0,
+      },
+      quantification: {
+        ratio_percent: 0,
+        level: "rarely",
+        quantified_examples: [],
+        quantified_count: 0,
+        total_bullets: 0,
+      },
+      keyword_stuffing: {
+        flagged: false,
+        explanation: "",
+        skills_listed: 0,
+        skills_in_work_context: 0,
+        skills_in_work_percent: 0,
+        work_bullet_quantified_percent: 0,
+      },
+    },
+    ownership_ratio_percent: 0,
+    quantification_ratio_percent: 0,
+    quantification_level: "rarely",
+    keyword_stuffing_flagged: false,
+    keyword_stuffing_explanation: "",
+    trajectory_velocity: "normal",
+    positive_signals: [],
+    watch_signals: [],
+    experience: [],
+    experience_fallback_raw: null,
+    education: [],
+    skills_verified: [],
+    skills_listed_only: [],
+    title_band: null,
+    core_strength_primary: null,
+    core_strength_secondary: null,
+    core_strength_breakdown: {},
+  };
+}
+
+function parsingStatusLabel(candidate: CandidateDetail): string | null {
+  const parsing = candidate.parsing_status as string;
+  if (parsing === "failed") return "Parsing failed";
+  if (parsing === "pending" || parsing === "parsing") return "Parsing resume…";
+  if ((candidate.scoring_status as string) === "evaluating") {
+    return "Evaluating…";
+  }
+  return null;
 }
 
 function ScoreHistorySection({
@@ -133,6 +224,7 @@ export function CandidateSlidePanel({
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [moveRoleBusy, setMoveRoleBusy] = useState(false);
   const [reEvaluateBusy, setReEvaluateBusy] = useState(false);
+  const [retryParseBusy, setRetryParseBusy] = useState(false);
   const [noteFilter, setNoteFilter] = useState<"all" | "role">(
     contextJobId ? "role" : "all",
   );
@@ -207,6 +299,14 @@ export function CandidateSlidePanel({
       candidate.role_fit_scores.find((f) => f.id === selectedFitId) ?? null
     );
   }, [candidate, selectedFitId]);
+
+  const panelCandidate = useMemo(() => {
+    if (!candidate) return null;
+    return {
+      ...candidate,
+      signal_profile: resolvePanelProfile(candidate),
+    };
+  }, [candidate]);
 
   const displayResult = selectedFit?.score_snapshot ?? null;
   const hasScore = Boolean(displayResult && selectedFit);
@@ -531,9 +631,28 @@ export function CandidateSlidePanel({
     }
   };
 
+  const handleRetryParse = async () => {
+    if (!candidateId) return;
+    setRetryParseBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/candidates/${candidateId}/reparse`, {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Retry failed");
+      toast("Retrying resume parse…", "info");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Retry failed");
+    } finally {
+      setRetryParseBusy(false);
+    }
+  };
+
   if (!candidateId) return null;
 
-  const profile = candidate?.signal_profile;
+  const profile = panelCandidate?.signal_profile ?? null;
   const verdict =
     selectedFit?.verdict ??
     (displayResult ? scoreToVerdict(displayResult.overall_score) : null);
@@ -543,14 +662,14 @@ export function CandidateSlidePanel({
     displayResult?.confidence_level ?? displayResult?.confidence_label ?? null;
   const askThemQuestions = cannotAssessItems.slice(0, 6);
 
-  const roleFitHistorySection = candidate ? (
+  const roleFitHistorySection = panelCandidate ? (
     <section className={`${karta.card} p-4`}>
       <h3 className={karta.sectionHeading}>Role Fit History</h3>
-      {candidate.role_fit_scores.length === 0 ? (
+      {panelCandidate.role_fit_scores.length === 0 ? (
         <p className="text-sm text-[#64748B]">No scores yet.</p>
       ) : (
         <ul className="mt-2 divide-y divide-[#F1F5F9]">
-          {candidate.role_fit_scores.map((fit) => (
+          {panelCandidate.role_fit_scores.map((fit) => (
             <li
               key={fit.id}
               className="flex items-center justify-between gap-2 py-2.5 text-sm"
@@ -576,15 +695,55 @@ export function CandidateSlidePanel({
   ) : null;
 
   const renderTabContent = () => {
-    if (!candidate || !profile) return null;
+    if (!panelCandidate || !profile) return null;
 
-    if (activeTab === "overview") {
-      if (!hasScore || !displayResult || !displayRoleBrief) {
-        return (
-          <div className={`${karta.card} p-6 text-center`}>
-            <p className="text-sm font-medium text-[#1E293B]">
-              This candidate has not been evaluated yet
-            </p>
+    const statusLabel = parsingStatusLabel(panelCandidate);
+    const parseFailed = panelCandidate.parsing_status === "failed";
+    const parsePending =
+      panelCandidate.parsing_status === "pending" ||
+      (panelCandidate.parsing_status as string) === "parsing";
+
+    const unevaluatedPlaceholder = (tabHint: string) => (
+      <div className="space-y-4">
+        {statusLabel && (
+          <div
+            className={`rounded-lg border px-4 py-3 text-sm ${
+              parseFailed
+                ? "border-red-200 bg-red-50 text-red-800"
+                : "border-amber-200 bg-amber-50 text-amber-900"
+            }`}
+          >
+            <p className="font-medium">{statusLabel}</p>
+            {parseFailed && (
+              <>
+                <ParseFailureHelp className="mt-2" tone="red" />
+                <button
+                  type="button"
+                  disabled={retryParseBusy}
+                  onClick={() => void handleRetryParse()}
+                  className={`mt-3 inline-flex items-center gap-1.5 ${karta.btnOutlineTeal} px-3 py-1.5 text-sm`}
+                >
+                  {retryParseBusy ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RotateCw className="h-3.5 w-3.5" />
+                  )}
+                  {retryParseBusy ? "Retrying…" : "Retry parse"}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+        <div className={`${karta.card} p-6 text-center`}>
+          <p className="text-sm font-medium text-[#1E293B]">
+            {parsePending
+              ? "Resume is still being processed"
+              : parseFailed
+                ? "Resume could not be parsed"
+                : "Not yet evaluated"}
+          </p>
+          <p className="mt-2 text-sm text-[#64748B]">{tabHint}</p>
+          {!parsePending && !parseFailed && (
             <button
               type="button"
               disabled={scoring}
@@ -600,6 +759,30 @@ export function CandidateSlidePanel({
                 "Evaluate Now"
               )}
             </button>
+          )}
+        </div>
+      </div>
+    );
+
+    if (activeTab === "overview") {
+      if (!hasScore || !displayResult || !displayRoleBrief) {
+        return (
+          <div className="space-y-4">
+            {unevaluatedPlaceholder(
+              parsePending
+                ? "Scores and recommendations will appear once parsing completes."
+                : parseFailed
+                  ? "Retry parsing or re-upload the resume from the profile tab."
+                  : "Run an evaluation to see fit scores and recommended actions.",
+            )}
+            <CandidateResumeSection
+              candidateId={panelCandidate.id}
+              resumeText={panelCandidate.resume_text}
+              resumeFilename={panelCandidate.resume_filename}
+              resumeFilePath={panelCandidate.resume_file_path}
+              resumeFileType={panelCandidate.resume_file_type}
+            />
+            {!parseFailed && roleFitHistorySection}
           </div>
         );
       }
@@ -608,6 +791,7 @@ export function CandidateSlidePanel({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
           <div className="min-w-0 space-y-3 lg:w-[60%]">
             <RecommendedActionSection result={displayResult} />
+            <ConfidenceIndicator confidence={displayResult.confidence} />
             {displayResult.deal_breaker_warning && (
               <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                 {displayResult.deal_breaker_warning}
@@ -618,6 +802,13 @@ export function CandidateSlidePanel({
               roleBrief={displayRoleBrief}
               cannotAssessItems={cannotAssessItems}
               variant="overview"
+            />
+            <CandidateResumeSection
+              candidateId={panelCandidate.id}
+              resumeText={panelCandidate.resume_text}
+              resumeFilename={panelCandidate.resume_filename}
+              resumeFilePath={panelCandidate.resume_file_path}
+              resumeFileType={panelCandidate.resume_file_type}
             />
           </div>
           <div className="min-w-0 space-y-4 lg:w-[40%]">
@@ -673,10 +864,8 @@ export function CandidateSlidePanel({
 
     if (activeTab === "analysis") {
       if (!hasScore || !displayResult || !displayRoleBrief) {
-        return (
-          <p className="text-sm text-[#64748B]">
-            Evaluate this candidate to see score analysis.
-          </p>
+        return unevaluatedPlaceholder(
+          "Evaluate this candidate to see dimension scores and skills analysis.",
         );
       }
 
@@ -704,8 +893,8 @@ export function CandidateSlidePanel({
           </div>
           <div className="min-w-0 space-y-4 lg:w-[40%]">
             {roleFitHistorySection}
-            {candidate.role_fit_scores.length > 1 && (
-              <ScoreHistorySection fits={candidate.role_fit_scores} />
+            {panelCandidate.role_fit_scores.length > 1 && (
+              <ScoreHistorySection fits={panelCandidate.role_fit_scores} />
             )}
           </div>
         </div>
@@ -714,10 +903,8 @@ export function CandidateSlidePanel({
 
     if (activeTab === "interview") {
       if (!selectedFit || !hasScore) {
-        return (
-          <p className="text-sm text-[#64748B]">
-            Evaluate this candidate before generating an interview brief.
-          </p>
+        return unevaluatedPlaceholder(
+          "Evaluate this candidate before generating an interview brief.",
         );
       }
 
@@ -726,7 +913,7 @@ export function CandidateSlidePanel({
           key={selectedFit.id}
           candidateId={candidateId!}
           savedScoreId={selectedFit.id}
-          candidateName={candidate.display_name}
+          candidateName={panelCandidate.display_name}
           roleTitle={selectedFit.role_brief_title ?? "Role"}
           storedBrief={selectedFit.interview_brief}
           roleBriefUpdatedAt={
@@ -748,7 +935,7 @@ export function CandidateSlidePanel({
 
     return (
       <CandidatePanelProfileTab
-        candidate={candidate}
+        candidate={panelCandidate}
         noteFilter={noteFilter}
         onNoteFilterChange={setNoteFilter}
         contextJobId={contextJobId ?? null}
@@ -758,13 +945,13 @@ export function CandidateSlidePanel({
         noteBusy={noteBusy}
         onAddNote={() => void addNote()}
         formatDate={formatDate}
-        hasResumeFile={Boolean(candidate.resume_file_path)}
+        hasResumeFile={Boolean(panelCandidate.resume_file_path)}
         cvDownloadBusy={cvDownloadBusy}
         onDownloadCv={() => void handleDownloadOriginalCv()}
         pdfBusy={pdfBusy}
         canDownloadReport={hasScore && Boolean(displayRoleBrief)}
         onDownloadReport={() => void handleDownloadReport()}
-        showActions={candidate.created_by === currentUserId}
+        showActions={panelCandidate.created_by === currentUserId}
         deleteConfirm={deleteConfirm}
         deleteBusy={deleteBusy}
         onDeleteConfirm={() => void handleDeleteCandidate()}
@@ -807,11 +994,11 @@ export function CandidateSlidePanel({
           </div>
         ) : error && !candidate ? (
           <p className="p-6 text-sm text-red-600">{error}</p>
-        ) : candidate && profile ? (
+        ) : panelCandidate ? (
           <>
             <div className="sticky-header shrink-0">
               <CandidatePanelHeader
-                candidate={candidate}
+                candidate={panelCandidate}
                 roleBriefTitle={jobTitleLabel ?? displayRoleBrief?.title ?? null}
                 verdict={verdict}
                 score={displayResult?.overall_score ?? null}
@@ -853,15 +1040,15 @@ export function CandidateSlidePanel({
                 </p>
               )}
 
-              {candidate.manual_rejection_reason && (
+              {panelCandidate.manual_rejection_reason && (
                 <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-red-600">
                     Not a Fit
                   </p>
                   <p className="mt-0.5 text-sm text-red-700">
-                    {candidate.manual_rejection_reason}
-                    {candidate.manual_rejection_detail
-                      ? ` — ${candidate.manual_rejection_detail}`
+                    {panelCandidate.manual_rejection_reason}
+                    {panelCandidate.manual_rejection_detail
+                      ? ` — ${panelCandidate.manual_rejection_detail}`
                       : ""}
                   </p>
                 </div>
@@ -872,16 +1059,12 @@ export function CandidateSlidePanel({
               </div>
             </div>
           </>
-        ) : candidate ? (
-          <p className="p-6 text-sm text-[#64748B]">
-            Profile data is still loading or unavailable for this candidate.
-          </p>
         ) : null}
       </aside>
 
-      {passModalOpen && candidate && (
+      {passModalOpen && panelCandidate && (
         <NotAFitModal
-          candidateName={candidate.display_name}
+          candidateName={panelCandidate.display_name}
           onClose={() => setPassModalOpen(false)}
           onConfirm={(reason, detail) => void handlePassConfirm(reason, detail)}
         />

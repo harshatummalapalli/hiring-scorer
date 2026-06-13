@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { NextResponse } from "next/server";
 import { triggerAutoEvaluation } from "@/lib/scoring/evaluation-queue";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
@@ -53,11 +54,22 @@ export async function POST(request: Request, { params }: Params) {
       );
     }
 
-    for (const row of rows ?? []) {
-      const candidateId = row.id != null ? String(row.id) : "";
-      if (!candidateId) continue;
-      void triggerAutoEvaluation(candidateId, jobId);
-    }
+    const candidateIds = (rows ?? [])
+      .map((row) => (row.id != null ? String(row.id) : ""))
+      .filter(Boolean);
+
+    after(async () => {
+      for (const candidateId of candidateIds) {
+        try {
+          await triggerAutoEvaluation(candidateId, jobId);
+        } catch (err) {
+          console.error(
+            `[mark-stale] triggerAutoEvaluation failed for ${candidateId}:`,
+            err,
+          );
+        }
+      }
+    });
 
     return NextResponse.json({
       ok: true,

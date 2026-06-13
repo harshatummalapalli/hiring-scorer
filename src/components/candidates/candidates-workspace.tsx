@@ -17,7 +17,10 @@ import {
   isScoredForRole,
 } from "@/lib/candidates/active-role-score";
 import { getErrorMessage } from "@/lib/errors";
+import { ResumeDropZone } from "@/components/candidates/resume-drop-zone";
+import { ResumeUploadFileHint } from "@/components/candidates/resume-upload-file-hint";
 import { submitCandidateWithResume } from "@/lib/candidates/submit-candidate-upload";
+import { filesToFileList, validateResumeUpload } from "@/lib/resume/accepted-resume-files";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import type {
@@ -252,6 +255,11 @@ export function CandidatesWorkspace() {
     setError(null);
     try {
       for (const file of Array.from(files)) {
+        const validationError = validateResumeUpload(file);
+        if (validationError) {
+          setError(validationError);
+          return;
+        }
         const resumeText = await parseResumeFile(file);
         const res = await submitCandidateWithResume({
           resumeText,
@@ -323,31 +331,34 @@ export function CandidatesWorkspace() {
             Upload resumes and match them against your active job role.
           </p>
         </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setShowUpload((s) => !s)}
-            className={`inline-flex items-center gap-1.5 ${karta.btnPrimary}`}
-          >
-            <Upload className="h-4 w-4" />
-            Upload Resumes
-          </button>
-          <button
-            type="button"
-            disabled={busy || unscoredCount === 0 || !roleId}
-            onClick={() => void handleScoreAll()}
-            className={`inline-flex items-center gap-1.5 ${karta.btnOutlineTeal}`}
-          >
-            {scoringAll ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="h-4 w-4" />
-            )}
-            Match All
-            {unscoredCount > 0 && (
-              <span className="text-slate-300">({unscoredCount})</span>
-            )}
-          </button>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setShowUpload((s) => !s)}
+              className={`inline-flex items-center gap-1.5 ${karta.btnPrimary}`}
+            >
+              <Upload className="h-4 w-4" />
+              Upload Resumes
+            </button>
+            <button
+              type="button"
+              disabled={busy || unscoredCount === 0 || !roleId}
+              onClick={() => void handleScoreAll()}
+              className={`inline-flex items-center gap-1.5 ${karta.btnOutlineTeal}`}
+            >
+              {scoringAll ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              Match All
+              {unscoredCount > 0 && (
+                <span className="text-slate-300">({unscoredCount})</span>
+              )}
+            </button>
+          </div>
+          <ResumeUploadFileHint />
         </div>
       </div>
 
@@ -416,19 +427,12 @@ export function CandidatesWorkspace() {
               <X className="h-4 w-4" />
             </button>
           </div>
-          <label
-            className={`flex cursor-pointer flex-col items-center rounded border-2 border-dashed border-slate-300 py-6 text-sm text-slate-600 hover:border-slate-400 ${uploading ? "pointer-events-none opacity-60" : ""}`}
-          >
-            <input
-              type="file"
-              accept=".pdf,.doc,.docx,.txt"
-              multiple
-              className="sr-only"
-              disabled={uploading}
-              onChange={(e) => void handleFiles(e.target.files)}
-            />
-            Drop PDF, Word, or text files — or click to browse
-          </label>
+          <ResumeDropZone
+            uploading={uploading}
+            onFilesSelected={(files) => {
+              void handleFiles(filesToFileList(files));
+            }}
+          />
         </div>
       )}
 

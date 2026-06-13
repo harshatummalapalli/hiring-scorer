@@ -1,15 +1,31 @@
 import { NextResponse } from "next/server";
 import { reparseCandidateRecord } from "@/lib/candidates/reparse-candidate-record";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
+import { hasUnlimitedWorkspaceEmail } from "@/lib/workspace/limits";
 import type { CandidateRow } from "@/types/candidate";
 
 export const maxDuration = 60;
 
 export async function POST() {
-  try {
-    const supabase = createSupabaseAdminClient();
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!hasUnlimitedWorkspaceEmail(user.email)) {
+    return NextResponse.json(
+      { error: "Forbidden — admin only" },
+      { status: 403 },
+    );
+  }
 
-    const { data, error } = await supabase
+  try {
+    const adminSupabase = createSupabaseAdminClient();
+
+    const { data, error } = await adminSupabase
       .from("candidates")
       .select("*")
       .order("updated_at", { ascending: false });
@@ -29,7 +45,7 @@ export async function POST() {
         "source:",
         update.ingestion_errors?.length ? "fallback" : "parser",
       );
-      const { error: updateError } = await supabase
+      const { error: updateError } = await adminSupabase
         .from("candidates")
         .update({
           display_name: update.display_name,

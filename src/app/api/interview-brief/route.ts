@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getApiKey } from "@/lib/ai/api-keys";
+import { CLAUDE_MODEL } from "@/lib/ai/model-constants";
 import { trackEvent } from "@/lib/analytics/track";
 import { sanitizeAiErrorMessage } from "@/lib/errors/sanitize-ai-error-message";
 import { parseJsonFromModel } from "@/lib/ai/parse-json";
@@ -177,7 +178,7 @@ export async function POST(request: Request) {
     });
 
     const message = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: CLAUDE_MODEL,
       max_tokens: 3000,
       temperature: 0,
       system: INTERVIEW_BRIEF_SYSTEM,

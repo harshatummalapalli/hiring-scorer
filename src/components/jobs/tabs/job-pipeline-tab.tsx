@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from "react";
 import {
@@ -42,6 +43,14 @@ import { CopyButton } from "@/components/ui/copy-button";
 import { EvaluatingDots } from "@/components/ui/evaluating-dots";
 import { useToast } from "@/components/ui/toast";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { ResumeDropZone } from "@/components/candidates/resume-drop-zone";
+import { ResumeUploadFileHint } from "@/components/candidates/resume-upload-file-hint";
+import { ParseFailureHelp } from "@/components/candidates/parse-failure-help";
+import {
+  filterResumeFiles,
+  filesToFileList,
+  validateResumeUpload,
+} from "@/lib/resume/accepted-resume-files";
 import { parseResumeFile } from "@/lib/resume/parse-resume";
 import { karta } from "@/lib/brand/karta";
 import {
@@ -98,6 +107,58 @@ type SectionKey =
   | "pending"
   | "weak"
   | "notAMatch";
+
+function viewToggleButtonStyle(active: boolean): CSSProperties {
+  return active
+    ? {
+        background: "var(--color-text-primary)",
+        color: "var(--color-background-primary)",
+      }
+    : {
+        background: "transparent",
+        color: "var(--color-text-secondary)",
+        border: "0.5px solid var(--color-border-secondary)",
+      };
+}
+
+function PipelineLoadingSkeleton() {
+  return (
+    <div className="space-y-3">
+      {[1, 2, 3].map((i) => (
+        <div
+          key={i}
+          style={{
+            height: "88px",
+            background: "var(--color-background-primary)",
+            borderRadius: "var(--border-radius-md)",
+          }}
+          className="flex flex-col justify-center gap-2 border border-slate-200/60 px-4"
+        >
+          <div className="h-4 w-32 rounded skeleton-shimmer" />
+          <div className="h-3 w-48 rounded skeleton-shimmer" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GroupedViewEmptyState() {
+  return (
+    <div
+      style={{
+        textAlign: "center",
+        padding: "40px 20px",
+        color: "var(--color-text-secondary)",
+        fontSize: "13px",
+      }}
+    >
+      <p style={{ marginBottom: "8px" }}>
+        Grouped view organises candidates by verdict.
+      </p>
+      <p>Scores will appear here once candidates finish evaluating.</p>
+    </div>
+  );
+}
 
 const SECTION_META: Record<
   SectionKey,
@@ -263,6 +324,7 @@ export function JobPipelineTab({
   const [isDragging, setIsDragging] = useState(false);
   const [showShortcutHint, setShowShortcutHint] = useState(true);
   const autoRetriedRef = useRef(new Set<string>());
+  const [retryingIds, setRetryingIds] = useState<Set<string>>(() => new Set());
   const { toast } = useToast();
 
   const { openPanel, refreshPanel, candidateId: openPanelId, closePanel } =
@@ -820,6 +882,15 @@ export function JobPipelineTab({
     if (!files?.length) return;
     const fileList = Array.from(files);
     setError(null);
+
+    for (const file of fileList) {
+      const validationError = validateResumeUpload(file);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+    }
+
     const initial: ResumeUploadFileItem[] = fileList.map((f) => ({
       name: f.name,
       status: "pending",
@@ -933,12 +1004,9 @@ export function JobPipelineTab({
   }, [groups.notAMatch]);
 
   const handleDroppedFiles = (files: File[]) => {
-    if (files.length === 0) return;
-    const dt = new DataTransfer();
-    for (const file of files) {
-      dt.items.add(file);
-    }
-    void uploadFiles(dt.files);
+    const accepted = filterResumeFiles(files);
+    if (accepted.length === 0) return;
+    void uploadFiles(filesToFileList(accepted));
   };
 
   const focusedCandidate = useMemo(
@@ -993,6 +1061,7 @@ export function JobPipelineTab({
   useKeyboardShortcuts(shortcutHandlers, flatList.length > 0);
 
   const retryCandidate = async (candidateId: string) => {
+    setRetryingIds((prev) => new Set(prev).add(candidateId));
     setError(null);
     try {
       const res = await fetch(`/api/candidates/${candidateId}/reparse`, {
@@ -1005,10 +1074,28 @@ export function JobPipelineTab({
       await load({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Retry failed");
+    } finally {
+      window.setTimeout(() => {
+        setRetryingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(candidateId);
+          return next;
+        });
+      }, 5000);
     }
   };
 
-  const renderStuckRow = (c: CandidateListItem) => (
+  const renderStuckRow = (c: CandidateListItem) => {
+    const parsePending =
+      c.parsing_status === "pending" ||
+      (c.parsing_status as string) === "parsing";
+    const stuckMessage = parsePending
+      ? "Parse timed out"
+      : (c.scoring_status as string) === "evaluating"
+        ? "Evaluation took longer than expected"
+        : "Processing took longer than expected";
+
+    return (
     <div
       key={c.id}
       className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4"
@@ -1017,19 +1104,19 @@ export function JobPipelineTab({
         <p className="text-sm font-medium text-[#1E293B]">
           {c.display_name?.trim() || c.resume_filename || "Candidate"}
         </p>
-        <p className="text-xs text-amber-600">
-          Processing took longer than expected
-        </p>
+        <p className="text-xs text-amber-600">{stuckMessage}</p>
       </div>
       <button
         type="button"
+        disabled={retryingIds.has(c.id)}
         onClick={() => void retryCandidate(c.id)}
-        className="shrink-0 text-sm font-medium text-[#0D9488] hover:text-[#0B8276]"
+        className="shrink-0 text-sm font-medium text-[#0D9488] hover:text-[#0B8276] disabled:opacity-50"
       >
-        Retry
+        {retryingIds.has(c.id) ? "Retrying…" : "Retry"}
       </button>
     </div>
-  );
+    );
+  };
 
   const renderParsingRow = (c: CandidateListItem) => {
     if (isStuck(c)) return renderStuckRow(c);
@@ -1050,10 +1137,26 @@ export function JobPipelineTab({
     );
   };
 
-  const renderFailedRow = (c: CandidateListItem) => (
+  const renderFailedRow = (c: CandidateListItem) => {
+    const isRetrying = retryingIds.has(c.id);
+    return (
     <div
       key={c.id}
-      className="flex flex-wrap items-center gap-3 border-b border-[#F1F5F9] border-l-4 border-l-red-300 px-4 py-3 last:border-0"
+      role="button"
+      tabIndex={0}
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest("button")) return;
+        setFocusedCandidateId(c.id);
+        openPanel(c.id, panelOptions);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          setFocusedCandidateId(c.id);
+          openPanel(c.id, panelOptions);
+        }
+      }}
+      className="flex cursor-pointer flex-wrap items-center gap-3 border-b border-[#F1F5F9] border-l-4 border-l-red-300 px-4 py-3 last:border-0 hover:bg-red-50/40"
     >
       <AlertCircle className="h-4 w-4 shrink-0 text-red-500" aria-hidden />
       <div className="min-w-0 flex-1">
@@ -1061,17 +1164,23 @@ export function JobPipelineTab({
           {c.resume_filename ?? candidateDisplayName(c)}
         </p>
         <p className="text-xs text-red-500">Resume parsing failed</p>
+        <ParseFailureHelp className="mt-1" />
       </div>
       <button
         type="button"
-        onClick={() => void retryCandidate(c.id)}
-        className={`${karta.btnOutlineTeal} inline-flex items-center gap-1.5 px-3 py-1.5 text-sm`}
+        disabled={isRetrying}
+        onClick={(e) => {
+          e.stopPropagation();
+          void retryCandidate(c.id);
+        }}
+        className={`${karta.btnOutlineTeal} inline-flex items-center gap-1.5 px-3 py-1.5 text-sm disabled:opacity-50`}
       >
-        <RotateCw className="h-3.5 w-3.5" />
-        Retry
+        <RotateCw className={`h-3.5 w-3.5 ${isRetrying ? "animate-spin" : ""}`} />
+        {isRetrying ? "Retrying…" : "Retry"}
       </button>
     </div>
-  );
+    );
+  };
 
   const renderEvaluatedRow = (
     c: CandidateListItem,
@@ -1079,7 +1188,12 @@ export function JobPipelineTab({
     showRejectionReason = false,
   ) => {
     if (isStuck(c)) return renderStuckRow(c);
-    if (c.parsing_status === "pending") return renderParsingRow(c);
+    if (
+      c.parsing_status === "pending" ||
+      (c.parsing_status as string) === "parsing"
+    ) {
+      return renderParsingRow(c);
+    }
     if (c.parsing_status === "failed") return renderFailedRow(c);
 
     const { gptScore, displayScore, verdict, isPreliminary } =
@@ -1201,7 +1315,12 @@ export function JobPipelineTab({
 
   const renderPendingRow = (c: CandidateListItem) => {
     if (isStuck(c)) return renderStuckRow(c);
-    if (c.parsing_status === "pending") return renderParsingRow(c);
+    if (
+      c.parsing_status === "pending" ||
+      (c.parsing_status as string) === "parsing"
+    ) {
+      return renderParsingRow(c);
+    }
     if (c.parsing_status === "failed") return renderFailedRow(c);
 
     const { displayScore, verdict, isPreliminary } = pipelineDisplayScore(
@@ -1312,7 +1431,12 @@ export function JobPipelineTab({
 
   const renderFlatRow = (c: CandidateListItem) => {
     if (isStuck(c)) return renderStuckRow(c);
-    if (c.parsing_status === "pending") return renderParsingRow(c);
+    if (
+      c.parsing_status === "pending" ||
+      (c.parsing_status as string) === "parsing"
+    ) {
+      return renderParsingRow(c);
+    }
     if (c.parsing_status === "failed") return renderFailedRow(c);
     const isPending = isPipelinePendingEvaluation(c, jobId);
     if (isPending) return renderPendingRow(c);
@@ -1369,11 +1493,7 @@ export function JobPipelineTab({
   };
 
   if (loading) {
-    return (
-      <div className="flex justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-      </div>
-    );
+    return <PipelineLoadingSkeleton />;
   }
 
   return (
@@ -1440,16 +1560,13 @@ export function JobPipelineTab({
         </div>
       )}
       <div className="flex flex-wrap items-center justify-end gap-3">
-        <div className="flex items-center rounded-lg border border-slate-200 p-0.5">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setGroupedView(false)}
             title="Flat list — ranked by score"
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              !groupedView
-                ? "bg-[#1E293B] text-white"
-                : "text-slate-500 hover:text-slate-700"
-            }`}
+            style={viewToggleButtonStyle(!groupedView)}
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
           >
             <LayoutList className="h-4 w-4" />
             Ranked
@@ -1458,40 +1575,46 @@ export function JobPipelineTab({
             type="button"
             onClick={() => setGroupedView(true)}
             title="Grouped by verdict band"
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              groupedView
-                ? "bg-[#1E293B] text-white"
-                : "text-slate-500 hover:text-slate-700"
-            }`}
+            style={viewToggleButtonStyle(groupedView)}
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
           >
             <Layers className="h-4 w-4" />
             Grouped
           </button>
         </div>
-        <label
-          className={`inline-flex cursor-pointer items-center gap-2 ${karta.btnPrimary} ${
-            uploading ? "pointer-events-none opacity-70" : ""
-          }`}
-        >
-          {uploading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Upload className="h-4 w-4" />
-          )}
-          Add Applicants
-          <input
-            type="file"
-            accept=".pdf,.doc,.docx,.txt"
-            multiple
-            className="sr-only"
-            disabled={uploading}
-            onChange={(e) => {
-              void uploadFiles(e.target.files);
-              e.target.value = "";
-            }}
-          />
-        </label>
+        <div className="flex flex-col items-end gap-1">
+          <label
+            className={`inline-flex cursor-pointer items-center gap-2 ${karta.btnPrimary} ${
+              uploading ? "pointer-events-none opacity-70" : ""
+            }`}
+          >
+            {uploading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="h-4 w-4" />
+            )}
+            Add Applicants
+            <input
+              type="file"
+              accept=".pdf,.doc,.docx,.txt"
+              multiple
+              className="sr-only"
+              disabled={uploading}
+              onChange={(e) => {
+                void uploadFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <ResumeUploadFileHint />
+        </div>
       </div>
+
+      {error && uploadUi.phase === "idle" && (
+        <p className="text-sm text-red-600" role="alert">
+          {error}
+        </p>
+      )}
 
       {uploadUi.phase !== "idle" && (
         <ResumeUploadProgress
@@ -1562,30 +1685,21 @@ export function JobPipelineTab({
             Upload resumes to start evaluating, or share your apply email with
             candidates.
           </p>
-          <div className="flex gap-3">
-            <label
-              className={`inline-flex cursor-pointer items-center gap-2 ${karta.btnPrimary}`}
-            >
-              <Upload className="h-4 w-4" />
-              Upload resumes
-              <input
-                type="file"
-                accept=".pdf,.doc,.docx,.txt"
-                multiple
-                className="sr-only"
-                onChange={(e) => {
-                  void uploadFiles(e.target.files);
-                  e.target.value = "";
-                }}
-              />
-            </label>
+          <div className="w-full max-w-lg space-y-4">
+            <ResumeDropZone
+              uploading={uploading}
+              onFilesSelected={handleDroppedFiles}
+            />
+            <ResumeUploadFileHint className="text-center" />
             {(roleBrief.inbound_email ?? roleBrief.apply_link) && (
-              <CopyButton
-                text={roleBrief.inbound_email ?? roleBrief.apply_link ?? ""}
-                label="Copy apply email"
-                toastMessage="Apply email copied to clipboard"
-                className={`${karta.btnSecondary} !text-slate-700`}
-              />
+              <div className="flex justify-center">
+                <CopyButton
+                  text={roleBrief.inbound_email ?? roleBrief.apply_link ?? ""}
+                  label="Copy apply email"
+                  toastMessage="Apply email copied to clipboard"
+                  className={`${karta.btnSecondary} !text-slate-700`}
+                />
+              </div>
             )}
           </div>
         </div>
@@ -1600,15 +1714,7 @@ export function JobPipelineTab({
           onDrop={(e) => {
             e.preventDefault();
             setIsDragging(false);
-            const files = Array.from(e.dataTransfer.files).filter(
-              (f) =>
-                f.type === "application/pdf" ||
-                f.name.endsWith(".pdf") ||
-                f.name.endsWith(".docx"),
-            );
-            if (files.length > 0) {
-              handleDroppedFiles(files);
-            }
+            handleDroppedFiles(filterResumeFiles(e.dataTransfer.files));
           }}
         >
           {isDragging && (
@@ -1617,12 +1723,15 @@ export function JobPipelineTab({
                 <p className="text-lg font-semibold text-teal-700">
                   Drop resumes here
                 </p>
-                <p className="mt-1 text-sm text-teal-600">PDF or DOCX files</p>
+                <p className="mt-1 text-sm text-teal-600">
+                  PDF, Word, or text files
+                </p>
               </div>
             </div>
           )}
           {groupedView ? (
         <div className="space-y-4">
+          {totalScored === 0 && <GroupedViewEmptyState />}
           {renderSection("exceptional", groups.exceptionalMatch, (c) =>
             renderEvaluatedRow(c, true),
           )}

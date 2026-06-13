@@ -2,10 +2,11 @@ import { extractResumeTextFromBytes } from "@/lib/resume/parse-resume";
 import { normalizeResumeText } from "@/lib/resume/normalize-resume-text";
 import { parseResumeWithGemini } from "@/lib/ai/gemini-resume-parser";
 import type { GeminiParsedResume } from "@/lib/ai/gemini-resume-parser";
-import {
-  isGoogleApiKeyAuthError,
-  isVertexCredentialsConfigured,
-} from "@/lib/ai/api-keys";
+import { isGoogleApiKeyAuthError } from "@/lib/ai/api-keys";
+import { isGeminiParsingConfigured } from "@/lib/gemini-client";
+import { computeResumeContentHash } from "@/lib/candidates/resume-content-hash";
+import { getParseCache, setParseCache } from "@/lib/ingestion/parse-cache";
+import { PARSE_VERSIONS } from "@/lib/ingestion/parse-versions";
 import { buildSignalProfile } from "@/lib/candidates/build-signal-profile";
 import type { CandidateSignalProfile } from "@/types/candidate";
 import type { StructuredResume } from "@/types/structured-resume";
@@ -29,6 +30,7 @@ export type IngestResumeResult = {
   parseResult: null;
   ingestionSource: IngestionSource;
   parseWarning?: string | null;
+  parseCacheHit?: boolean;
 };
 
 export async function ingestResumeFromText(
@@ -44,8 +46,29 @@ export async function ingestResumeFromText(
   }
 
   const strippedResumeText = stripPiiLocally(resumeText);
+  const contentHash = computeResumeContentHash(resumeText);
+  const cacheKey = {
+    contentHash,
+    parserVersion: PARSE_VERSIONS.PARSER,
+    promptVersion: PARSE_VERSIONS.PROMPT,
+    schemaVersion: PARSE_VERSIONS.SCHEMA,
+  };
 
-  if (isVertexCredentialsConfigured()) {
+  if (isGeminiParsingConfigured()) {
+    const cachedProfile = await getParseCache(cacheKey);
+    if (cachedProfile) {
+      return {
+        resumeText,
+        strippedResumeText,
+        signalProfile: cachedProfile,
+        geminiRecord: null,
+        structuredResume: null,
+        parseResult: null,
+        ingestionSource: "gemini_parser",
+        parseCacheHit: true,
+      };
+    }
+
     try {
       const geminiRecord = await parseResumeWithGemini(resumeText);
       const signalProfile = geminiRecordToSignalProfile(
@@ -53,6 +76,8 @@ export async function ingestResumeFromText(
         filename,
         resumeText,
       );
+
+      void setParseCache(cacheKey, signalProfile);
 
       return {
         resumeText,
@@ -62,6 +87,7 @@ export async function ingestResumeFromText(
         structuredResume: null,
         parseResult: null,
         ingestionSource: "gemini_parser",
+        parseCacheHit: false,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -74,20 +100,20 @@ export async function ingestResumeFromText(
         strippedResumeText,
         filename,
         isGoogleApiKeyAuthError(message)
-          ? "AI resume parser unavailable (check GOOGLE_VERTEX_CREDENTIALS). Parsed with built-in extractor."
+          ? "AI resume parser unavailable (check Gemini credentials). Parsed with built-in extractor."
           : "AI resume parser unavailable. Parsed with built-in extractor.",
       );
     }
   }
 
   console.warn(
-    `[ingest-resume] GOOGLE_VERTEX_CREDENTIALS not configured; using legacy parser for ${filename}`,
+    `[ingest-resume] Gemini parse lane not configured; using legacy parser for ${filename}`,
   );
   return ingestWithLegacyParser(
     resumeText,
     strippedResumeText,
     filename,
-    "Set GOOGLE_VERTEX_CREDENTIALS for richer resume parsing. Using built-in extractor.",
+    "Set GOOGLE_VERTEX_CREDENTIALS (Vertex) or GEMINI_API_KEY with USE_GEMINI_STUDIO=true for richer resume parsing. Using built-in extractor.",
   );
 }
 

@@ -128,6 +128,17 @@ export type {
   SkillMatchType,
 } from "@/lib/intelligence/semantic-matcher";
 
+export type ConfidenceLevel = "high" | "medium" | "low";
+
+export interface ConfidenceResult {
+  level: ConfidenceLevel;
+  score: number;
+  factors: {
+    positive: string[];
+    limiting: string[];
+  };
+}
+
 export type CandidateScoreResult = {
   overall_score: number;
   profile_classification?: {
@@ -159,6 +170,8 @@ export type CandidateScoreResult = {
   recruiter_card: RecruiterCard;
   resume_quality_signals: ResumeQualitySignals | null;
   skills_intelligence: SkillsIntelligence | null;
+  /** Evidence-based recruiter trust signal (derived from profile + snapshot). */
+  confidence?: ConfidenceResult | null;
 };
 
 export type SavedScore = {
