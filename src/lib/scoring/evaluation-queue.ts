@@ -38,12 +38,29 @@ export async function triggerAutoEvaluation(
 
     if (ownerUserId) {
       const supabase = createSupabaseAdminClient();
-      await runCronAutoEvaluation(
-        supabase,
-        candidateId,
-        roleBriefId,
-        ownerUserId,
-      );
+      try {
+        await runCronAutoEvaluation(
+          supabase,
+          candidateId,
+          roleBriefId,
+          ownerUserId,
+        );
+        console.log(
+          "[trigger-scoring] CRON STARTED",
+          JSON.stringify({
+            candidateId,
+          }),
+        );
+      } catch (err) {
+        console.error(
+          "[trigger-scoring] CRON FAILED",
+          JSON.stringify({
+            candidateId,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+        throw err;
+      }
       return;
     }
 
@@ -61,5 +78,6 @@ export async function triggerAutoEvaluation(
         statusErr instanceof Error ? statusErr.message : statusErr,
       );
     }
+    throw err;
   }
 }

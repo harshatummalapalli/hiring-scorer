@@ -64,6 +64,25 @@ export async function executeCandidateScore(
   roleBriefId: string,
   options?: { recordDecision?: boolean },
 ): Promise<ExecuteCandidateScoreResult> {
+  try {
+    return await executeCandidateScoreInner(candidateId, roleBriefId, options);
+  } catch (err) {
+    console.error(
+      "[score-failed]",
+      JSON.stringify({
+        candidateId,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+    throw err;
+  }
+}
+
+async function executeCandidateScoreInner(
+  candidateId: string,
+  roleBriefId: string,
+  options?: { recordDecision?: boolean },
+): Promise<ExecuteCandidateScoreResult> {
   const recordDecision = options?.recordDecision !== false;
 
   const candidate = await getCandidateById(candidateId);
@@ -136,6 +155,17 @@ export async function executeCandidateScore(
         from_cache: true,
       });
 
+      const scoringStatus = scoringStatusFromOverall(recomputed);
+      console.log(
+        "[score-complete]",
+        JSON.stringify({
+          candidateId,
+          verdict: recomputedVerdict,
+          overallScore: recomputed,
+          scoringStatus,
+        }),
+      );
+
       return {
         result: cachedResult,
         savedScoreId: String(cacheRow.id),
@@ -204,6 +234,17 @@ export async function executeCandidateScore(
     score: result.overall_score,
     verdict,
   });
+
+  const scoringStatus = scoringStatusFromOverall(result.overall_score);
+  console.log(
+    "[score-complete]",
+    JSON.stringify({
+      candidateId,
+      verdict,
+      overallScore: result.overall_score,
+      scoringStatus,
+    }),
+  );
 
   return { result, savedScoreId, fromCache: false, verdict };
 }

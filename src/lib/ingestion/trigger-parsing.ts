@@ -186,16 +186,23 @@ export async function triggerParsing(
           return;
         }
 
-        void triggerAutoEvaluation(
-          candidateId,
-          jobId,
-          ownerUserId,
-        ).catch((err) => {
-          console.error(
-            `[trigger-parsing] Auto-evaluation failed for ${candidateId}:`,
-            err,
+        try {
+          await triggerAutoEvaluation(candidateId, jobId, ownerUserId);
+          console.log(
+            "[trigger-scoring] STARTED",
+            JSON.stringify({
+              candidateId,
+            }),
           );
-        });
+        } catch (err) {
+          console.error(
+            "[trigger-scoring] FAILED",
+            JSON.stringify({
+              candidateId,
+              error: err instanceof Error ? err.message : String(err),
+            }),
+          );
+        }
       }
     }
 

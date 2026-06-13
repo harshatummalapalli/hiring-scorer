@@ -6,7 +6,7 @@ import { createActivity, prependActivity } from "@/lib/candidates/activity";
 import { normalizeSignalProfile } from "@/lib/candidates/build-signal-profile";
 import { buildSavedScoreInsertPayload } from "@/lib/saved-scores/build-save-payload";
 import { scoringStatusFromOverall } from "@/lib/jobs/scoring-status";
-import { filenameToDisplayName } from "@/lib/scoring/recruiter-card";
+import { filenameToDisplayName, scoreToVerdict } from "@/lib/scoring/recruiter-card";
 import { stripPII } from "@/lib/resume/strip-pii";
 import { withCreatedBy } from "@/lib/supabase/created-by";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -49,6 +49,31 @@ async function insertSavedScoreAdmin(
 
 /** Score a candidate for a job using the service-role client (cron / inbound email). */
 export async function runCronAutoEvaluation(
+  supabase: SupabaseClient,
+  candidateId: string,
+  roleBriefId: string,
+  ownerUserId: string,
+): Promise<void> {
+  try {
+    await runCronAutoEvaluationInner(
+      supabase,
+      candidateId,
+      roleBriefId,
+      ownerUserId,
+    );
+  } catch (err) {
+    console.error(
+      "[score-failed]",
+      JSON.stringify({
+        candidateId,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+    throw err;
+  }
+}
+
+async function runCronAutoEvaluationInner(
   supabase: SupabaseClient,
   candidateId: string,
   roleBriefId: string,
@@ -136,4 +161,16 @@ export async function runCronAutoEvaluation(
     .eq("id", candidateId);
 
   if (updateError) throw new Error(updateError.message);
+
+  const verdict = scoreToVerdict(result.overall_score);
+  const scoringStatus = scoringStatusFromOverall(result.overall_score);
+  console.log(
+    "[score-complete]",
+    JSON.stringify({
+      candidateId,
+      verdict,
+      overallScore: result.overall_score,
+      scoringStatus,
+    }),
+  );
 }
