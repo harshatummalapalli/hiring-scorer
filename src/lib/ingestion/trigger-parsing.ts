@@ -21,6 +21,12 @@ import {
   markIngestionJobFailed,
   markIngestionJobProcessing,
 } from "@/lib/ingestion/ingestion-jobs";
+import {
+  logParseSuccess,
+  PARSE_MODEL,
+  geminiParseLane,
+} from "@/lib/observability/log-event";
+import { resolveObservabilityIds } from "@/lib/observability/resolve-context";
 import { parseRoleBriefRow } from "@/types/role-brief";
 
 const PARSE_TIMEOUT_MS = 30_000;
@@ -105,6 +111,25 @@ export async function triggerParsing(
           `prompt=${PARSE_VERSIONS.PROMPT} schema=${PARSE_VERSIONS.SCHEMA}`,
       );
     }
+
+    void (async () => {
+      const recruiterId = ownerUserId;
+      const obs = recruiterId
+        ? await resolveObservabilityIds(recruiterId)
+        : {};
+      logParseSuccess({
+        candidateId,
+        jobId: jobId ?? undefined,
+        durationMs: ingested.parseUsage?.durationMs ?? 0,
+        model: PARSE_MODEL,
+        lane: geminiParseLane(),
+        cacheHit: ingested.parseCacheHit === true,
+        inputTokens: ingested.parseUsage?.inputTokens,
+        outputTokens: ingested.parseUsage?.outputTokens,
+        workspaceId: obs.workspaceId,
+        recruiterId: obs.recruiterId,
+      });
+    })();
 
     const signal_profile = ingested.signalProfile;
     const display_name = resolveCandidateDisplayName(

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { logWorkspaceActivityIfAuthed } from "@/lib/activity/log";
+import { logClaudeCall } from "@/lib/observability/log-event";
+import { resolveObservabilityIds } from "@/lib/observability/resolve-context";
 import { resolveJobDescriptionAnalysis } from "@/lib/role-brief/resolve-jd-analysis";
 import { sanitizeAiErrorMessage } from "@/lib/errors/sanitize-ai-error-message";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
@@ -66,12 +68,32 @@ export async function POST(request: Request) {
       existingBrief = parseRoleBriefRow(data as Record<string, unknown>);
     }
 
+    const obsIds = await resolveObservabilityIds(user.id);
+
     const result = await resolveJobDescriptionAnalysis({
       jobDescription: body.jobDescription,
       existingBrief,
       sessionCache: body.sessionCache ?? null,
       recruiterContext: body.recruiterContext ?? null,
+      observability: {
+        jobId: body.roleBriefId,
+        workspaceId: obsIds.workspaceId,
+        recruiterId: obsIds.recruiterId,
+      },
     });
+
+    if (result.fromCache) {
+      logClaudeCall({
+        eventType: "jd_analysis",
+        jobId: body.roleBriefId,
+        durationMs: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheHit: true,
+        workspaceId: obsIds.workspaceId,
+        recruiterId: obsIds.recruiterId,
+      });
+    }
 
     // Enrich must-haves and core signals with tech-graph equivalents.
     const enrichedCoreSignals =

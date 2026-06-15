@@ -3,6 +3,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getApiKey } from "@/lib/ai/api-keys";
 import { CLAUDE_MODEL } from "@/lib/ai/model-constants";
 import { trackEvent } from "@/lib/analytics/track";
+import { logClaudeCall } from "@/lib/observability/log-event";
+import { resolveObservabilityIds } from "@/lib/observability/resolve-context";
 import { sanitizeAiErrorMessage } from "@/lib/errors/sanitize-ai-error-message";
 import { parseJsonFromModel } from "@/lib/ai/parse-json";
 import { scoreToVerdict } from "@/lib/scoring/recruiter-card";
@@ -177,6 +179,7 @@ export async function POST(request: Request) {
       apiKey: getApiKey("anthropic"),
     });
 
+    const briefStart = Date.now();
     const message = await client.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 3000,
@@ -221,6 +224,21 @@ export async function POST(request: Request) {
       job_id: roleBriefId,
       saved_score_id: body.saved_score_id,
     });
+
+    void (async () => {
+      const obsIds = await resolveObservabilityIds(user.id);
+      logClaudeCall({
+        eventType: "interview_brief",
+        jobId: roleBriefId ?? undefined,
+        candidateId: body.candidate_id,
+        durationMs: Date.now() - briefStart,
+        inputTokens: message.usage?.input_tokens ?? 0,
+        outputTokens: message.usage?.output_tokens ?? 0,
+        cacheHit: false,
+        workspaceId: obsIds.workspaceId,
+        recruiterId: obsIds.recruiterId,
+      });
+    })();
 
     return NextResponse.json({ brief });
   } catch (err) {

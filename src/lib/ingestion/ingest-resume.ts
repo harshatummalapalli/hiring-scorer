@@ -1,6 +1,6 @@
 import { extractResumeTextFromBytes } from "@/lib/resume/parse-resume";
 import { normalizeResumeText } from "@/lib/resume/normalize-resume-text";
-import { parseResumeWithGemini } from "@/lib/ai/gemini-resume-parser";
+import { parseResumeWithGemini, type GeminiParseUsage } from "@/lib/ai/gemini-resume-parser";
 import type { GeminiParsedResume } from "@/lib/ai/gemini-resume-parser";
 import { isGoogleApiKeyAuthError } from "@/lib/ai/api-keys";
 import { isGeminiParsingConfigured } from "@/lib/gemini-client";
@@ -31,6 +31,7 @@ export type IngestResumeResult = {
   ingestionSource: IngestionSource;
   parseWarning?: string | null;
   parseCacheHit?: boolean;
+  parseUsage?: GeminiParseUsage;
 };
 
 export async function ingestResumeFromText(
@@ -70,7 +71,8 @@ export async function ingestResumeFromText(
     }
 
     try {
-      const geminiRecord = await parseResumeWithGemini(resumeText);
+      const { record: geminiRecord, usage: parseUsage } =
+        await parseResumeWithGemini(resumeText);
       const signalProfile = geminiRecordToSignalProfile(
         geminiRecord,
         filename,
@@ -88,6 +90,7 @@ export async function ingestResumeFromText(
         parseResult: null,
         ingestionSource: "gemini_parser",
         parseCacheHit: false,
+        parseUsage,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

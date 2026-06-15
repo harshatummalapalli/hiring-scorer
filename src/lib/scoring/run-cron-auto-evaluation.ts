@@ -1,7 +1,9 @@
 import {
   buildScoringSignalsFromProfile,
   scoreCandidate,
+  type ScoreObservabilityContext,
 } from "@/lib/ai/gpt-mini-scorer";
+import { resolveObservabilityIds } from "@/lib/observability/resolve-context";
 import { createActivity, prependActivity } from "@/lib/candidates/activity";
 import { normalizeSignalProfile } from "@/lib/candidates/build-signal-profile";
 import { buildSavedScoreInsertPayload } from "@/lib/saved-scores/build-save-payload";
@@ -126,11 +128,19 @@ async function runCronAutoEvaluationInner(
   }
 
   const signals = buildScoringSignalsFromProfile(signal_profile);
+  const obsIds = await resolveObservabilityIds(ownerUserId);
+  const scoreObs: ScoreObservabilityContext = {
+    candidateId,
+    jobId: roleBriefId,
+    workspaceId: obsIds.workspaceId,
+    recruiterId: obsIds.recruiterId,
+  };
   const result = await scoreCandidate(
     scoringText,
     roleBrief,
     signals,
     signal_profile?.github,
+    scoreObs,
   );
   result.recruiter_card.candidate_header.display_name =
     display_name || filenameToDisplayName(resume_filename);

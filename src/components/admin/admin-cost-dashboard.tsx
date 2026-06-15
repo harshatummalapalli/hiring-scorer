@@ -2,95 +2,51 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
-import { karta } from "@/lib/brand/karta";
-
-type ModelRow = {
-  model: string;
-  input_tokens: number;
-  output_tokens: number;
-  total_tokens: number;
-  requests: number;
-  cost_usd: number;
-};
-
-type CostsPayload = {
-  fetchedAt: string;
-  openai: {
-    total_tokens: number;
-    total_cost_usd: number;
-    requests: number;
-    by_model: ModelRow[];
-    live: boolean;
-    warning?: string;
-    note?: string;
-  };
-  anthropic: {
-    claude_cost_usd: number;
-    gpt_mini_recorded_usd: number;
-    note: string;
-  };
-  summary: {
-    openai_total_usd: number;
-    claude_total_usd: number;
-    combined_total_usd: number;
-    candidates_scored_this_month: number;
-    average_cost_per_candidate_usd: number;
-    projected_monthly_usd: number;
-  };
-  workspaces: {
-    userId: string;
-    ownerEmail: string;
-    candidatesScoredThisMonth: number;
-    estimatedApiCostUsd: number;
-    storageUsedMb: number;
-    lastActiveAt: string | null;
-  }[];
-  missingEnv?: string[];
-};
+import type { OperationalCostsSnapshot } from "@/lib/admin/operational-cost-queries";
 
 function formatUsd(n: number): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
     minimumFractionDigits: 2,
-    maximumFractionDigits: 4,
+    maximumFractionDigits: 6,
   }).format(n);
 }
 
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+function modelLabel(model: string): string {
+  if (model.includes("gemini")) return "Gemini Parse";
+  if (model.includes("gpt-4o-mini")) return "GPT Scoring";
+  if (model.includes("claude")) return "Claude Analysis";
+  return model;
 }
 
-function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-/** Admin cost breakdown — version labels only (no vendor model IDs in UI). */
-function costTierLabel(index: number): string {
-  return `v${index + 1}`;
-}
-
-function CostMetricCard({ label, value }: { label: string; value: string }) {
+function CostCard({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
   return (
-    <div className={`${karta.card} p-5`}>
-      <p className="text-xs font-semibold uppercase tracking-wide text-[#64748B]">
+    <div className="rounded-xl border border-[#1E2230] bg-[#111420] p-5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[#94A3B8]">
         {label}
       </p>
-      <p className="mt-2 text-xl font-semibold text-[#1E293B]">{value}</p>
+      <p
+        className={`mt-2 text-2xl font-semibold tabular-nums ${
+          accent ? "text-emerald-400" : "text-white"
+        }`}
+      >
+        {value}
+      </p>
     </div>
   );
 }
 
 export function AdminCostDashboard() {
-  const [data, setData] = useState<CostsPayload | null>(null);
+  const [data, setData] = useState<OperationalCostsSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -105,7 +61,7 @@ export function AdminCostDashboard() {
       }
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to load costs");
-      setData(json as CostsPayload);
+      setData(json as OperationalCostsSnapshot);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load costs");
     } finally {
@@ -117,25 +73,25 @@ export function AdminCostDashboard() {
     void load();
   }, [load]);
 
+  const maxDailyCost = Math.max(
+    ...(data?.last7days.dailyBreakdown.map((d) => d.cost) ?? [0]),
+    0.000001,
+  );
+
   return (
-    <section className="space-y-6">
+    <div className="rounded-2xl border border-[#1E2230] bg-[#0B0D14] p-6 text-[#E2E8F0]">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-[#1E293B]">Cost Dashboard</h2>
-          {data?.fetchedAt && (
-            <p className="mt-1 text-xs text-[#94A3B8]">
-              Data as of {formatDateTime(data.fetchedAt)}
-              {data.openai.live
-                ? " · Scoring costs live"
-                : " · Cost data cached or unavailable"}
-            </p>
-          )}
+          <h2 className="text-lg font-semibold text-white">LLM Costs</h2>
+          <p className="mt-1 text-xs text-[#64748B]">
+            Per-call token usage from operational events
+          </p>
         </div>
         <button
           type="button"
           onClick={() => void load()}
           disabled={loading}
-          className={`inline-flex items-center gap-2 ${karta.btnOutlineTeal}`}
+          className="inline-flex items-center gap-2 rounded-lg border border-[#4F46E5]/40 bg-[#111420] px-3 py-2 text-sm font-medium text-[#A5B4FC] hover:border-[#4F46E5] hover:text-white disabled:opacity-60"
         >
           {loading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -147,126 +103,160 @@ export function AdminCostDashboard() {
       </div>
 
       {error && (
-        <p className="text-sm text-red-600" role="alert">
+        <p className="mt-4 text-sm text-red-400" role="alert">
           {error}
         </p>
       )}
 
-      {data?.openai.note && (
-        <p className="text-xs text-[#94A3B8]" role="status">
-          {data.openai.note}
-        </p>
-      )}
-
-      {data?.openai.warning && (
-        <p
-          className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-          role="status"
-        >
-          {data.openai.warning}
-        </p>
-      )}
-
-      {data?.missingEnv && data.missingEnv.length > 0 && (
-        <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-[#64748B]">
-          Missing env: {data.missingEnv.join(", ")}. Add them to .env.local for full
-          cost tracking.
-        </p>
-      )}
-
       {loading && !data ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+        <div className="flex justify-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-[#4F46E5]" />
         </div>
       ) : data ? (
-        <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-            <CostMetricCard
-              label="Scoring costs (this month)"
-              value={formatUsd(data.summary.openai_total_usd)}
+        <div className="mt-6 space-y-8">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <CostCard label="Today" value={formatUsd(data.today.total)} />
+            <CostCard
+              label="This week (7 days)"
+              value={formatUsd(data.last7days.total)}
             />
-            <CostMetricCard
-              label="Analysis costs (this month)"
-              value={formatUsd(data.summary.claude_total_usd)}
+            <CostCard
+              label="Cache savings today"
+              value={formatUsd(data.today.cacheSavings)}
+              accent
             />
-            <CostMetricCard
-              label="Platform costs"
-              value={formatUsd(data.summary.combined_total_usd)}
-            />
-            <CostMetricCard
-              label="Candidates scored"
-              value={String(data.summary.candidates_scored_this_month)}
-            />
-            <CostMetricCard
-              label="Avg cost / candidate"
-              value={formatUsd(data.summary.average_cost_per_candidate_usd)}
-            />
-            <CostMetricCard
-              label="Projected monthly (run rate)"
-              value={formatUsd(data.summary.projected_monthly_usd)}
-            />
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300/80">
+                Caching
+              </p>
+              <p className="mt-2 text-sm font-medium text-emerald-300">
+                Saved {formatUsd(data.today.cacheSavings)} via caching today
+              </p>
+            </div>
           </div>
 
-          <p className="text-xs text-[#94A3B8]">
-            Scoring: {data.openai.requests.toLocaleString()} requests ·{" "}
-            {data.openai.total_tokens.toLocaleString()} tokens
-            {data.openai.by_model.length > 0 && (
-              <>
-                {" "}
-                · Tiers:{" "}
-                {data.openai.by_model
-                  .slice(0, 5)
-                  .map((_, i) => costTierLabel(i))
-                  .join(", ")}
-              </>
-            )}
-          </p>
-          <p className="text-xs text-[#94A3B8]">{data.anthropic.note}</p>
-
-          <div className={`overflow-x-auto ${karta.card}`}>
-            <table className="w-full min-w-[800px] text-left text-sm">
-              <thead className="border-b border-slate-100 bg-slate-50/80 text-xs font-semibold uppercase tracking-wide text-[#64748B]">
-                <tr>
-                  <th className="px-4 py-3">Owner email</th>
-                  <th className="px-4 py-3 text-right">Scored this month</th>
-                  <th className="px-4 py-3 text-right">Est. API cost</th>
-                  <th className="px-4 py-3 text-right">Storage (MB)</th>
-                  <th className="px-4 py-3">Last active</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {data.workspaces.length === 0 ? (
+          <section>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-[#94A3B8]">
+              By model (today)
+            </h3>
+            <div className="mt-3 overflow-x-auto rounded-xl border border-[#1E2230] bg-[#111420]">
+              <table className="w-full min-w-[640px] text-left text-sm">
+                <thead className="border-b border-[#1E2230] text-xs font-semibold uppercase tracking-wide text-[#64748B]">
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-[#64748B]">
-                      No workspace cost data.
-                    </td>
+                    <th className="px-4 py-3">Model</th>
+                    <th className="px-4 py-3 text-right">Cost</th>
+                    <th className="px-4 py-3 text-right">Calls</th>
+                    <th className="px-4 py-3 text-right">Avg / call</th>
                   </tr>
-                ) : (
-                  data.workspaces.map((w) => (
-                    <tr key={w.userId} className="hover:bg-slate-50/50">
-                      <td className="max-w-[240px] truncate px-4 py-3 font-medium text-[#1E293B]">
-                        {w.ownerEmail}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {w.candidatesScoredThisMonth}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {formatUsd(w.estimatedApiCostUsd)}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {w.storageUsedMb.toFixed(2)}
-                      </td>
-                      <td className="px-4 py-3 text-[#64748B]">
-                        {formatDate(w.lastActiveAt)}
+                </thead>
+                <tbody className="divide-y divide-[#1E2230]">
+                  {data.today.byModel.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={4}
+                        className="px-4 py-8 text-center text-[#64748B]"
+                      >
+                        No billed LLM calls today.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </>
+                  ) : (
+                    data.today.byModel.map((row) => (
+                      <tr key={row.model} className="hover:bg-[#151925]">
+                        <td className="px-4 py-3 font-medium text-white">
+                          {modelLabel(row.model)}
+                          <span className="mt-0.5 block text-xs font-normal text-[#64748B]">
+                            {row.model}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-[#E2E8F0]">
+                          {formatUsd(row.cost)}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-[#94A3B8]">
+                          {row.calls}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-[#94A3B8]">
+                          {formatUsd(row.calls > 0 ? row.cost / row.calls : 0)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-[#94A3B8]">
+              By workspace (today)
+            </h3>
+            <div className="mt-3 overflow-x-auto rounded-xl border border-[#1E2230] bg-[#111420]">
+              <table className="w-full min-w-[480px] text-left text-sm">
+                <thead className="border-b border-[#1E2230] text-xs font-semibold uppercase tracking-wide text-[#64748B]">
+                  <tr>
+                    <th className="px-4 py-3">Workspace</th>
+                    <th className="px-4 py-3 text-right">Cost</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#1E2230]">
+                  {data.today.byWorkspace.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={2}
+                        className="px-4 py-8 text-center text-[#64748B]"
+                      >
+                        No workspace-attributed costs today.
+                      </td>
+                    </tr>
+                  ) : (
+                    data.today.byWorkspace.map((row) => (
+                      <tr key={row.workspaceId} className="hover:bg-[#151925]">
+                        <td className="px-4 py-3 font-medium text-white">
+                          {row.workspaceName}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-[#E2E8F0]">
+                          {formatUsd(row.cost)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-[#94A3B8]">
+              7-day trend
+            </h3>
+            <div className="mt-4 flex h-40 items-end gap-2 rounded-xl border border-[#1E2230] bg-[#111420] px-4 pb-4 pt-6">
+              {data.last7days.dailyBreakdown.map((day) => {
+                const heightPct = Math.max(
+                  4,
+                  (day.cost / maxDailyCost) * 100,
+                );
+                return (
+                  <div
+                    key={day.date}
+                    className="flex min-w-0 flex-1 flex-col items-center gap-2"
+                  >
+                    <span className="text-[10px] tabular-nums text-[#64748B]">
+                      {day.cost > 0 ? formatUsd(day.cost) : "—"}
+                    </span>
+                    <div
+                      className="w-full max-w-[48px] rounded-t bg-[#4F46E5]"
+                      style={{ height: `${heightPct}%` }}
+                      title={`${day.date}: ${formatUsd(day.cost)}`}
+                    />
+                    <span className="text-[10px] text-[#64748B]">
+                      {day.date.slice(5)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        </div>
       ) : null}
-    </section>
+    </div>
   );
 }

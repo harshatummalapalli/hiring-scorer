@@ -1,7 +1,10 @@
 import {
   buildScoringSignalsFromProfile,
   scoreCandidate,
+  type ScoreObservabilityContext,
 } from "@/lib/ai/gpt-mini-scorer";
+import { logScoreSuccess } from "@/lib/observability/log-event";
+import { resolveObservabilityIds } from "@/lib/observability/resolve-context";
 import { createActivity, prependActivity } from "@/lib/candidates/activity";
 import { trackEvent } from "@/lib/analytics/track";
 import { recordRecruiterDecision } from "@/lib/decisions/recruiter-decisions";
@@ -155,6 +158,22 @@ async function executeCandidateScoreInner(
         from_cache: true,
       });
 
+      void (async () => {
+        const recruiterId = candidate.created_by ?? undefined;
+        const obs = recruiterId
+          ? await resolveObservabilityIds(recruiterId)
+          : {};
+        logScoreSuccess({
+          candidateId,
+          jobId: roleBriefId,
+          durationMs: 0,
+          model: "gpt-4o-mini-2024-07-18",
+          cacheHit: true,
+          workspaceId: obs.workspaceId,
+          recruiterId: obs.recruiterId,
+        });
+      })();
+
       const scoringStatus = scoringStatusFromOverall(recomputed);
       console.log(
         "[score-complete]",
@@ -183,11 +202,22 @@ async function executeCandidateScoreInner(
   }
 
   const signals = buildScoringSignalsFromProfile(candidate.signal_profile);
+  const recruiterId = candidate.created_by ?? undefined;
+  const obsIds = recruiterId
+    ? await resolveObservabilityIds(recruiterId)
+    : {};
+  const scoreObs: ScoreObservabilityContext = {
+    candidateId,
+    jobId: roleBriefId,
+    workspaceId: obsIds.workspaceId,
+    recruiterId: obsIds.recruiterId,
+  };
   const result = await scoreCandidate(
     scoringText,
     roleBrief,
     signals,
     candidate.signal_profile?.github,
+    scoreObs,
   );
   applyProfileToRecruiterCard(result, candidate, filename);
   result.confidence = computeConfidence(candidate.signal_profile, result);

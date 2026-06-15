@@ -275,10 +275,16 @@ async function callWithRetry(
   throw new Error("All retry attempts failed");
 }
 
+export type GeminiParseUsage = {
+  inputTokens?: number;
+  outputTokens?: number;
+  durationMs: number;
+};
+
 async function requestGeminiParse(
   rawResumeText: string,
   compact: boolean,
-): Promise<GeminiParsedResume> {
+): Promise<{ record: GeminiParsedResume; usage: GeminiParseUsage }> {
   const client = getGeminiClient();
 
   const compactRules = compact
@@ -334,6 +340,8 @@ Return a JSON object matching this exact schema:
   ]
 }`;
 
+  let usage: GeminiParseUsage = { durationMs: 0 };
+
   const text = await callWithRetry(async () => {
     const parseStart = Date.now();
     const response = await client.models.generateContent({
@@ -346,6 +354,19 @@ Return a JSON object matching this exact schema:
       },
     });
     const parseMs = Date.now() - parseStart;
+    const meta = (
+      response as {
+        usageMetadata?: {
+          promptTokenCount?: number;
+          candidatesTokenCount?: number;
+        };
+      }
+    ).usageMetadata;
+    usage = {
+      durationMs: parseMs,
+      inputTokens: meta?.promptTokenCount,
+      outputTokens: meta?.candidatesTokenCount,
+    };
     console.log(
       `[gemini-parse] model=${GEMINI_PARSE_MODEL} lane=${geminiParseLane()} duration=${parseMs}ms`,
     );
@@ -365,25 +386,33 @@ Return a JSON object matching this exact schema:
     throw new Error("Resume parser returned an empty response.");
   }
 
-  return parseGeminiResumeJson(text);
+  return {
+    record: parseGeminiResumeJson(text),
+    usage,
+  };
 }
+
+export type GeminiParseResult = {
+  record: GeminiParsedResume;
+  usage: GeminiParseUsage;
+};
 
 export async function parseResumeWithGemini(
   rawResumeText: string,
   stallMs = 0,
-): Promise<GeminiParsedResume> {
+): Promise<GeminiParseResult> {
   if (stallMs > 0) {
     await new Promise((r) => setTimeout(r, stallMs));
   }
   let lastError: Error | null = null;
-  let lastRecord: GeminiParsedResume | null = null;
+  let lastResult: GeminiParseResult | null = null;
 
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const record = await requestGeminiParse(rawResumeText, attempt === 1);
-      lastRecord = record;
-      if (hasUsefulParse(record) || attempt === 2) {
-        return record;
+      const parsed = await requestGeminiParse(rawResumeText, attempt === 1);
+      lastResult = parsed;
+      if (hasUsefulParse(parsed.record) || attempt === 2) {
+        return parsed;
       }
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
@@ -392,12 +421,12 @@ export async function parseResumeWithGemini(
         lastError.message.includes("output token limit") ||
         lastError.message.includes("empty response");
       if (!retryable && attempt === 2) break;
-      if (attempt === 2 && lastRecord) return lastRecord;
+      if (attempt === 2 && lastResult) return lastResult;
       if (attempt === 2) break;
       await new Promise((resolve) => setTimeout(resolve, 750));
     }
   }
 
-  if (lastRecord) return lastRecord;
+  if (lastResult) return lastResult;
   throw lastError ?? new Error("Gemini resume parser failed.");
 }

@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { getApiKey } from "@/lib/ai/api-keys";
 import { parseJsonFromModel } from "@/lib/ai/parse-json";
+import { logScoreSuccess } from "@/lib/observability/log-event";
 import type { BeyondKeywordSignals } from "@/lib/intelligence/beyond-keywords";
 import { matchRequiredSkills } from "@/lib/intelligence/semantic-matcher";
 import {
@@ -753,6 +754,16 @@ function mapToCandidateScoreResult(
   };
 }
 
+const SCORING_MODEL = "gpt-4o-mini-2024-07-18";
+
+export type ScoreObservabilityContext = {
+  candidateId: string;
+  jobId?: string;
+  workspaceId?: string;
+  recruiterId?: string;
+  cacheHit?: boolean;
+};
+
 /**
  * Score a candidate with a single GPT-4o mini call (temperature 0, JSON mode).
  * Resume text must already be PII-stripped.
@@ -762,6 +773,7 @@ export async function scoreCandidate(
   roleBrief: RoleBrief,
   beyondKeywordSignals: BeyondKeywordSignals,
   github?: CandidateSignalProfile["github"] | null,
+  observability?: ScoreObservabilityContext,
 ): Promise<CandidateScoreResult> {
   const stripped = strippedResumeText.trim();
   if (!stripped) {
@@ -779,8 +791,9 @@ export async function scoreCandidate(
     truncated,
   );
 
+  const scoreStart = Date.now();
   const completion = await client.chat.completions.create({
-    model: "gpt-4o-mini-2024-07-18",
+    model: SCORING_MODEL,
     temperature: 0,
     max_tokens: 1200,
     response_format: { type: "json_object" },
@@ -827,7 +840,7 @@ export async function scoreCandidate(
   else verdict = "not_a_match";
   parsed.verdict = verdict;
 
-  return mapToCandidateScoreResult(
+  const scoreResult = mapToCandidateScoreResult(
     stripped,
     roleBrief,
     beyondKeywordSignals,
@@ -835,4 +848,21 @@ export async function scoreCandidate(
     dimensions,
     overallScore,
   );
+
+  if (observability) {
+    const durationMs = Date.now() - scoreStart;
+    logScoreSuccess({
+      candidateId: observability.candidateId,
+      jobId: observability.jobId ?? roleBrief.id,
+      durationMs,
+      model: SCORING_MODEL,
+      cacheHit: observability.cacheHit === true,
+      inputTokens: completion.usage?.prompt_tokens,
+      outputTokens: completion.usage?.completion_tokens,
+      workspaceId: observability.workspaceId,
+      recruiterId: observability.recruiterId,
+    });
+  }
+
+  return scoreResult;
 }

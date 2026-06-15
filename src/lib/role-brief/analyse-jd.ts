@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getApiKey } from "@/lib/ai/api-keys";
 import { CLAUDE_MODEL } from "@/lib/ai/model-constants";
 import { parseJsonFromModel } from "@/lib/ai/parse-json";
+import { logClaudeCall } from "@/lib/observability/log-event";
 import { dedupeRoleBriefAnalysis } from "@/lib/role-brief/dedupe-skills";
 import type { JdRecruiterContext } from "@/types/job-posting";
 import type { RoleBriefAnalysis, TitleBand } from "@/types/role-brief";
@@ -119,13 +120,22 @@ export function parseRoleBriefAnalysis(raw: unknown): RoleBriefAnalysis {
   });
 }
 
+export type AnalyseJdObservabilityContext = {
+  jobId?: string;
+  workspaceId?: string;
+  recruiterId?: string;
+  cacheHit?: boolean;
+};
+
 export async function analyseJobDescription(
   jobDescription: string,
   recruiterContext?: JdRecruiterContext | null,
+  observability?: AnalyseJdObservabilityContext,
 ): Promise<RoleBriefAnalysis> {
   const client = new Anthropic({ apiKey: getApiKey("anthropic") });
   const contextBlock = buildRecruiterContextBlock(recruiterContext);
 
+  const analyseStart = Date.now();
   const message = await client.messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 8192,
@@ -144,5 +154,20 @@ export async function analyseJobDescription(
   }
 
   const parsed = parseJsonFromModel(textBlock.text);
-  return parseRoleBriefAnalysis(parsed);
+  const analysis = parseRoleBriefAnalysis(parsed);
+
+  if (observability) {
+    logClaudeCall({
+      eventType: "jd_analysis",
+      jobId: observability.jobId,
+      durationMs: Date.now() - analyseStart,
+      inputTokens: message.usage?.input_tokens ?? 0,
+      outputTokens: message.usage?.output_tokens ?? 0,
+      cacheHit: observability.cacheHit === true,
+      workspaceId: observability.workspaceId,
+      recruiterId: observability.recruiterId,
+    });
+  }
+
+  return analysis;
 }

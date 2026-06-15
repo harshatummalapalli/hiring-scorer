@@ -10,6 +10,14 @@ import { ResumeParsingWidget } from "@/components/admin/resume-parsing-widget";
 import { SystemHealthSection } from "@/components/admin/system-health-section";
 import { karta } from "@/lib/brand/karta";
 
+type AdminTab = "overview" | "workspaces" | "costs";
+
+const ADMIN_TABS: { id: AdminTab; label: string }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "workspaces", label: "Workspaces" },
+  { id: "costs", label: "Costs" },
+];
+
 function formatStorageBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -491,6 +499,7 @@ function DataQualityCard() {
 }
 
 export function AdminDashboard() {
+  const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [workspaces, setWorkspaces] = useState<AdminWorkspaceRow[]>([]);
   const [search, setSearch] = useState("");
@@ -542,6 +551,30 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-10">
+      <nav
+        className="flex flex-wrap gap-2 border-b border-slate-200 pb-1"
+        aria-label="Admin sections"
+      >
+        {ADMIN_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={`rounded-t-lg px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === tab.id
+                ? "border-b-2 border-[#4F46E5] bg-[#0B0D14] text-white"
+                : "text-[#64748B] hover:text-[#334155]"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
+
+      {activeTab === "costs" ? (
+        <AdminCostDashboard />
+      ) : (
+        <>
       <SystemHealthSection />
 
       {loading && !overview ? (
@@ -553,6 +586,8 @@ export function AdminDashboard() {
           {error}
         </p>
       ) : (
+        <>
+      {activeTab === "overview" && (
         <>
       <WorkspaceResetCard onResetComplete={() => void load(search)} />
       <DataQualityCard />
@@ -590,9 +625,10 @@ export function AdminDashboard() {
       </section>
 
       <ResumeParsingWidget />
+        </>
+      )}
 
-      <AdminCostDashboard />
-
+      {activeTab === "workspaces" && (
       <section>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-lg font-semibold text-[#1E293B]">Workspaces</h2>
@@ -690,6 +726,9 @@ export function AdminDashboard() {
           </p>
         )}
       </section>
+      )}
+        </>
+      )}
         </>
       )}
     </div>

@@ -1,4 +1,5 @@
 import { analyseJobDescription } from "@/lib/role-brief/analyse-jd";
+import type { AnalyseJdObservabilityContext } from "@/lib/role-brief/analyse-jd";
 import {
   computeJobDescriptionHash,
   isAnalysisPopulated,
@@ -29,6 +30,7 @@ export type JdAnalysisResolveInput = {
   existingBrief?: RoleBrief | null;
   sessionCache?: JdSessionCache | null;
   recruiterContext?: JdRecruiterContext | null;
+  observability?: AnalyseJdObservabilityContext;
 };
 
 function priorAnalysisVersion(input: JdAnalysisResolveInput): number {
@@ -110,6 +112,7 @@ export async function resolveJobDescriptionAnalysis(
   const analysis = await analyseJobDescription(
     newJobDescription,
     input.recruiterContext,
+    input.observability,
   );
   const now = new Date().toISOString();
 
