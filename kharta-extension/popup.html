@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Kharta</title>
+  <style>
+    body {
+      width: 340px;
+      font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+      padding: 14px;
+      color: #1a1a1a;
+    }
+    h1 {
+      font-size: 15px;
+      margin: 0 0 10px;
+    }
+    .status {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 10px;
+    }
+    select, button {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      box-sizing: border-box;
+    }
+    button {
+      cursor: pointer;
+      background: #1a1a2e;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    #result {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 4px;
+      font-size: 13px;
+      display: none;
+    }
+    .privacy-note {
+      font-size: 11px;
+      color: #888;
+      margin-top: 12px;
+      line-height: 1.4;
+    }
+    a { color: #1a1a2e; }
+  </style>
+</head>
+<body>
+  <h1>Kharta — Score this page</h1>
+  <div class="status" id="status">Checking sign-in…</div>
+
+  <div id="signedOutView" style="display:none;">
+    <button id="signInBtn">Sign in to Kharta</button>
+  </div>
+
+  <div id="signedInView" style="display:none;">
+    <select id="roleSelect">
+      <option value="">Loading your open roles…</option>
+    </select>
+    <button id="extractBtn">Extract &amp; Score This Page</button>
+  </div>
+
+  <div id="result"></div>
+
+  <div class="privacy-note">
+    Nothing on this page is read until you click "Extract &amp; Score."
+    Only the visible text is sent, only to your Kharta workspace, only for
+    the role you pick.
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

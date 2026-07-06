@@ -9,18 +9,35 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCandidateById, updateCandidate } from "@/lib/supabase/candidates";
 import { createSupabaseServerClient } from "@/lib/supabase/server-auth";
 import type { CandidateSignalProfile, VerifiedSkill } from "@/types/candidate";
+import {
+  assertCandidateAccess,
+  AuthRequiredError,
+  ForbiddenError,
+  NotFoundError,
+} from "@/lib/supabase/access-guards";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, { params }: Params) {
   try {
     const { id } = await params;
+    // Defense-in-depth: app-layer ownership check on top of RLS.
+    await assertCandidateAccess(id);
     const candidate = await getCandidateById(id);
     if (!candidate) {
       return NextResponse.json({ error: "Candidate not found." }, { status: 404 });
     }
     return NextResponse.json({ candidate });
   } catch (err) {
+    if (err instanceof AuthRequiredError) {
+      return NextResponse.json({ error: err.message }, { status: 401 });
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: err.message }, { status: 403 });
+    }
+    if (err instanceof NotFoundError) {
+      return NextResponse.json({ error: err.message }, { status: 404 });
+    }
     const message =
       err instanceof Error ? err.message : "Failed to load candidate";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -44,6 +61,8 @@ type PatchBody = {
 export async function PATCH(request: Request, { params }: Params) {
   try {
     const { id } = await params;
+    // Defense-in-depth: app-layer ownership check on top of RLS.
+    await assertCandidateAccess(id);
     const candidate = await getCandidateById(id);
     if (!candidate) {
       return NextResponse.json({ error: "Candidate not found." }, { status: 404 });
@@ -157,6 +176,15 @@ export async function PATCH(request: Request, { params }: Params) {
     const updated = await getCandidateById(id);
     return NextResponse.json({ candidate: updated });
   } catch (err) {
+    if (err instanceof AuthRequiredError) {
+      return NextResponse.json({ error: err.message }, { status: 401 });
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: err.message }, { status: 403 });
+    }
+    if (err instanceof NotFoundError) {
+      return NextResponse.json({ error: err.message }, { status: 404 });
+    }
     const message =
       err instanceof Error ? err.message : "Failed to update candidate";
     return NextResponse.json({ error: message }, { status: 500 });

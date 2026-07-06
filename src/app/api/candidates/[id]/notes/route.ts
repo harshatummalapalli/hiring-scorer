@@ -5,6 +5,12 @@ import {
   insertCandidateNote,
   updateCandidate,
 } from "@/lib/supabase/candidates";
+import {
+  assertCandidateAccess,
+  AuthRequiredError,
+  ForbiddenError,
+  NotFoundError,
+} from "@/lib/supabase/access-guards";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -20,6 +26,9 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: "Note body is required." }, { status: 400 });
     }
 
+    // Defense-in-depth ownership check, same rationale as the score route.
+    await assertCandidateAccess(id);
+
     const candidate = await getCandidateById(id);
     if (!candidate) {
       return NextResponse.json({ error: "Candidate not found." }, { status: 404 });
@@ -34,6 +43,15 @@ export async function POST(request: Request, { params }: Params) {
 
     return NextResponse.json({ note });
   } catch (err) {
+    if (err instanceof AuthRequiredError) {
+      return NextResponse.json({ error: err.message }, { status: 401 });
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: err.message }, { status: 403 });
+    }
+    if (err instanceof NotFoundError) {
+      return NextResponse.json({ error: err.message }, { status: 404 });
+    }
     const message = err instanceof Error ? err.message : "Failed to add note";
     return NextResponse.json({ error: message }, { status: 500 });
   }

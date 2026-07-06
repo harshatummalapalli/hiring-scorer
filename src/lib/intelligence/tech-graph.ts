@@ -63,10 +63,25 @@ function nodeByCanonical(canonical: string): TechNode | null {
   return CANONICAL_BY_KEY.get(normalizeToken(canonical)) ?? null;
 }
 
+// Module-level cache: expandEquivalents is a pure function of its input
+// string over a static graph, and is called once per (requirement,
+// candidate) pair — e.g. up to 200x per talent-match request for the same
+// role brief's requirements. Caching avoids re-walking the 3,333-node graph
+// for the same requirement string on every one of those calls.
+const equivalentsCache = new Map<string, string[]>();
+
 /** Collect all technologies equivalent to the given skill (includes canonical). */
 export function expandEquivalents(skill: string): string[] {
+  const cacheKey = normalizeToken(skill);
+  const cached = equivalentsCache.get(cacheKey);
+  if (cached) return cached;
+
   const start = findTechNode(skill);
-  if (!start) return skill.trim() ? [skill.trim()] : [];
+  if (!start) {
+    const fallback = skill.trim() ? [skill.trim()] : [];
+    equivalentsCache.set(cacheKey, fallback);
+    return fallback;
+  }
 
   const visited = new Set<string>();
   const queue = [start.canonical];
@@ -89,7 +104,9 @@ export function expandEquivalents(skill: string): string[] {
     }
   }
 
-  return [...visited];
+  const result = [...visited];
+  equivalentsCache.set(cacheKey, result);
+  return result;
 }
 
 /** Given explicit skills, return additional implied canonical skills. */

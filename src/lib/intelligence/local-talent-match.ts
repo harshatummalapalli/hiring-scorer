@@ -1,3 +1,5 @@
+import { expandEquivalents } from "@/lib/intelligence/tech-graph";
+
 export type LocalMatchExperienceGap = "under" | "match" | "over" | "unknown";
 
 export type LocalMatchSignalQuality = "high" | "medium" | "low";
@@ -100,11 +102,15 @@ export function computeLocalMatch(
   const mustHaveHits: string[] = [];
   for (const req of dealBreakers) {
     const reqLower = req.toLowerCase();
-    if (
-      allSkills.some(
-        (s) => s.includes(reqLower) || reqLower.includes(s),
-      )
-    ) {
+    // Check the raw requirement plus every ontology-recognized equivalent
+    // (e.g. "Kubernetes" also matches a candidate who only listed "K8s"),
+    // so this fast path stays consistent with the full LLM-scored path,
+    // which already gets equivalents injected into its prompt.
+    const candidateTerms = [reqLower, ...expandEquivalents(req).map((t) => t.toLowerCase())];
+    const isHit = candidateTerms.some((term) =>
+      allSkills.some((s) => s.includes(term) || term.includes(s)),
+    );
+    if (isHit) {
       mustHaveHits.push(req);
     }
   }
@@ -116,12 +122,14 @@ export function computeLocalMatch(
 
   const skillOverlap: string[] = [];
   for (const req of allRequirements) {
-    const reqLower = req.toLowerCase();
-    if (
-      verifiedSkills.some(
-        (s) => s.includes(reqLower) || reqLower.includes(s),
-      )
-    ) {
+    const candidateTerms = [
+      req.toLowerCase(),
+      ...expandEquivalents(req).map((t) => t.toLowerCase()),
+    ];
+    const isMatch = candidateTerms.some((term) =>
+      verifiedSkills.some((s) => s.includes(term) || term.includes(s)),
+    );
+    if (isMatch) {
       skillOverlap.push(req);
     }
   }
