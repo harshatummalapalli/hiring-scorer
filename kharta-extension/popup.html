@@ -10,30 +10,54 @@
       padding: 14px;
       color: #1a1a1a;
     }
-    h1 {
-      font-size: 15px;
-      margin: 0 0 10px;
-    }
-    .status {
-      font-size: 12px;
-      color: #666;
+    h1 { font-size: 15px; margin: 0 0 10px; }
+    .status { font-size: 12px; color: #666; margin-bottom: 10px; }
+
+    /* Mode toggle — Feature 1 */
+    .mode-toggle {
+      display: flex;
+      gap: 5px;
       margin-bottom: 10px;
     }
-    select, button {
+    .mode-btn {
+      flex: 1;
+      padding: 5px 4px;
+      font-size: 12px;
+      background: #f0f0f0;
+      color: #555;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      cursor: pointer;
+      width: auto;
+      margin-bottom: 0;
+      box-sizing: border-box;
+    }
+    .mode-btn.active {
+      background: #1a1a2e;
+      color: white;
+      border-color: #1a1a2e;
+    }
+
+    select {
       width: 100%;
       padding: 8px;
       margin-bottom: 8px;
       font-size: 13px;
       box-sizing: border-box;
     }
-    button {
+    #extractBtn, #signInBtn {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      box-sizing: border-box;
       cursor: pointer;
       background: #1a1a2e;
       color: white;
       border: none;
       border-radius: 4px;
     }
-    button:disabled {
+    #extractBtn:disabled, #signInBtn:disabled {
       background: #ccc;
       cursor: not-allowed;
     }
@@ -43,6 +67,7 @@
       border-radius: 4px;
       font-size: 13px;
       display: none;
+      line-height: 1.5;
     }
     .privacy-note {
       font-size: 11px;
@@ -62,18 +87,27 @@
   </div>
 
   <div id="signedInView" style="display:none;">
-    <select id="roleSelect">
-      <option value="">Loading your open roles…</option>
-    </select>
+    <!-- Feature 1: mode toggle -->
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="modeScoreBtn">Score Candidate</button>
+      <button class="mode-btn" id="modeRoleBtn">Save as Role</button>
+    </div>
+
+    <!-- Hidden in "Save as Role" mode -->
+    <div id="roleRow">
+      <select id="roleSelect">
+        <option value="">Loading your open roles…</option>
+      </select>
+    </div>
+
     <button id="extractBtn">Extract &amp; Score This Page</button>
   </div>
 
   <div id="result"></div>
 
   <div class="privacy-note">
-    Nothing on this page is read until you click "Extract &amp; Score."
-    Only the visible text is sent, only to your Kharta workspace, only for
-    the role you pick.
+    Nothing on this page is read until you click the button.
+    Only visible text is sent, only to your Kharta workspace.
   </div>
 
   <script src="popup.js"></script>
