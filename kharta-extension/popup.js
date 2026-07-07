@@ -15,6 +15,12 @@
 
 const KHARTA_ORIGIN = "https://hiring-scorer.vercel.app";
 
+// Initialize PDF.js worker (bundled with extension for single-click PDF extraction).
+// If pdf.min.js failed to load (files not yet added) this is a no-op.
+if (typeof pdfjsLib !== "undefined") {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL("pdf.worker.min.js");
+}
+
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 
 const statusEl       = document.getElementById("status");
@@ -167,7 +173,7 @@ async function extractPageText() {
       target: { tabId: tab.id },
       // func: (inline) avoids the MV3 file-injection return-value bug where
       // files: ["content-extract.js"] sometimes returns undefined even on success.
-      func: () => {
+      func: async () => {
         const MAX_CHARS = 20000;
         const url = location.href;
 
@@ -181,17 +187,41 @@ async function extractPageText() {
           );
 
         if (isPdf) {
-          const sel     = window.getSelection()?.toString() ?? "";
-          const trimmed = sel.replace(/\n{3,}/g, "\n\n").trim();
-          return {
-            text:         trimmed.slice(0, MAX_CHARS),
-            truncated:    trimmed.length > MAX_CHARS,
-            charCount:    trimmed.length,
-            pageTitle:    document.title || "",
-            pageUrl:      url,
-            isPdf:        true,
-            hadSelection: trimmed.length > 40,
-          };
+          // Fetch the raw PDF bytes from the page's own URL so the popup can
+          // parse them with bundled PDF.js — no clipboard interaction needed.
+          try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`fetch ${response.status}`);
+            const buffer = await response.arrayBuffer();
+            if (buffer.byteLength > 10 * 1024 * 1024) {
+              throw new Error("PDF too large for automatic extraction");
+            }
+            const bytes = new Uint8Array(buffer);
+            // Chunk-based btoa avoids call-stack overflow on large files
+            let binary = "";
+            const CHUNK = 0x8000;
+            for (let i = 0; i < bytes.length; i += CHUNK) {
+              binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+            }
+            return {
+              text: "", charCount: 0, truncated: false,
+              pageTitle: document.title || "", pageUrl: url,
+              isPdf: true, pdfBase64: btoa(binary),
+            };
+          } catch (_fetchErr) {
+            // fetch failed (e.g., cross-origin viewer) — fall back to DOM selection
+            const sel     = window.getSelection()?.toString() ?? "";
+            const trimmed = sel.replace(/\n{3,}/g, "\n\n").trim();
+            return {
+              text:         trimmed.slice(0, MAX_CHARS),
+              truncated:    trimmed.length > MAX_CHARS,
+              charCount:    trimmed.length,
+              pageTitle:    document.title || "",
+              pageUrl:      url,
+              isPdf:        true,
+              hadSelection: trimmed.length > 40,
+            };
+          }
         }
 
         // HTML, TXT, and anything else Chrome renders as a DOM
@@ -224,11 +254,66 @@ async function extractPageText() {
       "Couldn't read this page — try refreshing and clicking the button again.",
     );
   }
-  if (extracted.isPdf && !extracted.hadSelection) {
-    throw new UserFacingError(
-      "PDF detected — press <strong>Ctrl+A</strong> in the PDF to select all text, " +
-      "then click the button again.",
-    );
+  if (extracted.isPdf) {
+    // Primary path: PDF.js parses the base64 bytes returned by the injected script.
+    if (extracted.pdfBase64 && typeof pdfjsLib !== "undefined") {
+      try {
+        const binaryStr = atob(extracted.pdfBase64);
+        const bytes     = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+
+        const pdf       = await pdfjsLib.getDocument({ data: bytes }).promise;
+        const pageTexts = [];
+        for (let p = 1; p <= pdf.numPages; p++) {
+          const page    = await pdf.getPage(p);
+          const content = await page.getTextContent();
+          pageTexts.push(content.items.map((item) => item.str).join(" "));
+        }
+        const fullText = pageTexts.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+        if (fullText.length >= 40) {
+          return {
+            text:      fullText.slice(0, 20000),
+            truncated: fullText.length > 20000,
+            charCount: fullText.length,
+            pageTitle: extracted.pageTitle,
+            pageUrl:   extracted.pageUrl,
+            isPdf:     true,
+          };
+        }
+      } catch (_pdfErr) {
+        // PDF.js parsing failed — fall through to clipboard fallback
+      }
+    }
+
+    // Fallback: two-step clipboard (PDF.js unavailable or fetch/parse failed)
+    //   Click 1 → show instructions, flag this tab
+    //   Click 2 (after Ctrl+A + Ctrl+C) → read clipboard
+    if (!extracted.hadSelection) {
+      const { pdfTabId } = await new Promise((r) =>
+        chrome.storage.local.get("pdfTabId", r),
+      );
+      if (pdfTabId === tab.id) {
+        await chrome.storage.local.remove("pdfTabId");
+        try {
+          const clipText = (await navigator.clipboard.readText()).trim();
+          if (clipText.length > 40) {
+            return {
+              text:      clipText.slice(0, 20000),
+              truncated: clipText.length > 20000,
+              charCount: clipText.length,
+              pageTitle: extracted.pageTitle,
+              pageUrl:   extracted.pageUrl,
+              isPdf:     true,
+            };
+          }
+        } catch (_) {}
+      }
+      await chrome.storage.local.set({ pdfTabId: tab.id });
+      throw new UserFacingError(
+        "PDF detected — press <strong>Ctrl+A</strong> then <strong>Ctrl+C</strong> " +
+        "in the PDF to copy all text, then click the button again.",
+      );
+    }
   }
   if (!extracted.text || extracted.text.trim().length < 40) {
     throw new UserFacingError(
@@ -465,12 +550,20 @@ async function scoreCandidate(candidateId, roleBriefId) {
     if (detailRes.ok) {
       const detailData  = await detailRes.json();
       // role_fit_scores comes from getCandidateById — ownership-checked via assertCandidateAccess
-      const allScores   = detailData.candidate?.role_fit_scores ?? [];
-      const priorScores = allScores
-        .filter(
-          (s) => s.role_brief_id !== roleBriefId && s.overall_score != null,
-        )
-        .slice(0, 3);
+      const allScores = detailData.candidate?.role_fit_scores ?? [];
+
+      // Deduplicate by role_brief_id — keep the highest score per role.
+      // Also exclude the role we just scored and any 0% entries (aborted/failed runs).
+      const bestByRole = new Map();
+      for (const s of allScores) {
+        if (s.role_brief_id === roleBriefId) continue;
+        if (!s.overall_score) continue; // skip null, 0, or falsy
+        const prev = bestByRole.get(s.role_brief_id);
+        if (!prev || s.overall_score > prev.overall_score) {
+          bestByRole.set(s.role_brief_id, s);
+        }
+      }
+      const priorScores = [...bestByRole.values()].slice(0, 3);
 
       if (priorScores.length > 0) {
         const priorStr = priorScores

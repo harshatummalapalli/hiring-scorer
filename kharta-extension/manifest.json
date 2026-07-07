@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Kharta — Score Anywhere",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "Score a resume against your open roles from any page in your browser. Nothing is read or sent unless you click the button.",
   "action": {
     "default_popup": "popup.html",
@@ -20,7 +20,8 @@
   "permissions": [
     "activeTab",
     "scripting",
-    "storage"
+    "storage",
+    "clipboardRead"
   ],
   "host_permissions": [
     "https://hiring-scorer.vercel.app/*"
@@ -28,6 +29,12 @@
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
   },
+  "web_accessible_resources": [
+    {
+      "resources": ["pdf.worker.min.js"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "commands": {
     "_execute_action": {
       "suggested_key": {
