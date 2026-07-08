@@ -13,7 +13,7 @@
 // - Feature 4: Prior scores for other roles fetched from /api/candidates/:id
 //   after scoring — same ownership-checked endpoint used during parse polling.
 
-const KHARTA_ORIGIN = "https://hiring-scorer.vercel.app";
+const KHARTA_ORIGIN = "https://app.dayzero.partners";
 
 // Initialize PDF.js worker (bundled with extension for single-click PDF extraction).
 // If pdf.min.js failed to load (files not yet added) this is a no-op.
